@@ -1,0 +1,17 @@
+.git
+.gitignore
+.dockerignore
+DockerFile*
+
+# 전체 envs 디렉토리 무시
+envs/
+
+# 기타 빌드 결과 디렉토리 무시
+dist
+node_modules
+
+# Docker Volumne 디렉토리 무시
+data
+# mysqldata
+# redisdata
+README.md
