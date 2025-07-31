@@ -25,31 +25,19 @@ import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { JwtPayload } from '@krgeobuk/jwt/interfaces';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
-import { RequirePermission } from '@krgeobuk/authorization/decorators';
+import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
+import { LimitType } from '@krgeobuk/core/enum';
+import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
 import { CreatorApplicationService } from '../../creator-application/services/index.js';
 import { ReviewApplicationDto, ApplicationDetailDto } from '../../creator-application/dto/index.js';
 import { ApplicationStatus } from '../../creator-application/enums/index.js';
-import { PaginatedResult } from '../../creator/dto/index.js';
 
-// TODO: @krgeobuk/authorization 패키지 설치 후 import
-// import { AuthGuard, CurrentUser, RequirePermission } from '@krgeobuk/authorization';
-
-// 임시 인터페이스 (실제로는 @krgeobuk/authorization에서 import)
-interface UserInfo {
-  id: string;
-  email: string;
-  roles: string[];
-}
-
-// 임시 데코레이터 (실제로는 @krgeobuk/authorization에서 import)
-const AuthGuard = () => () => {};
-const CurrentUser = () => (target: any, propertyKey: string, parameterIndex: number) => {};
-const RequirePermissionTemp = (permission: string) => () => {};
 
 @SwaggerApiTags({ tags: ['admin/creator-applications'] })
 @SwaggerApiBearerAuth()
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
+@RequireRole('superAdmin')
 @Controller('admin/creator-applications')
 export class AdminCreatorApplicationController {
   constructor(private readonly creatorApplicationService: CreatorApplicationService) {}
@@ -65,18 +53,28 @@ export class AdminCreatorApplicationController {
     dto: ApplicationDetailDto 
   })
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.creator-applications.read')
+  @RequirePermission('creator-application:read')
   async getApplications(
     @Query('status') status?: ApplicationStatus,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 20
   ): Promise<PaginatedResult<ApplicationDetailDto>> {
-    const searchOptions: any = { page, limit };
+    // Convert number limit to LimitType
+    const limitType: LimitType = limit <= 15 ? LimitType.FIFTEEN :
+                                 limit <= 30 ? LimitType.THIRTY :
+                                 limit <= 50 ? LimitType.FIFTY :
+                                 LimitType.HUNDRED;
+                                 
+    const searchOptions: {
+      page: number;
+      limit: LimitType;
+      status?: ApplicationStatus;
+    } = { page, limit: limitType };
     if (status !== undefined) {
       searchOptions.status = status;
     }
     
-    return this.creatorApplicationService.searchApplicationsForAdmin(searchOptions) as any;
+    return this.creatorApplicationService.searchApplicationsForAdmin(searchOptions);
   }
 
   @Get('stats')
@@ -89,7 +87,7 @@ export class AdminCreatorApplicationController {
     description: '신청 통계 조회 성공'
   })
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.creator-applications.stats')
+  @RequirePermission('creator-application:read')
   async getApplicationStats(): Promise<{
     pending: number;
     approved: number;
@@ -114,7 +112,7 @@ export class AdminCreatorApplicationController {
     dto: ApplicationDetailDto 
   })
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.creator-applications.read')
+  @RequirePermission('creator-application:read')
   @Serialize({ dto: ApplicationDetailDto })
   async getApplicationById(
     @Param('id', ParseUUIDPipe) applicationId: string
@@ -139,7 +137,7 @@ export class AdminCreatorApplicationController {
     description: '승인 정보'
   })
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.creator-applications.approve')
+  @RequirePermission('creator-application:approve')
   async approveApplication(
     @Param('id', ParseUUIDPipe) applicationId: string,
     @Body() body: { comment?: string; requirements?: string[] },
@@ -175,7 +173,7 @@ export class AdminCreatorApplicationController {
     description: '거부 정보'
   })
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.creator-applications.reject')
+  @RequirePermission('creator-application:reject')
   async rejectApplication(
     @Param('id', ParseUUIDPipe) applicationId: string,
     @Body() body: { reason?: string; comment?: string; requirements?: string[] },

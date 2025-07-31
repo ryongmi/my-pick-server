@@ -5,7 +5,7 @@ import { EntityManager } from 'typeorm';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import { LimitType } from '@krgeobuk/core/enum';
 
-import { SyncStatus } from '@common/enums/index.js';
+import { SyncStatus, PlatformType } from '@common/enums/index.js';
 
 import { PlatformApplicationRepository } from '../repositories/index.js';
 import { CreatorPlatformService } from '../../creator/services/creator-platform.service.js';
@@ -180,7 +180,7 @@ export class PlatformApplicationService {
       // 3. 이미 등록된 플랫폼인지 확인
       const existingPlatform = await this.creatorPlatformService.findByCreatorIdAndType(
         dto.creatorId,
-        dto.platformData.type as any
+        dto.platformData.type as PlatformType
       );
 
       if (existingPlatform && existingPlatform.platformId === dto.platformData.platformId) {
@@ -514,7 +514,7 @@ export class PlatformApplicationService {
       await this.creatorPlatformService.createPlatform(
         {
           creatorId: application.creatorId,
-          type: platformData.type as any,
+          type: platformData.type as PlatformType,
           platformId: platformData.platformId,
           url: platformData.url,
           displayName: platformData.displayName,

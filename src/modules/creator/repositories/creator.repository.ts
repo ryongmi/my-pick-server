@@ -93,5 +93,9 @@ export class CreatorRepository extends BaseRepository<CreatorEntity> {
 
     return { items, pageInfo };
   }
+
+  async getTotalCount(): Promise<number> {
+    return this.count();
+  }
 }
 

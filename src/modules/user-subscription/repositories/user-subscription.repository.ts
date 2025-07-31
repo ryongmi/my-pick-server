@@ -94,4 +94,8 @@ export class UserSubscriptionRepository extends BaseRepository<UserSubscriptionE
   async countByUserId(userId: string): Promise<number> {
     return this.count({ where: { userId } });
   }
+
+  async getTotalCount(): Promise<number> {
+    return this.count();
+  }
 }

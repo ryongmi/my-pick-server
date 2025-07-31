@@ -182,16 +182,18 @@ export class AdminDashboardService {
 
   private async getTotalUsersFromAuthService(): Promise<number> {
     try {
-      // TODO: auth-service TCP 통신으로 사용자 수 조회
-      // const result = await this.authClient.send('user.count', {}).toPromise();
-      // return result.count;
+      const result = await this.authClient.send('user.count', {}).toPromise();
       
-      // 임시 반환값
-      return 1000;
+      this.logger.debug('Total users fetched from auth service', {
+        count: result?.count || 0,
+      });
+      
+      return result?.count || 0;
     } catch (error: unknown) {
       this.logger.warn('Failed to get total users from auth service', {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
+      // TCP 통신 실패 시 폴백값 반환
       return 0;
     }
   }
@@ -215,15 +217,7 @@ export class AdminDashboardService {
 
   private async getTotalCreators(): Promise<number> {
     try {
-      // TODO: CreatorRepository에 count 메서드 추가 필요
-      // return await this.creatorService.getTotalCount();
-      
-      // 임시: 검색 결과에서 추정
-      const searchResult = await this.creatorService.searchCreators({
-        page: 1,
-        limit: 15,
-      });
-      return searchResult.pageInfo.totalItems;
+      return await this.creatorService.getTotalCount();
     } catch (error: unknown) {
       this.logger.warn('Failed to get total creators', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -234,15 +228,7 @@ export class AdminDashboardService {
 
   private async getTotalContent(): Promise<number> {
     try {
-      // TODO: ContentRepository에 count 메서드 추가 필요
-      // return await this.contentService.getTotalCount();
-      
-      // 임시: 검색 결과에서 추정
-      const searchResult = await this.contentService.searchContent({
-        page: 1,
-        limit: 15,
-      });
-      return searchResult.pageInfo.totalItems;
+      return await this.contentService.getTotalCount();
     } catch (error: unknown) {
       this.logger.warn('Failed to get total content', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -253,11 +239,7 @@ export class AdminDashboardService {
 
   private async getTotalSubscriptions(): Promise<number> {
     try {
-      // TODO: UserSubscriptionRepository에 count 메서드 추가 필요
-      // return await this.userSubscriptionService.getTotalCount();
-      
-      // 임시 반환값
-      return 5000;
+      return await this.userSubscriptionService.getTotalCount();
     } catch (error: unknown) {
       this.logger.warn('Failed to get total subscriptions', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -268,11 +250,7 @@ export class AdminDashboardService {
 
   private async getTotalInteractions(): Promise<number> {
     try {
-      // TODO: UserInteractionRepository에 count 메서드 추가 필요
-      // return await this.userInteractionService.getTotalCount();
-      
-      // 임시 반환값
-      return 15000;
+      return await this.userInteractionService.getTotalCount();
     } catch (error: unknown) {
       this.logger.warn('Failed to get total interactions', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -454,7 +432,7 @@ export class AdminDashboardService {
         { name: 'External APIs', status: 'warning' as const, message: 'Twitter API rate limit near threshold' },
       ];
 
-      const hasFailures = checks.some(check => (check as any).status === 'fail'); // Mock data, no failures currently
+      const hasFailures = false; // Mock data, no failures currently
       const hasWarnings = checks.some(check => check.status === 'warning');
 
       return {

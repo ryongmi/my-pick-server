@@ -26,6 +26,8 @@ import {
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
+import { JwtPayload } from '@krgeobuk/jwt/interfaces';
+import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
 import {
@@ -61,9 +63,10 @@ export class ContentController {
   })
   @Serialize({ dto: ContentSearchResultDto })
   async getContent(
-    @Query() query: ContentSearchQueryDto
+    @Query() query: ContentSearchQueryDto,
+    @CurrentJwt() jwt?: JwtPayload
   ): Promise<PaginatedResult<ContentSearchResultDto>> {
-    const userId = undefined; // TODO: 인증 시스템 구현 후 사용자 ID 얻어오기
+    const userId = jwt?.id; // 선택적 인증: 로그인하지 않은 사용자도 볼 수 있음
     return this.contentService.searchContent(query, userId);
   }
 
@@ -118,14 +121,19 @@ export class ContentController {
     description: '콘텐츠를 찾을 수 없습니다.',
   })
   @Serialize({ dto: ContentDetailDto })
-  async getContentById(@Param('id', ParseUUIDPipe) contentId: string): Promise<ContentDetailDto> {
-    const userId = undefined; // TODO: 인증 시스템 구현 후 사용자 ID 얻어오기
+  async getContentById(
+    @Param('id', ParseUUIDPipe) contentId: string,
+    @CurrentJwt() jwt?: JwtPayload
+  ): Promise<ContentDetailDto> {
+    const userId = jwt?.id; // 선택적 인증: 로그인하지 않은 사용자도 볼 수 있음
     return this.contentService.getContentById(contentId, userId);
   }
 
   @Post(':id/bookmark')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AccessTokenGuard)
   @SwaggerApiOperation({ summary: '콘텐츠 북마크 추가' })
+  @SwaggerApiBearerAuth()
   @SwaggerApiParam({
     name: 'id',
     description: '콘텐츠 ID',
@@ -139,13 +147,15 @@ export class ContentController {
     status: 404,
     description: '콘텐츠를 찾을 수 없습니다.',
   })
-  async bookmarkContent(@Param('id', ParseUUIDPipe) contentId: string): Promise<void> {
-    const userId = 'temp-user-id'; // TODO: 인증 시스템 구현 후 실제 사용자 ID 사용
+  async bookmarkContent(
+    @Param('id', ParseUUIDPipe) contentId: string,
+    @CurrentJwt() { id }: JwtPayload
+  ): Promise<void> {
 
     await this.contentService.findByIdOrFail(contentId);
 
     const dto: BookmarkContentDto = {
-      userId,
+      userId: id,
       contentId,
     };
 
@@ -154,32 +164,29 @@ export class ContentController {
 
   @Delete(':id/bookmark')
   @HttpCode(HttpStatus.NO_CONTENT)
-  // @UseGuards(AuthGuard)
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiBearerAuth()
   async removeBookmark(
-    @Param('id', ParseUUIDPipe) contentId: string
-    // @CurrentUser() user: UserInfo,
+    @Param('id', ParseUUIDPipe) contentId: string,
+    @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    // 임시 사용자 ID (실제로는 CurrentUser 데코레이터에서 가져옴)
-    const userId = 'temp-user-id';
-
-    await this.userInteractionService.removeBookmark(userId, contentId);
+    await this.userInteractionService.removeBookmark(id, contentId);
   }
 
   @Post(':id/like')
   @HttpCode(HttpStatus.NO_CONTENT)
-  // @UseGuards(AuthGuard)
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiBearerAuth()
   async likeContent(
-    @Param('id', ParseUUIDPipe) contentId: string
-    // @CurrentUser() user: UserInfo,
+    @Param('id', ParseUUIDPipe) contentId: string,
+    @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    // 임시 사용자 ID (실제로는 CurrentUser 데코레이터에서 가져옴)
-    const userId = 'temp-user-id';
 
     // 콘텐츠 존재 확인
     await this.contentService.findByIdOrFail(contentId);
 
     const dto: LikeContentDto = {
-      userId,
+      userId: id,
       contentId,
     };
 
@@ -188,33 +195,30 @@ export class ContentController {
 
   @Delete(':id/like')
   @HttpCode(HttpStatus.NO_CONTENT)
-  // @UseGuards(AuthGuard)
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiBearerAuth()
   async removeLike(
-    @Param('id', ParseUUIDPipe) contentId: string
-    // @CurrentUser() user: UserInfo,
+    @Param('id', ParseUUIDPipe) contentId: string,
+    @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    // 임시 사용자 ID (실제로는 CurrentUser 데코레이터에서 가져옴)
-    const userId = 'temp-user-id';
-
-    await this.userInteractionService.removeLike(userId, contentId);
+    await this.userInteractionService.removeLike(id, contentId);
   }
 
   @Post(':id/watch')
   @HttpCode(HttpStatus.NO_CONTENT)
-  // @UseGuards(AuthGuard)
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiBearerAuth()
   async watchContent(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @Body() body: { watchDuration?: number } = {}
-    // @CurrentUser() user: UserInfo,
+    @Body() body: { watchDuration?: number } = {},
+    @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    // 임시 사용자 ID (실제로는 CurrentUser 데코레이터에서 가져옴)
-    const userId = 'temp-user-id';
 
     // 콘텐츠 존재 확인
     await this.contentService.findByIdOrFail(contentId);
 
     const dto: WatchContentDto = {
-      userId,
+      userId: id,
       contentId,
       watchDuration: body.watchDuration,
     };
@@ -224,30 +228,81 @@ export class ContentController {
 
   @Post(':id/rate')
   @HttpCode(HttpStatus.NO_CONTENT)
-  // @UseGuards(AuthGuard)
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiBearerAuth()
   async rateContent(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @Body() body: { rating: number }
-    // @CurrentUser() user: UserInfo,
+    @Body() body: { rating: number },
+    @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    // 임시 사용자 ID (실제로는 CurrentUser 데코레이터에서 가져옴)
-    const userId = 'temp-user-id';
 
     // 콘텐츠 존재 확인
     await this.contentService.findByIdOrFail(contentId);
 
     const dto: RateContentDto = {
-      userId,
+      userId: id,
       contentId,
       rating: body.rating,
     };
 
     await this.userInteractionService.rateContent(dto);
   }
+
+  // ==================== 실시간 토글 API ====================
+
+  @Post(':id/bookmark/toggle')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiOperation({ summary: '콘텐츠 북마크 토글 (실시간)' })
+  @SwaggerApiBearerAuth()
+  @SwaggerApiParam({
+    name: 'id',
+    description: '콘텐츠 ID',
+    type: String,
+  })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '북마크 토글 성공',
+  })
+  async toggleBookmark(
+    @Param('id', ParseUUIDPipe) contentId: string,
+    @CurrentJwt() { id }: JwtPayload
+  ): Promise<{ isBookmarked: boolean }> {
+    // 콘텐츠 존재 확인
+    await this.contentService.findByIdOrFail(contentId);
+
+    return this.userInteractionService.toggleBookmark(id, contentId);
+  }
+
+  @Post(':id/like/toggle')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiOperation({ summary: '콘텐츠 좋아요 토글 (실시간)' })
+  @SwaggerApiBearerAuth()
+  @SwaggerApiParam({
+    name: 'id',
+    description: '콘텐츠 ID',
+    type: String,
+  })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '좋아요 토글 성공',
+  })
+  async toggleLike(
+    @Param('id', ParseUUIDPipe) contentId: string,
+    @CurrentJwt() { id }: JwtPayload
+  ): Promise<{ isLiked: boolean }> {
+    // 콘텐츠 존재 확인
+    await this.contentService.findByIdOrFail(contentId);
+
+    return this.userInteractionService.toggleLike(id, contentId);
+  }
 }
 
 // 북마크 관리 컨트롤러
 @Controller('content/bookmarks')
+@UseGuards(AccessTokenGuard)
+@SwaggerApiBearerAuth()
 export class ContentBookmarkController {
   constructor(
     private readonly contentService: ContentService,
@@ -255,16 +310,13 @@ export class ContentBookmarkController {
   ) {}
 
   @Get()
-  // @UseGuards(AuthGuard)
   async getBookmarkedContent(
-    // @CurrentUser() user: UserInfo,
     @Query('page') page: number = 1,
-    @Query('limit') limit: number = 20
+    @Query('limit') limit: number = 20,
+    @CurrentJwt() { id }: JwtPayload
   ): Promise<ContentSearchResultDto[]> {
-    // 임시 사용자 ID (실제로는 CurrentUser 데코레이터에서 가져옴)
-    const userId = 'temp-user-id';
 
-    const bookmarkedContentIds = await this.userInteractionService.getBookmarkedContentIds(userId);
+    const bookmarkedContentIds = await this.userInteractionService.getBookmarkedContentIds(id);
 
     if (bookmarkedContentIds.length === 0) {
       return [];

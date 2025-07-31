@@ -250,4 +250,17 @@ export class UserSubscriptionService {
       throw UserSubscriptionException.subscriptionFetchError();
     }
   }
+
+  // ==================== ADMIN 통계 메서드 ====================
+
+  async getTotalCount(): Promise<number> {
+    try {
+      return await this.userSubscriptionRepo.getTotalCount();
+    } catch (error: unknown) {
+      this.logger.error('Failed to get total subscription count', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return 0;
+    }
+  }
 }

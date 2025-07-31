@@ -15,6 +15,12 @@ import { ClientProxy } from '@nestjs/microservices';
 
 import { plainToInstance } from 'class-transformer';
 
+import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
+import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
+import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
+import type { PaginatedResult } from '@krgeobuk/core/interfaces';
+import { LimitType } from '@krgeobuk/core/enum';
+
 import { UserSubscriptionService } from '../../user-subscription/services/index.js';
 import { UserInteractionService } from '../../user-interaction/services/index.js';
 import { CreatorService } from '../../creator/services/index.js';
@@ -25,25 +31,12 @@ import {
   UpdateUserStatusDto,
   UserStatus,
 } from '../dto/index.js';
-import { PaginatedResult } from '../../creator/dto/index.js';
 import { AdminException } from '../exceptions/index.js';
 
-// TODO: @krgeobuk/authorization 패키지 설치 후 import
-// import { AuthGuard, RequirePermission, CurrentUser } from '@krgeobuk/authorization';
-
-// 임시 인터페이스 (실제로는 @krgeobuk/authorization에서 import)
-interface UserInfo {
-  id: string;
-  email: string;
-  roles: string[];
-}
-
-// 임시 데코레이터 (실제로는 @krgeobuk/authorization에서 import)
-const AuthGuard = () => () => {};
-const CurrentUser = () => (target: any, propertyKey: string, parameterIndex: number) => {};
-const RequirePermission = (permission: string) => () => {};
 
 @Controller('admin/users')
+@UseGuards(AccessTokenGuard, AuthorizationGuard)
+@RequireRole('superAdmin')
 export class AdminUserController {
   constructor(
     private readonly userSubscriptionService: UserSubscriptionService,
@@ -54,7 +47,7 @@ export class AdminUserController {
 
   @Get()
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.users.read')
+  @RequirePermission('user:read')
   async getUserList(
     @Query() query: AdminUserSearchQueryDto,
     // @CurrentUser() admin: UserInfo,
@@ -108,12 +101,17 @@ export class AdminUserController {
         }),
       );
 
-      return new PaginatedResult(
-        enrichedUsers,
-        mockUsers.length, // TODO: 실제 총 개수
-        query.page || 1,
-        query.limit || 20,
-      );
+      return {
+        items: enrichedUsers,
+        pageInfo: {
+          totalItems: mockUsers.length, // TODO: 실제 총 개수
+          totalPages: Math.ceil(mockUsers.length / 20),
+          page: query.page || 1,
+          limit: LimitType.THIRTY, // 임시로 THIRTY 사용
+          hasPreviousPage: (query.page || 1) > 1,
+          hasNextPage: (query.page || 1) * 20 < mockUsers.length,
+        },
+      };
     } catch (error: unknown) {
       throw AdminException.userDataFetchError();
     }
@@ -121,7 +119,7 @@ export class AdminUserController {
 
   @Get(':id')
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.users.read')
+  @RequirePermission('user:read')
   async getUserDetail(
     @Param('id', ParseUUIDPipe) userId: string,
     // @CurrentUser() admin: UserInfo,
@@ -191,7 +189,7 @@ export class AdminUserController {
   @Put(':id/status')
   @HttpCode(HttpStatus.NO_CONTENT)
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.users.moderate')
+  @RequirePermission('user:write')
   async updateUserStatus(
     @Param('id', ParseUUIDPipe) userId: string,
     @Body() dto: UpdateUserStatusDto,
@@ -228,7 +226,7 @@ export class AdminUserController {
 
   @Get(':id/activity')
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.users.activity')
+  @RequirePermission('user:read')
   async getUserActivity(
     @Param('id', ParseUUIDPipe) userId: string,
     @Query('days') days: number = 30,
@@ -267,7 +265,7 @@ export class AdminUserController {
 
   @Get(':id/reports')
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.users.reports')
+  @RequirePermission('user:read')
   async getUserReports(
     @Param('id', ParseUUIDPipe) userId: string,
     // @CurrentUser() admin: UserInfo,
@@ -302,7 +300,7 @@ export class AdminUserController {
 
   @Get('statistics/overview')
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.users.stats')
+  @RequirePermission('user:read')
   async getUserStatistics(
     // @CurrentUser() admin: UserInfo,
   ): Promise<{

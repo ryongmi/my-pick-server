@@ -12,22 +12,10 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 
 import { Serialize } from '@krgeobuk/core/decorators';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
-import { RequirePermission } from '@krgeobuk/authorization/decorators';
+import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
+import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
+import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
 
-// TODO: 실제 공유 패키지 설치 후 import
-// import { AuthGuard, AdminGuard, CurrentUser } from '@krgeobuk/authorization';
-// import { UserInfo } from '@krgeobuk/auth/interfaces';
-
-// 임시 타입 및 데코레이터 정의
-interface UserInfo {
-  id: string;
-  email: string;
-  roles: string[];
-}
-
-const AuthGuard = () => () => {};
-const AdminGuard = () => () => {};
-const CurrentUser = () => (target: any, propertyKey: string, parameterIndex: number) => {};
 
 import { PlatformApplicationService } from '../../platform-application/services/index.js';
 import {
@@ -44,7 +32,8 @@ import { PlatformApplicationException } from '../../platform-application/excepti
 @ApiTags('Admin - Platform Applications')
 @ApiBearerAuth()
 @Controller('admin/platform-applications')
-@UseGuards(AuthGuard, AdminGuard)
+@UseGuards(AccessTokenGuard, AuthorizationGuard)
+@RequireRole('superAdmin')
 export class AdminPlatformApplicationController {
   constructor(private readonly platformApplicationService: PlatformApplicationService) {}
 
@@ -54,7 +43,7 @@ export class AdminPlatformApplicationController {
     status: 200,
     description: '플랫폼 신청 목록 조회 성공',
   })
-  @RequirePermission('admin.platform-applications.read')
+  @RequirePermission('platform-application:read')
   @Serialize({ dto: ApplicationDetailDto })
   async getApplications(
     @Query() query: PlatformApplicationSearchQueryDto
@@ -69,7 +58,7 @@ export class AdminPlatformApplicationController {
     description: '플랫폼 신청 통계 조회 성공',
     type: ApplicationStatsDto,
   })
-  @RequirePermission('admin.platform-applications.read')
+  @RequirePermission('platform-application:read')
   @Serialize({ dto: ApplicationStatsDto })
   async getApplicationStats(): Promise<ApplicationStatsDto> {
     return await this.platformApplicationService.getApplicationStats();
@@ -82,7 +71,7 @@ export class AdminPlatformApplicationController {
     description: '크리에이터별 플랫폼 신청 목록 조회 성공',
     type: [ApplicationDetailDto],
   })
-  @RequirePermission('admin.platform-applications.read')
+  @RequirePermission('platform-application:read')
   @Serialize({ dto: ApplicationDetailDto })
   async getApplicationsByCreator(
     @Param('creatorId', ParseUUIDPipe) creatorId: string
@@ -111,7 +100,7 @@ export class AdminPlatformApplicationController {
     type: ApplicationDetailDto,
   })
   @ApiResponse({ status: 404, description: '플랫폼 신청을 찾을 수 없음' })
-  @RequirePermission('admin.platform-applications.read')
+  @RequirePermission('platform-application:read')
   @Serialize({ dto: ApplicationDetailDto })
   async getApplicationDetail(
     @Param('id', ParseUUIDPipe) applicationId: string
@@ -125,13 +114,13 @@ export class AdminPlatformApplicationController {
   @ApiResponse({ status: 400, description: '이미 검토된 신청이거나 잘못된 요청' })
   @ApiResponse({ status: 403, description: '자신의 신청은 검토할 수 없음' })
   @ApiResponse({ status: 404, description: '플랫폼 신청을 찾을 수 없음' })
-  @RequirePermission('admin.platform-applications.approve')
+  @RequirePermission('platform-application:approve')
   async approveApplication(
     @Param('id', ParseUUIDPipe) applicationId: string,
     @Body() dto: ApproveApplicationDto,
-    @CurrentUser() admin: UserInfo
+    // @CurrentUser() admin: UserInfo
   ): Promise<void> {
-    await this.platformApplicationService.approveApplication(applicationId, dto, admin.id);
+    await this.platformApplicationService.approveApplication(applicationId, dto, 'admin-user-id'); // TODO: CurrentUser 구현 후 실제 admin.id 사용
   }
 
   @Post(':id/reject')
@@ -140,13 +129,13 @@ export class AdminPlatformApplicationController {
   @ApiResponse({ status: 400, description: '이미 검토된 신청이거나 잘못된 요청' })
   @ApiResponse({ status: 403, description: '자신의 신청은 검토할 수 없음' })
   @ApiResponse({ status: 404, description: '플랫폼 신청을 찾을 수 없음' })
-  @RequirePermission('admin.platform-applications.reject')
+  @RequirePermission('platform-application:reject')
   async rejectApplication(
     @Param('id', ParseUUIDPipe) applicationId: string,
     @Body() dto: RejectApplicationDto,
-    @CurrentUser() admin: UserInfo
+    // @CurrentUser() admin: UserInfo
   ): Promise<void> {
-    await this.platformApplicationService.rejectApplication(applicationId, dto, admin.id);
+    await this.platformApplicationService.rejectApplication(applicationId, dto, 'admin-user-id'); // TODO: CurrentUser 구현 후 실제 admin.id 사용
   }
 
   @Get('rejection-reasons')
@@ -156,7 +145,7 @@ export class AdminPlatformApplicationController {
     description: '거부 사유 목록 및 메시지 조회 성공',
     type: [RejectionReasonItemDto],
   })
-  @RequirePermission('admin.platform-applications.read')
+  @RequirePermission('platform-application:read')
   @Serialize({ dto: RejectionReasonItemDto })
   async getRejectionReasons(): Promise<RejectionReasonItemDto[]> {
     return Object.values(RejectionReason).map(reason => ({

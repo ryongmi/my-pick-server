@@ -9,14 +9,9 @@ import {
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
+import { RequirePermission } from '@krgeobuk/authorization/decorators';
 
 import { UserSubscriptionService } from '../services/index.js';
-
-// TODO: @krgeobuk/authorization 패키지 설치 후 import
-// import { RequirePermission } from '@krgeobuk/authorization';
-
-// 임시 데코레이터 (실제로는 @krgeobuk/authorization에서 import)
-const RequirePermission = (permission: string) => () => {};
 
 @SwaggerApiTags({ tags: ['creator-subscribers'] })
 @SwaggerApiBearerAuth()

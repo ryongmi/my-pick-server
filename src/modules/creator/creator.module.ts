@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { UserSubscriptionModule } from '@modules/user-subscription/index.js';
+import { ContentModule } from '@modules/content/index.js';
 
 import { CreatorEntity, CreatorPlatformEntity } from './entities/index.js';
 import { CreatorRepository, CreatorPlatformRepository } from './repositories/index.js';
@@ -12,6 +13,7 @@ import { CreatorController } from './controllers/index.js';
   imports: [
     TypeOrmModule.forFeature([CreatorEntity, CreatorPlatformEntity]),
     UserSubscriptionModule,
+    ContentModule,
   ],
   controllers: [CreatorController],
   providers: [CreatorRepository, CreatorPlatformRepository, CreatorService, CreatorPlatformService],

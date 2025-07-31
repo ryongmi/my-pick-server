@@ -15,6 +15,9 @@ import {
 import { plainToInstance } from 'class-transformer';
 
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
+import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
+import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
+import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
 
 import { ContentService } from '../../content/services/index.js';
 import {
@@ -26,30 +29,16 @@ import {
 } from '../dto/index.js';
 import { AdminException } from '../exceptions/index.js';
 
-// TODO: @krgeobuk/authorization 패키지 설치 후 import
-// import { AuthGuard, RequirePermission, CurrentUser } from '@krgeobuk/authorization';
-
-// 임시 인터페이스 (실제로는 @krgeobuk/authorization에서 import)
-interface UserInfo {
-  id: string;
-  email: string;
-  roles: string[];
-}
-
-// 임시 데코레이터 (실제로는 @krgeobuk/authorization에서 import)
-const AuthGuard = () => () => {};
-const CurrentUser = () => (target: any, propertyKey: string, parameterIndex: number) => {};
-const RequirePermission = (permission: string) => () => {};
-
 @Controller('admin/content')
+@UseGuards(AccessTokenGuard, AuthorizationGuard)
+@RequireRole('superAdmin')
 export class AdminContentController {
   constructor(
     private readonly contentService: ContentService,
   ) {}
 
   @Get()
-  // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.content.read')
+  @RequirePermission('content:read')
   async getContentList(
     @Query() query: AdminContentSearchQueryDto,
     // @CurrentUser() admin: UserInfo,
@@ -118,7 +107,7 @@ export class AdminContentController {
 
   @Get(':id')
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.content.read')
+  @RequirePermission('content:read')
   async getContentDetail(
     @Param('id', ParseUUIDPipe) contentId: string,
     // @CurrentUser() admin: UserInfo,
@@ -164,7 +153,7 @@ export class AdminContentController {
   @Put(':id/status')
   @HttpCode(HttpStatus.NO_CONTENT)
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.content.moderate')
+  @RequirePermission('content:write')
   async updateContentStatus(
     @Param('id', ParseUUIDPipe) contentId: string,
     @Body() dto: UpdateContentStatusDto,
@@ -193,7 +182,7 @@ export class AdminContentController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.content.delete')
+  @RequirePermission('content:delete')
   async deleteContent(
     @Param('id', ParseUUIDPipe) contentId: string,
     // @CurrentUser() admin: UserInfo,
@@ -210,7 +199,7 @@ export class AdminContentController {
 
   @Get(':id/flags')
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.content.flags')
+  @RequirePermission('content:read')
   async getContentFlags(
     @Param('id', ParseUUIDPipe) contentId: string,
     // @CurrentUser() admin: UserInfo,
@@ -238,7 +227,7 @@ export class AdminContentController {
   @Put(':id/flags/:flagId/resolve')
   @HttpCode(HttpStatus.NO_CONTENT)
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.content.flags.resolve')
+  @RequirePermission('content:write')
   async resolveContentFlag(
     @Param('id', ParseUUIDPipe) contentId: string,
     @Param('flagId', ParseUUIDPipe) flagId: string,
@@ -263,7 +252,7 @@ export class AdminContentController {
 
   @Get('statistics/overview')
   // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.content.stats')
+  @RequirePermission('content:read')
   async getContentStatistics(
     // @CurrentUser() admin: UserInfo,
   ): Promise<{

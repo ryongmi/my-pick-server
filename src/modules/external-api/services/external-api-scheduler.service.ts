@@ -373,7 +373,7 @@ export class ExternalApiSchedulerService {
 
       const platform = await this.creatorPlatformService.findByCreatorIdAndType(
         creatorId,
-        platformType as any,
+        platformType as PlatformType,
         true // includeCreator
       );
 

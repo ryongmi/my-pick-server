@@ -27,6 +27,7 @@ import {
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
+import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
 import { CreatorService } from '../../creator/services/index.js';
@@ -41,11 +42,6 @@ import {
   UpdatePlatformDto,
 } from '../../creator/dto/index.js';
 
-// TODO: @krgeobuk/authorization 패키지 설치 후 import
-// import { RequirePermission } from '@krgeobuk/authorization';
-
-// 임시 데코레이터 (실제로는 @krgeobuk/authorization에서 import)
-const RequirePermission = (permission: string) => () => {};
 
 // 관리자 전용 크리에이터 상태 DTO
 export class UpdateCreatorStatusDto {
@@ -68,6 +64,7 @@ export class AdminCreatorDetailDto extends CreatorDetailDto {
 @SwaggerApiTags({ tags: ['admin-creators'] })
 @SwaggerApiBearerAuth()
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
+@RequireRole('superAdmin')
 @Controller('admin/creators')
 export class AdminCreatorController {
   constructor(
@@ -81,7 +78,7 @@ export class AdminCreatorController {
     description: '관리자가 모든 크리에이터 목록을 조회합니다. 검색, 필터링, 페이지네이션을 지원합니다.'
   })
   @SwaggerApiPaginatedResponse({ dto: CreatorSearchResultDto, status: 200, description: '크리에이터 목록 조회 성공' })
-  // @RequirePermission('admin.creator.read')
+  @RequirePermission('creator:read')
   async getCreators(
     @Query() query: CreatorSearchQueryDto,
   ): Promise<PaginatedResult<CreatorSearchResultDto>> {
@@ -96,7 +93,7 @@ export class AdminCreatorController {
   })
   @SwaggerApiBody({ dto: CreateCreatorDto })
   @SwaggerApiOkResponse({ status: 201, description: '크리에이터 생성 완료' })
-  // @RequirePermission('admin.creator.create')
+  @RequirePermission('creator:write')
   async createCreator(@Body() dto: CreateCreatorDto): Promise<void> {
     await this.creatorService.createCreator(dto);
   }
@@ -108,7 +105,7 @@ export class AdminCreatorController {
   })
   @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
   @SwaggerApiOkResponse({ dto: AdminCreatorDetailDto, status: 200, description: '크리에이터 상세 조회 성공' })
-  // @RequirePermission('admin.creator.read')
+  @RequirePermission('creator:read')
   async getCreatorById(
     @Param('id', ParseUUIDPipe) creatorId: string,
   ): Promise<AdminCreatorDetailDto> {
@@ -138,7 +135,7 @@ export class AdminCreatorController {
   @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
   @SwaggerApiBody({ dto: UpdateCreatorDto })
   @SwaggerApiOkResponse({ status: 204, description: '크리에이터 수정 완료' })
-  // @RequirePermission('admin.creator.update')
+  @RequirePermission('creator:write')
   async updateCreator(
     @Param('id', ParseUUIDPipe) creatorId: string,
     @Body() dto: UpdateCreatorDto,
@@ -155,7 +152,7 @@ export class AdminCreatorController {
   @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
   @SwaggerApiBody({ dto: UpdateCreatorStatusDto })
   @SwaggerApiOkResponse({ status: 204, description: '상태 변경 완료' })
-  // @RequirePermission('admin.creator.status.update')
+  @RequirePermission('creator:write')
   async updateCreatorStatus(
     @Param('id', ParseUUIDPipe) creatorId: string,
     @Body() dto: UpdateCreatorStatusDto,
@@ -172,7 +169,7 @@ export class AdminCreatorController {
   @SwaggerApiOperation({ summary: '관리자용 크리에이터 삭제' })
   @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
   @SwaggerApiOkResponse({ status: 204, description: '크리에이터 삭제 완료' })
-  // @RequirePermission('admin.creator.delete')
+  @RequirePermission('creator:delete')
   async deleteCreator(@Param('id', ParseUUIDPipe) creatorId: string): Promise<void> {
     await this.creatorService.deleteCreator(creatorId);
   }
@@ -187,7 +184,7 @@ export class AdminCreatorController {
     status: 200,
     description: '크리에이터 통계 조회 성공'
   })
-  // @RequirePermission('admin.creator.statistics.read')
+  @RequirePermission('creator:read')
   async getCreatorStatistics(
     @Param('id', ParseUUIDPipe) creatorId: string,
   ): Promise<{
@@ -228,7 +225,7 @@ export class AdminCreatorController {
     status: 200,
     description: '크리에이터 플랫폼 목록 조회 성공'
   })
-  // @RequirePermission('admin.creator.platforms.read')
+  @RequirePermission('creator:read')
   async getCreatorPlatforms(
     @Param('id', ParseUUIDPipe) creatorId: string,
   ): Promise<{
@@ -257,7 +254,7 @@ export class AdminCreatorController {
   })
   @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
   @SwaggerApiOkResponse({ status: 201, description: '플랫폼이 성공적으로 추가되었습니다.' })
-  // @RequirePermission('admin.creator.platform.create')
+  @RequirePermission('creator:write')
   async addPlatformToCreator(
     @Param('id', ParseUUIDPipe) creatorId: string,
     @Body() dto: AddPlatformDto,
@@ -273,7 +270,7 @@ export class AdminCreatorController {
   })
   @SwaggerApiParam({ name: 'platformId', type: String, description: '플랫폼 ID' })
   @SwaggerApiOkResponse({ status: 204, description: '플랫폼 정보가 성공적으로 수정되었습니다.' })
-  // @RequirePermission('admin.creator.platform.update')
+  @RequirePermission('creator:write')
   async updateCreatorPlatform(
     @Param('platformId', ParseUUIDPipe) platformId: string,
     @Body() dto: UpdatePlatformDto,
@@ -289,7 +286,7 @@ export class AdminCreatorController {
   })
   @SwaggerApiParam({ name: 'platformId', type: String, description: '플랫폼 ID' })
   @SwaggerApiOkResponse({ status: 204, description: '플랫폼이 성공적으로 삭제되었습니다.' })
-  // @RequirePermission('admin.creator.platform.delete')
+  @RequirePermission('creator:delete')
   async removeCreatorPlatform(
     @Param('platformId', ParseUUIDPipe) platformId: string,
   ): Promise<void> {
@@ -304,7 +301,7 @@ export class AdminCreatorController {
   })
   @SwaggerApiParam({ name: 'platformId', type: String, description: '플랫폼 ID' })
   @SwaggerApiOkResponse({ status: 204, description: '플랫폼 데이터가 성공적으로 동기화되었습니다.' })
-  // @RequirePermission('admin.creator.platform.sync')
+  @RequirePermission('creator:write')
   async syncPlatformData(
     @Param('platformId', ParseUUIDPipe) platformId: string,
   ): Promise<void> {
@@ -321,7 +318,7 @@ export class AdminCreatorController {
     status: 200,
     description: '신고 이력 조회 성공'
   })
-  // @RequirePermission('admin.creator.reports.read')
+  @RequirePermission('creator:read')
   async getCreatorReports(
     @Param('id', ParseUUIDPipe) creatorId: string,
   ): Promise<unknown[]> {

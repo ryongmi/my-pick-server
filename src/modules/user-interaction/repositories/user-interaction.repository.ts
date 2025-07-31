@@ -170,4 +170,57 @@ export class UserInteractionRepository extends BaseRepository<UserInteractionEnt
       .limit(limit)
       .getMany();
   }
+
+  /**
+   * 사용자별 상호작용 정보를 배치로 조회
+   */
+  async getContentInteractionsBatch(
+    contentIds: string[], 
+    userId: string
+  ): Promise<Record<string, UserInteractionEntity>> {
+    if (contentIds.length === 0) return {};
+
+    const interactions = await this.find({
+      where: { 
+        userId, 
+        contentId: In(contentIds) 
+      },
+    });
+
+    const interactionMap: Record<string, UserInteractionEntity> = {};
+    interactions.forEach((interaction) => {
+      interactionMap[interaction.contentId] = interaction;
+    });
+
+    return interactionMap;
+  }
+
+  /**
+   * 북마크/좋아요 상태 토글을 위한 upsert 메서드
+   */
+  async upsertInteraction(
+    userId: string, 
+    contentId: string, 
+    updates: Partial<Pick<UserInteractionEntity, 'isBookmarked' | 'isLiked' | 'rating' | 'watchedAt' | 'watchDuration'>>
+  ): Promise<UserInteractionEntity> {
+    let interaction = await this.findByUserAndContent(userId, contentId);
+    
+    if (!interaction) {
+      interaction = this.create({
+        userId,
+        contentId,
+        isBookmarked: false,
+        isLiked: false,
+        ...updates,
+      });
+    } else {
+      Object.assign(interaction, updates);
+    }
+
+    return this.save(interaction);
+  }
+
+  async getTotalCount(): Promise<number> {
+    return this.count();
+  }
 }

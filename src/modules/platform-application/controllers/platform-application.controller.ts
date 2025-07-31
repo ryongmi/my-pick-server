@@ -36,7 +36,7 @@ interface UserInfo {
 }
 
 // 임시 데코레이터
-const CurrentUser = () => (target: any, propertyKey: string, parameterIndex: number) => {};
+const CurrentUser = () => (target: unknown, propertyKey: string, parameterIndex: number) => {};
 
 import { PlatformApplicationService } from '../services/index.js';
 import {

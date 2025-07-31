@@ -16,7 +16,7 @@ import {
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
-import { RequirePermission } from '@krgeobuk/authorization/decorators';
+import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
 
 import { AdminDashboardService } from '../services/index.js';
 import {
@@ -28,6 +28,7 @@ import {
 @SwaggerApiTags({ tags: ['admin-dashboard'] })
 @SwaggerApiBearerAuth()
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
+@RequireRole('superAdmin')
 @Controller('admin/dashboard')
 export class AdminDashboardController {
   constructor(
@@ -46,7 +47,7 @@ export class AdminDashboardController {
     status: 403,
     description: '관리자 권한이 필요합니다.',
   })
-  @RequirePermission('admin.dashboard.read')
+  @RequirePermission('dashboard:read')
   @Serialize({ dto: AdminDashboardOverviewDto })
   async getDashboardOverview(): Promise<AdminDashboardOverviewDto> {
     return this.adminDashboardService.getDashboardOverview();
@@ -64,7 +65,7 @@ export class AdminDashboardController {
     status: 403,
     description: '관리자 권한이 필요합니다.',
   })
-  @RequirePermission('admin.dashboard.stats')
+  @RequirePermission('dashboard:read')
   @Serialize({ dto: AdminDashboardStatsDto })
   async getDashboardStats(): Promise<AdminDashboardStatsDto> {
     return this.adminDashboardService.getDashboardStats();
@@ -82,7 +83,7 @@ export class AdminDashboardController {
     status: 403,
     description: '관리자 권한이 필요합니다.',
   })
-  @RequirePermission('admin.dashboard.metrics')
+  @RequirePermission('dashboard:read')
   @Serialize({ dto: AdminDashboardMetricsDto })
   async getDashboardMetrics(): Promise<AdminDashboardMetricsDto> {
     return this.adminDashboardService.getDashboardMetrics();

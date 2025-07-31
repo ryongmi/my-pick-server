@@ -27,6 +27,7 @@ import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { JwtPayload } from '@krgeobuk/jwt/interfaces';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import { RequirePermission } from '@krgeobuk/authorization/decorators';
+import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
 import { CreatorService } from '../services/index.js';
 import { UserSubscriptionService } from '../../user-subscription/services/index.js';
@@ -38,7 +39,6 @@ import {
   CreatorPlatformDto,
   AddPlatformDto,
   UpdatePlatformDto,
-  PaginatedResult,
 } from '../dto/index.js';
 
 @SwaggerApiTags({ tags: ['creators'] })
@@ -55,7 +55,7 @@ export class CreatorController {
   async getCreators(
     @Query() query: CreatorSearchQueryDto
   ): Promise<PaginatedResult<CreatorSearchResultDto>> {
-    return await this.creatorService.searchCreators(query) as any;
+    return this.creatorService.searchCreators(query);
   }
 
   @Get(':id')
@@ -80,14 +80,17 @@ export class CreatorController {
   @Serialize({ dto: CreatorStatsDto })
   async getCreatorStats(@Param('id', ParseUUIDPipe) creatorId: string): Promise<CreatorStatsDto> {
     const creator = await this.creatorService.findByIdOrFail(creatorId);
-    const subscriberCount = await this.userSubscriptionService.getSubscriberCount(creatorId);
+    
+    const [subscriberCount, statistics] = await Promise.all([
+      this.userSubscriptionService.getSubscriberCount(creatorId),
+      this.creatorService.getCreatorStatistics(creatorId)
+    ]);
 
-    // TODO: CreatorPlatformEntity에서 통계 합계 계산하도록 수정 필요
     return {
       subscriberCount,
-      followerCount: 0, // TODO: CreatorPlatformEntity에서 총합 계산
-      contentCount: 0, // TODO: CreatorPlatformEntity에서 총합 계산  
-      totalViews: 0, // TODO: CreatorPlatformEntity에서 총합 계산
+      followerCount: statistics.followerCount,
+      contentCount: statistics.contentCount,  
+      totalViews: statistics.totalViews,
     };
   }
 

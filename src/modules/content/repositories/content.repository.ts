@@ -181,4 +181,8 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
       take: limit,
     });
   }
+
+  async getTotalCount(): Promise<number> {
+    return this.count();
+  }
 }

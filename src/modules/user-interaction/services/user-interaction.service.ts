@@ -123,39 +123,18 @@ export class UserInteractionService {
 
   async bookmarkContent(dto: BookmarkContentDto): Promise<void> {
     try {
-      // 1. 기존 상호작용 조회 또는 생성
-      let interaction = await this.userInteractionRepo.findByUserAndContent(dto.userId, dto.contentId);
+      const interaction = await this.userInteractionRepo.upsertInteraction(
+        dto.userId,
+        dto.contentId,
+        { isBookmarked: true }
+      );
 
-      if (!interaction) {
-        interaction = new UserInteractionEntity();
-        interaction.userId = dto.userId;
-        interaction.contentId = dto.contentId;
-      }
-
-      // 2. 이미 북마크된 경우 확인
-      if (interaction.isBookmarked) {
-        this.logger.warn('Content already bookmarked', {
-          userId: dto.userId,
-          contentId: dto.contentId,
-        });
-        throw UserInteractionException.bookmarkAlreadyExists();
-      }
-
-      // 3. 북마크 설정
-      interaction.isBookmarked = true;
-
-      await this.userInteractionRepo.save(interaction);
-
-      // 4. 성공 로깅
       this.logger.log('Content bookmarked successfully', {
         userId: dto.userId,
         contentId: dto.contentId,
+        wasNew: !interaction.updatedAt || interaction.createdAt >= interaction.updatedAt,
       });
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
       this.logger.error('Bookmark creation failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
         userId: dto.userId,
@@ -209,39 +188,18 @@ export class UserInteractionService {
 
   async likeContent(dto: LikeContentDto): Promise<void> {
     try {
-      // 1. 기존 상호작용 조회 또는 생성
-      let interaction = await this.userInteractionRepo.findByUserAndContent(dto.userId, dto.contentId);
+      const interaction = await this.userInteractionRepo.upsertInteraction(
+        dto.userId,
+        dto.contentId,
+        { isLiked: true }
+      );
 
-      if (!interaction) {
-        interaction = new UserInteractionEntity();
-        interaction.userId = dto.userId;
-        interaction.contentId = dto.contentId;
-      }
-
-      // 2. 이미 좋아요한 경우 확인
-      if (interaction.isLiked) {
-        this.logger.warn('Content already liked', {
-          userId: dto.userId,
-          contentId: dto.contentId,
-        });
-        throw UserInteractionException.likeAlreadyExists();
-      }
-
-      // 3. 좋아요 설정
-      interaction.isLiked = true;
-
-      await this.userInteractionRepo.save(interaction);
-
-      // 4. 성공 로깅
       this.logger.log('Content liked successfully', {
         userId: dto.userId,
         contentId: dto.contentId,
+        wasNew: !interaction.updatedAt || interaction.createdAt >= interaction.updatedAt,
       });
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
       this.logger.error('Like creation failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
         userId: dto.userId,
@@ -295,28 +253,22 @@ export class UserInteractionService {
 
   async watchContent(dto: WatchContentDto): Promise<void> {
     try {
-      // 1. 기존 상호작용 조회 또는 생성
-      let interaction = await this.userInteractionRepo.findByUserAndContent(dto.userId, dto.contentId);
+      const watchUpdate = {
+        watchedAt: new Date(),
+        ...(dto.watchDuration !== undefined && { watchDuration: dto.watchDuration })
+      };
 
-      if (!interaction) {
-        interaction = new UserInteractionEntity();
-        interaction.userId = dto.userId;
-        interaction.contentId = dto.contentId;
-      }
+      const interaction = await this.userInteractionRepo.upsertInteraction(
+        dto.userId,
+        dto.contentId,
+        watchUpdate
+      );
 
-      // 2. 시청 정보 업데이트
-      interaction.watchedAt = new Date();
-      if (dto.watchDuration !== undefined) {
-        interaction.watchDuration = dto.watchDuration;
-      }
-
-      await this.userInteractionRepo.save(interaction);
-
-      // 3. 성공 로깅
       this.logger.log('Content watch recorded successfully', {
         userId: dto.userId,
         contentId: dto.contentId,
         watchDuration: dto.watchDuration,
+        totalWatchDuration: interaction.watchDuration,
       });
     } catch (error: unknown) {
       this.logger.error('Watch record failed', {
@@ -331,25 +283,17 @@ export class UserInteractionService {
 
   async rateContent(dto: RateContentDto): Promise<void> {
     try {
-      // 1. 기존 상호작용 조회 또는 생성
-      let interaction = await this.userInteractionRepo.findByUserAndContent(dto.userId, dto.contentId);
+      const interaction = await this.userInteractionRepo.upsertInteraction(
+        dto.userId,
+        dto.contentId,
+        { rating: dto.rating }
+      );
 
-      if (!interaction) {
-        interaction = new UserInteractionEntity();
-        interaction.userId = dto.userId;
-        interaction.contentId = dto.contentId;
-      }
-
-      // 2. 평점 설정
-      interaction.rating = dto.rating;
-
-      await this.userInteractionRepo.save(interaction);
-
-      // 3. 성공 로깅
       this.logger.log('Content rated successfully', {
         userId: dto.userId,
         contentId: dto.contentId,
         rating: dto.rating,
+        previousRating: interaction.rating !== dto.rating ? 'updated' : 'same',
       });
     } catch (error: unknown) {
       this.logger.error('Rating failed', {
@@ -360,6 +304,86 @@ export class UserInteractionService {
       });
 
       throw UserInteractionException.interactionCreateError();
+    }
+  }
+
+  // ==================== 토글 메서드 (실시간 상호작용) ====================
+
+  async toggleBookmark(userId: string, contentId: string): Promise<{ isBookmarked: boolean }> {
+    try {
+      const currentInteraction = await this.userInteractionRepo.findByUserAndContent(userId, contentId);
+      const currentState = currentInteraction?.isBookmarked || false;
+      const newState = !currentState;
+
+      await this.userInteractionRepo.upsertInteraction(
+        userId,
+        contentId,
+        { isBookmarked: newState }
+      );
+
+      this.logger.log('Bookmark toggled successfully', {
+        userId,
+        contentId,
+        from: currentState,
+        to: newState,
+      });
+
+      return { isBookmarked: newState };
+    } catch (error: unknown) {
+      this.logger.error('Bookmark toggle failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+        contentId,
+      });
+      throw UserInteractionException.interactionCreateError();
+    }
+  }
+
+  async toggleLike(userId: string, contentId: string): Promise<{ isLiked: boolean }> {
+    try {
+      const currentInteraction = await this.userInteractionRepo.findByUserAndContent(userId, contentId);
+      const currentState = currentInteraction?.isLiked || false;
+      const newState = !currentState;
+
+      await this.userInteractionRepo.upsertInteraction(
+        userId,
+        contentId,
+        { isLiked: newState }
+      );
+
+      this.logger.log('Like toggled successfully', {
+        userId,
+        contentId,
+        from: currentState,
+        to: newState,
+      });
+
+      return { isLiked: newState };
+    } catch (error: unknown) {
+      this.logger.error('Like toggle failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+        contentId,
+      });
+      throw UserInteractionException.interactionCreateError();
+    }
+  }
+
+  // ==================== 배치 조회 메서드 ====================
+
+  async getContentInteractionsBatch(
+    contentIds: string[], 
+    userId: string
+  ): Promise<Record<string, UserInteractionEntity>> {
+    try {
+      return await this.userInteractionRepo.getContentInteractionsBatch(contentIds, userId);
+    } catch (error: unknown) {
+      this.logger.error('Get content interactions batch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+        contentCount: contentIds.length,
+      });
+      throw UserInteractionException.interactionFetchError();
     }
   }
 
@@ -503,6 +527,19 @@ export class UserInteractionService {
         limit,
       });
       throw UserInteractionException.interactionFetchError();
+    }
+  }
+
+  // ==================== ADMIN 통계 메서드 ====================
+
+  async getTotalCount(): Promise<number> {
+    try {
+      return await this.userInteractionRepo.getTotalCount();
+    } catch (error: unknown) {
+      this.logger.error('Failed to get total interaction count', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return 0;
     }
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject, HttpException } from '@nestjs/common';
+import { Injectable, Logger, Inject, HttpException, forwardRef } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 
 import { EntityManager, In, UpdateResult, FindOptionsWhere, Not } from 'typeorm';
@@ -7,6 +7,7 @@ import { plainToInstance } from 'class-transformer';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
 import { UserSubscriptionService } from '@modules/user-subscription/index.js';
+import { ContentService } from '@modules/content/index.js';
 import { VideoSyncStatus, SyncStatus } from '@common/enums/index.js';
 
 import { CreatorRepository } from '../repositories/index.js';
@@ -39,6 +40,7 @@ export class CreatorService {
     private readonly creatorRepo: CreatorRepository,
     private readonly creatorPlatformService: CreatorPlatformService,
     private readonly userSubscriptionService: UserSubscriptionService,
+    private readonly contentService: ContentService,
     @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy
   ) {}
 
@@ -218,7 +220,7 @@ export class CreatorService {
       const platforms = await this.creatorPlatformService.findByCreatorId(creatorId);
 
       // 3. 응답 형식으로 변환
-      return platforms.map(platform => ({
+      return platforms.map((platform) => ({
         id: platform.id,
         type: platform.type,
         platformId: platform.platformId,
@@ -323,7 +325,7 @@ export class CreatorService {
         updateData.consentGrantedAt = now;
         updateData.consentExpiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // 1년 후
       } else {
-        // 동의 철회 시
+        // 동의 철회 시 - null을 사용하여 데이터베이스에서 null로 설정
         (updateData as any).consentGrantedAt = null;
         (updateData as any).consentExpiresAt = null;
       }
@@ -861,7 +863,9 @@ export class CreatorService {
       const platform = await this.creatorPlatformService.findByIdOrFail(platformId);
 
       // 동기화 상태 업데이트
-      await this.creatorPlatformService.updateSyncStatus(platformId, { syncStatus: SyncStatus.ACTIVE });
+      await this.creatorPlatformService.updateSyncStatus(platformId, {
+        syncStatus: SyncStatus.ACTIVE,
+      });
 
       this.logger.log('Platform data sync triggered via admin', {
         platformId,
@@ -883,6 +887,93 @@ export class CreatorService {
         platformId,
       });
       throw CreatorException.platformSyncError();
+    }
+  }
+
+  // ==================== 통계 메서드 ====================
+
+  async getCreatorStatistics(creatorId: string): Promise<{
+    followerCount: number;
+    contentCount: number;
+    totalViews: number;
+  }> {
+    try {
+      // CreatorPlatform에서 followerCount 총합 계산
+      const platforms = await this.creatorPlatformService.findByCreatorId(creatorId);
+      const followerCount = platforms.reduce(
+        (sum: number, platform) => sum + (platform.followerCount || 0),
+        0
+      );
+
+      // Content 개수와 총 조회수 계산 (TCP 통신 사용)
+      const [contentCount, totalViews] = await Promise.all([
+        this.getContentCount(creatorId),
+        this.getTotalViews(creatorId),
+      ]);
+
+      this.logger.debug('Creator statistics calculated', {
+        creatorId,
+        followerCount,
+        contentCount,
+        totalViews,
+        platformCount: platforms.length,
+      });
+
+      return {
+        followerCount,
+        contentCount,
+        totalViews,
+      };
+    } catch (error: unknown) {
+      this.logger.error('Creator statistics calculation failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+
+      // 에러 발생 시 기본값 반환 (서비스 안정성)
+      return {
+        followerCount: 0,
+        contentCount: 0,
+        totalViews: 0,
+      };
+    }
+  }
+
+  private async getContentCount(creatorId: string): Promise<number> {
+    try {
+      return await this.contentService.getContentCountByCreatorId(creatorId);
+    } catch (error: unknown) {
+      this.logger.warn('Failed to get content count from content service', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      return 0;
+    }
+  }
+
+  private async getTotalViews(creatorId: string): Promise<number> {
+    try {
+      // ContentService에 총 조회수 메서드 호출
+      return await this.contentService.getTotalViewsByCreatorId(creatorId);
+    } catch (error: unknown) {
+      this.logger.warn('Failed to get total views from content service', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      return 0;
+    }
+  }
+
+  // ==================== ADMIN 통계 메서드 ====================
+
+  async getTotalCount(): Promise<number> {
+    try {
+      return await this.creatorRepo.getTotalCount();
+    } catch (error: unknown) {
+      this.logger.error('Failed to get total creator count', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return 0;
     }
   }
 }

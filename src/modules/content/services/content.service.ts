@@ -6,6 +6,9 @@ import { plainToInstance } from 'class-transformer';
 
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
+import { PlatformType } from '@common/enums/index.js';
+import { UserInteractionService } from '@modules/user-interaction/index.js';
+
 import { ContentRepository } from '../repositories/index.js';
 import { ContentEntity, ContentStatisticsEntity } from '../entities/index.js';
 import {
@@ -25,6 +28,7 @@ export class ContentService {
   constructor(
     private readonly contentRepo: ContentRepository,
     private readonly dataSource: DataSource,
+    private readonly userInteractionService: UserInteractionService,
     @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
   ) {}
 
@@ -62,7 +66,7 @@ export class ContentService {
 
   async findByPlatformId(platformId: string, platform: string): Promise<ContentEntity | null> {
     return this.contentRepo.findOne({
-      where: { platformId, platform: platform as any },
+      where: { platformId, platform: platform as PlatformType },
     });
   }
 
@@ -82,20 +86,26 @@ export class ContentService {
     query: ContentSearchQueryDto,
     userId?: string,
   ): Promise<PaginatedResult<ContentSearchResultDto>> {
-    const searchOptions: any = {
-      ...query,
-      startDate: query.startDate ? new Date(query.startDate) : undefined,
-      endDate: query.endDate ? new Date(query.endDate) : undefined,
-    };
-
-    // Remove undefined values to satisfy exactOptionalPropertyTypes
-    Object.keys(searchOptions).forEach(key => {
-      if (searchOptions[key] === undefined) {
-        delete searchOptions[key];
+    // Create clean search options with proper types
+    const cleanedOptions: Record<string, unknown> = {};
+    
+    // Copy defined properties from query
+    Object.keys(query).forEach(key => {
+      const value = (query as Record<string, unknown>)[key];
+      if (value !== undefined) {
+        cleanedOptions[key] = value;
       }
     });
 
-    const { items, pageInfo } = await this.contentRepo.searchContent(searchOptions);
+    // Transform string dates to Date objects if provided
+    if (query.startDate) {
+      cleanedOptions.startDate = new Date(query.startDate);
+    }
+    if (query.endDate) {
+      cleanedOptions.endDate = new Date(query.endDate);
+    }
+
+    const { items, pageInfo } = await this.contentRepo.searchContent(cleanedOptions as Parameters<typeof this.contentRepo.searchContent>[0]);
     
     if (items.length === 0) {
       return { items: [], pageInfo };
@@ -105,10 +115,13 @@ export class ContentService {
     const creatorIds = [...new Set(items.map((content) => content.creatorId!))]; // 중복 제거
 
     try {
+      // 🔥 콘텐츠 통계 정보 조회
+      const contentStatistics = await this.getContentStatisticsByIds(contentIds);
+      
       // 🔥 사용자 상호작용 정보 조회 (크리에이터 정보는 실시간 집계로 대체)
-      const userInteractions = userId ? await this.getUserInteractionsByContentIds(userId, contentIds) : {};
+      const userInteractions = userId ? await this.getUserInteractionsByContentIds(userId, contentIds) : {} as Record<string, { isBookmarked?: boolean; isLiked?: boolean; rating?: number; }>;
 
-      const enrichedItems = this.buildContentSearchResults(items, userInteractions, userId);
+      const enrichedItems = this.buildContentSearchResults(items, userInteractions, contentStatistics, userId);
       
       this.logger.debug('Content search completed with enriched data', {
         totalFound: pageInfo.totalItems,
@@ -144,16 +157,25 @@ export class ContentService {
         excludeExtraneousValues: true,
       });
 
-      // TODO: UserInteractionService 연동하여 사용자별 상호작용 정보 추가
+      // UserInteractionService 연동하여 사용자별 상호작용 정보 추가
       if (userId) {
-        // detailDto.isBookmarked = await this.userInteractionService.isBookmarked(userId, contentId);
-        // detailDto.isLiked = await this.userInteractionService.isLiked(userId, contentId);
-        // const interaction = await this.userInteractionService.getInteractionDetail(userId, contentId);
-        // if (interaction) {
-        //   detailDto.watchedAt = interaction.watchedAt;
-        //   detailDto.watchDuration = interaction.watchDuration;
-        //   detailDto.rating = interaction.rating;
-        // }
+        try {
+          detailDto.isBookmarked = await this.userInteractionService.isBookmarked(userId, contentId);
+          detailDto.isLiked = await this.userInteractionService.isLiked(userId, contentId);
+          const interaction = await this.userInteractionService.getInteractionDetail(userId, contentId);
+          if (interaction) {
+            if (interaction.watchedAt) detailDto.watchedAt = interaction.watchedAt;
+            if (interaction.watchDuration) detailDto.watchDuration = interaction.watchDuration;
+            if (interaction.rating) detailDto.rating = interaction.rating;
+          }
+        } catch (error: unknown) {
+          this.logger.warn('Failed to fetch user interactions for content detail', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            userId,
+            contentId,
+          });
+          // 사용자 상호작용 정보 조회 실패 시 기본값 유지
+        }
       }
 
       this.logger.debug('Content detail fetched', {
@@ -246,7 +268,7 @@ export class ContentService {
   ): Promise<void> {
     // 1. 사전 검증 (중복 확인)
     const existing = await this.contentRepo.findOne({
-      where: { platformId: dto.platformId, platform: dto.platform as any }
+      where: { platformId: dto.platformId, platform: dto.platform as PlatformType }
     });
     if (existing) {
       this.logger.warn('Content creation failed: duplicate platform content', {
@@ -376,6 +398,26 @@ export class ContentService {
     return this.contentRepo.count({
       where: { creatorId },
     });
+  }
+
+  async getTotalViewsByCreatorId(creatorId: string): Promise<number> {
+    try {
+      const result = await this.dataSource
+        .getRepository(ContentStatisticsEntity)
+        .createQueryBuilder('stats')
+        .leftJoin('content', 'content', 'content.id = stats.contentId')
+        .select('SUM(stats.views)', 'totalViews')
+        .where('content.creatorId = :creatorId', { creatorId })
+        .getRawOne();
+
+      return Number(result?.totalViews) || 0;
+    } catch (error: unknown) {
+      this.logger.error('Failed to get total views by creator', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      return 0;
+    }
   }
 
   // ==================== YouTube API 정책 준수 메서드 ====================
@@ -900,23 +942,98 @@ export class ContentService {
   // ==================== PRIVATE HELPER METHODS ====================
 
 
-  // 🔥 사용자 상호작용 정보 조회 (TODO: UserInteractionService 구현 후)
+  // 콘텐츠 통계 정보 조회 (ContentStatistics 연동)
+  private async getContentStatisticsByIds(
+    contentIds: string[]
+  ): Promise<Record<string, { views: number; likes: number; comments: number; shares: number; engagementRate: number; updatedAt: Date; }>> {
+    try {
+      if (contentIds.length === 0) return {};
+
+      const statisticsRepo = this.dataSource.getRepository(ContentStatisticsEntity);
+      const statistics = await statisticsRepo.find({
+        where: { contentId: In(contentIds) },
+      });
+
+      const result: Record<string, { views: number; likes: number; comments: number; shares: number; engagementRate: number; updatedAt: Date; }> = {};
+      
+      statistics.forEach((stat) => {
+        result[stat.contentId] = {
+          views: Number(stat.views) || 0,
+          likes: stat.likes || 0,
+          comments: stat.comments || 0,
+          shares: stat.shares || 0,
+          engagementRate: Number(stat.engagementRate) || 0,
+          updatedAt: stat.updatedAt || new Date(),
+        };
+      });
+
+      return result;
+    } catch (error: unknown) {
+      this.logger.warn('Failed to fetch content statistics', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        contentCount: contentIds.length,
+      });
+      return {}; // 실패 시 빈 객체 반환
+    }
+  }
+
+  // 사용자 상호작용 정보 조회 (UserInteractionService 연동)
   private async getUserInteractionsByContentIds(
     userId: string, 
     contentIds: string[]
-  ): Promise<Record<string, unknown>> {
-    // TODO: UserInteractionService 구현 후 활성화
-    return {};
+  ): Promise<Record<string, { isBookmarked?: boolean; isLiked?: boolean; rating?: number; watchedAt?: Date; }>> {
+    try {
+      const interactions = await this.userInteractionService.getContentInteractionsBatch(
+        contentIds, 
+        userId
+      );
+      
+      const result: Record<string, { isBookmarked?: boolean; isLiked?: boolean; rating?: number; watchedAt?: Date; }> = {};
+      
+      Object.entries(interactions).forEach(([contentId, interaction]) => {
+        const interactionData: { isBookmarked?: boolean; isLiked?: boolean; rating?: number; watchedAt?: Date; } = {
+          isBookmarked: interaction.isBookmarked || false,
+          isLiked: interaction.isLiked || false,
+        };
+        
+        if (interaction.rating) {
+          interactionData.rating = interaction.rating;
+        }
+        if (interaction.watchedAt) {
+          interactionData.watchedAt = interaction.watchedAt;
+        }
+        
+        result[contentId] = interactionData;
+      });
+      
+      return result;
+    } catch (error: unknown) {
+      this.logger.warn('Failed to fetch batch user interactions', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+        contentCount: contentIds.length,
+      });
+      return {}; // 실패 시 빈 객체 반환
+    }
   }
 
   // 🔥 콘텐츠 검색 결과 빌드 (데이터 정규화 기반)
   private buildContentSearchResults(
     contents: Partial<ContentEntity>[],
-    userInteractions: Record<string, unknown>,
+    userInteractions: Record<string, { isBookmarked?: boolean; isLiked?: boolean; rating?: number }>,
+    contentStatistics: Record<string, { views: number; likes: number; comments: number; shares: number; engagementRate: number; updatedAt: Date; }>,
     userId?: string
   ): ContentSearchResultDto[] {
     return contents.map((content) => {
-      const interaction = userInteractions[content.id!] as any;
+      const interaction = userInteractions[content.id!];
+      const statistics = contentStatistics[content.id!] || {
+        views: 0,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        engagementRate: 0,
+        updatedAt: new Date()
+      };
 
       return {
         id: content.id!,
@@ -932,19 +1049,12 @@ export class ContentService {
         creatorId: content.creatorId!,
         metadata: content.metadata!,
         createdAt: content.createdAt!,
-        statistics: {
-          views: 0,
-          likes: 0,
-          comments: 0,
-          shares: 0,
-          engagementRate: 0,
-          updatedAt: new Date()
-        } as any, // TODO: 실제 통계 조회 로직 구현
+        statistics, // 실제 통계 사용
         // 🔥 크리에이터 정보는 별도 API 호출로 조회 (데이터 정규화)
         // 🔥 사용자 상호작용 정보 (userId가 있을 때만)
         isBookmarked: userId ? (interaction?.isBookmarked || false) : undefined,
         isLiked: userId ? (interaction?.isLiked || false) : undefined,
-        watchedAt: userId ? interaction?.watchedAt : undefined,
+        watchedAt: userId ? (interaction as { watchedAt?: Date })?.watchedAt : undefined,
         rating: userId ? interaction?.rating : undefined,
       };
     });
@@ -973,7 +1083,7 @@ export class ContentService {
         shares: 0,
         engagementRate: 0,
         updatedAt: new Date()
-      } as any, // TODO: 실제 통계 조회 로직 구현
+      }, // 폴백 시 기본값
       // 🔥 크리에이터 정보는 별도 API 호출로 조회 (폴백)
       // 🔥 사용자 상호작용 정보 기본값
       isBookmarked: undefined,
@@ -981,5 +1091,18 @@ export class ContentService {
       watchedAt: undefined,
       rating: undefined,
     }));
+  }
+
+  // ==================== ADMIN 통계 메서드 ====================
+
+  async getTotalCount(): Promise<number> {
+    try {
+      return await this.contentRepo.getTotalCount();
+    } catch (error: unknown) {
+      this.logger.error('Failed to get total content count', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return 0;
+    }
   }
 }
