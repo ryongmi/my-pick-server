@@ -24,6 +24,15 @@ export class AdminDashboardStatsDto {
 
   @Expose()
   rejectedApplications!: number;
+
+  @Expose()
+  totalReports!: number;
+
+  @Expose()
+  pendingReports!: number;
+
+  @Expose()
+  resolvedReports!: number;
 }
 
 export class AdminDashboardMetricsDto {

@@ -10,6 +10,7 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   Inject,
+  Logger,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 
@@ -24,6 +25,7 @@ import { LimitType } from '@krgeobuk/core/enum';
 import { UserSubscriptionService } from '../../user-subscription/services/index.js';
 import { UserInteractionService } from '../../user-interaction/services/index.js';
 import { CreatorService } from '../../creator/services/index.js';
+import { ReportService } from '../../report/services/index.js';
 import {
   AdminUserSearchQueryDto,
   AdminUserListItemDto,
@@ -38,10 +40,13 @@ import { AdminException } from '../exceptions/index.js';
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
 @RequireRole('superAdmin')
 export class AdminUserController {
+  private readonly logger = new Logger(AdminUserController.name);
+
   constructor(
     private readonly userSubscriptionService: UserSubscriptionService,
     private readonly userInteractionService: UserInteractionService,
     private readonly creatorService: CreatorService,
+    private readonly reportService: ReportService,
     @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
   ) {}
 
@@ -53,41 +58,48 @@ export class AdminUserController {
     // @CurrentUser() admin: UserInfo,
   ): Promise<PaginatedResult<AdminUserListItemDto>> {
     try {
-      // TODO: auth-service에서 사용자 목록 조회
-      // const usersResult = await this.authClient.send('user.search', query).toPromise();
-      
-      // 임시 데이터
-      const mockUsers = [
-        {
-          id: 'user1',
-          email: 'user1@example.com',
-          name: 'User One',
-          status: UserStatus.ACTIVE,
-          isEmailVerified: true,
-          registeredAt: new Date('2024-01-15'),
-          lastLoginAt: new Date('2024-07-20'),
-        },
-        {
-          id: 'user2',
-          email: 'user2@example.com',
-          name: 'User Two',
-          status: UserStatus.ACTIVE,
-          isEmailVerified: true,
-          registeredAt: new Date('2024-02-10'),
-          lastLoginAt: new Date('2024-07-19'),
-        },
-      ];
+      // Auth-service에서 사용자 목록 조회
+      const usersResult = await this.authClient.send('user.search', {
+        page: query.page || 1,
+        limit: query.limit || 20,
+        status: query.status,
+        email: query.email,
+        name: query.name,
+        startDate: query.startDate,
+        endDate: query.endDate,
+      }).toPromise();
+
+      this.logger.debug('Users fetched from auth service', {
+        totalItems: usersResult?.pageInfo?.totalItems || 0,
+        page: query.page || 1,
+      });
+
+      // 응답이 없거나 에러인 경우 처리
+      if (!usersResult || !usersResult.items) {
+        this.logger.warn('No users data received from auth service');
+        return {
+          items: [],
+          pageInfo: {
+            totalItems: 0,
+            totalPages: 0,
+            page: query.page || 1,
+            limit: (query.limit || 20) as LimitType,
+            hasPreviousPage: false,
+            hasNextPage: false,
+          },
+        };
+      }
 
       // 각 사용자의 추가 정보 조회
       const enrichedUsers = await Promise.all(
-        mockUsers.map(async (user) => {
+        usersResult.items.map(async (user: any) => {
           const [subscriptionCount, interactionCount] = await Promise.all([
-            this.userSubscriptionService.getSubscriptionCount(user.id),
-            this.userInteractionService.getUserInteractionCount(user.id),
+            this.userSubscriptionService.getSubscriptionCount(user.id).catch(() => 0),
+            this.userInteractionService.getUserInteractionCount(user.id).catch(() => 0),
           ]);
 
           // 크리에이터 여부 확인
-          const isCreator = await this.checkIfUserIsCreator(user.id);
+          const isCreator = await this.checkIfUserIsCreator(user.id).catch(() => false);
 
           return plainToInstance(AdminUserListItemDto, {
             ...user,
@@ -103,13 +115,13 @@ export class AdminUserController {
 
       return {
         items: enrichedUsers,
-        pageInfo: {
-          totalItems: mockUsers.length, // TODO: 실제 총 개수
-          totalPages: Math.ceil(mockUsers.length / 20),
+        pageInfo: usersResult.pageInfo || {
+          totalItems: 0,
+          totalPages: 0,
           page: query.page || 1,
-          limit: LimitType.THIRTY, // 임시로 THIRTY 사용
-          hasPreviousPage: (query.page || 1) > 1,
-          hasNextPage: (query.page || 1) * 20 < mockUsers.length,
+          limit: query.limit || 20,
+          hasPreviousPage: false,
+          hasNextPage: false,
         },
       };
     } catch (error: unknown) {
@@ -125,33 +137,15 @@ export class AdminUserController {
     // @CurrentUser() admin: UserInfo,
   ): Promise<AdminUserDetailDto> {
     try {
-      // TODO: auth-service에서 사용자 상세 정보 조회
-      // const userDetail = await this.authClient.send('user.findById', { userId }).toPromise();
+      // Auth-service에서 사용자 상세 정보 조회
+      const userDetail = await this.authClient.send('user.findById', { userId }).toPromise();
       
-      // 임시 데이터
-      const mockUser = {
-        id: userId,
-        email: 'user@example.com',
-        name: 'User Name',
-        status: UserStatus.ACTIVE,
-        isEmailVerified: true,
-        registeredAt: new Date('2024-01-15'),
-        lastLoginAt: new Date('2024-07-20'),
-        profile: {
-          avatar: 'https://example.com/avatar.jpg',
-          bio: 'User biography',
-          location: 'Seoul, Korea',
-          website: 'https://user-website.com',
-        },
-        preferences: {
-          language: 'ko',
-          timezone: 'Asia/Seoul',
-          notifications: {
-            email: true,
-            push: true,
-          },
-        },
-      };
+      if (!userDetail) {
+        this.logger.warn('User not found in auth service', { userId });
+        throw AdminException.userNotFound();
+      }
+
+      this.logger.debug('User detail fetched from auth service', { userId });
 
       // 추가 정보 조회
       const [
@@ -160,16 +154,16 @@ export class AdminUserController {
         subscriptions,
         recentInteractions,
       ] = await Promise.all([
-        this.userSubscriptionService.getSubscriptionCount(userId),
-        this.userInteractionService.getUserInteractionCount(userId),
-        this.getUserSubscriptions(userId),
-        this.getUserRecentInteractions(userId),
+        this.userSubscriptionService.getSubscriptionCount(userId).catch(() => 0),
+        this.userInteractionService.getUserInteractionCount(userId).catch(() => 0),
+        this.getUserSubscriptions(userId).catch(() => []),
+        this.getUserRecentInteractions(userId).catch(() => []),
       ]);
 
-      const isCreator = await this.checkIfUserIsCreator(userId);
+      const isCreator = await this.checkIfUserIsCreator(userId).catch(() => false);
 
       return plainToInstance(AdminUserDetailDto, {
-        ...mockUser,
+        ...userDetail,
         subscriptionCount,
         interactionCount,
         reportCount: 0, // TODO: 신고 수 구현 필요
@@ -201,21 +195,22 @@ export class AdminUserController {
       //   throw AdminException.selfModerationNotAllowed();
       // }
 
-      // TODO: auth-service에 사용자 상태 업데이트 요청
-      // await this.authClient.send('user.updateStatus', {
-      //   userId,
-      //   status: dto.status,
-      //   reason: dto.reason,
-      //   suspensionDays: dto.suspensionDays,
-      //   moderatedBy: dto.moderatedBy,
-      // }).toPromise();
+      // Auth-service에 사용자 상태 업데이트 요청
+      await this.authClient.send('user.updateStatus', {
+        userId,
+        status: dto.status,
+        reason: dto.reason,
+        suspensionDays: dto.suspensionDays,
+        moderatedBy: dto.moderatedBy,
+      }).toPromise();
 
-      // 임시 로깅
-      console.log(`User ${userId} status updated to ${dto.status} by ${dto.moderatedBy}`);
-      
-      if (dto.status === UserStatus.SUSPENDED && dto.suspensionDays) {
-        console.log(`User suspended for ${dto.suspensionDays} days`);
-      }
+      this.logger.log('User status updated successfully', {
+        userId,
+        newStatus: dto.status,
+        moderatedBy: dto.moderatedBy,
+        reason: dto.reason,
+        suspensionDays: dto.suspensionDays,
+      });
 
       // TODO: 모더레이션 이력 저장
       // TODO: 상태에 따른 추가 액션 (알림, 세션 무효화 등)
@@ -287,13 +282,47 @@ export class AdminUserController {
     }>;
   }> {
     try {
-      // TODO: 사용자 관련 신고 조회 구현
-      
+      // 사용자가 신고한 목록
+      const reportsByUserResult = await this.reportService.searchReports({
+        reporterId: userId,
+        page: 1,
+        limit: 50,
+      });
+
+      const reportsByUser = reportsByUserResult.items.map(report => ({
+        id: report.id,
+        targetType: report.targetType,
+        targetId: report.targetId,
+        reason: report.reason,
+        status: report.status,
+        reportedAt: report.createdAt,
+      }));
+
+      // 사용자에 대한 신고 목록
+      const reportsAgainstUserResult = await this.reportService.searchReports({
+        targetType: 'user' as any,
+        targetId: userId,
+        page: 1,
+        limit: 50,
+      });
+
+      const reportsAgainstUser = reportsAgainstUserResult.items.map(report => ({
+        id: report.id,
+        reportedBy: report.reporterId,
+        reason: report.reason,
+        status: report.status,
+        reportedAt: report.createdAt,
+      }));
+
       return {
-        reportsByUser: [], // 사용자가 신고한 목록
-        reportsAgainstUser: [], // 사용자에 대한 신고 목록
+        reportsByUser,
+        reportsAgainstUser,
       };
     } catch (error: unknown) {
+      this.logger.error('Failed to get user reports', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+      });
       throw AdminException.userDataFetchError();
     }
   }

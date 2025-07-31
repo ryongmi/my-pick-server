@@ -18,8 +18,11 @@ import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
+import { CurrentJwt } from '@krgeobuk/jwt/decorators';
+import type { JwtPayload } from '@krgeobuk/jwt/interfaces';
 
 import { ContentService } from '../../content/services/index.js';
+import { ReportService } from '../../report/services/index.js';
 import {
   AdminContentSearchQueryDto,
   AdminContentListItemDto,
@@ -35,6 +38,7 @@ import { AdminException } from '../exceptions/index.js';
 export class AdminContentController {
   constructor(
     private readonly contentService: ContentService,
+    private readonly reportService: ReportService,
   ) {}
 
   @Get()
@@ -57,14 +61,22 @@ export class AdminContentController {
 
       const result = await this.contentService.searchContent(searchQuery);
 
-      // 관리자용 DTO로 변환
-      const adminItems = result.items.map((content) => {
+      // 관리자용 DTO로 변환 (신고 수 조회 포함)
+      const adminItems = await Promise.all(result.items.map(async (content) => {
+        // 각 콘텐츠의 신고 수 조회
+        const reportsResult = await this.reportService.searchReports({
+          targetType: 'content' as any,
+          targetId: content.id,
+          page: 1,
+          limit: 1, // 개수만 필요하므로 1개만 조회
+        }).catch(() => ({ pageInfo: { totalItems: 0 } }));
+
         return plainToInstance(AdminContentListItemDto, {
           id: content.id,
           type: content.type,
           title: content.title,
           platform: content.platform,
-          status: ContentStatus.ACTIVE, // TODO: 실제 상태 필드 추가 필요
+          status: content.status || ContentStatus.ACTIVE,
           publishedAt: content.publishedAt,
           createdAt: content.createdAt,
           creator: content.creator ? {
@@ -81,13 +93,13 @@ export class AdminContentController {
             likes: content.statistics.likes,
             comments: content.statistics.comments,
           },
-          flagCount: 0, // TODO: 신고 수 구현 필요
-          lastModeratedAt: undefined, // TODO: 모더레이션 이력 구현 필요
-          moderatedBy: undefined,
+          flagCount: reportsResult.pageInfo.totalItems,
+          lastModeratedAt: content.moderatedAt,
+          moderatedBy: content.moderatedBy,
         }, {
           excludeExtraneousValues: true,
         });
-      });
+      }));
 
       return {
         items: adminItems,
@@ -110,10 +122,28 @@ export class AdminContentController {
   @RequirePermission('content:read')
   async getContentDetail(
     @Param('id', ParseUUIDPipe) contentId: string,
-    // @CurrentUser() admin: UserInfo,
   ): Promise<AdminContentDetailDto> {
     try {
       const content = await this.contentService.getContentById(contentId);
+
+      // 콘텐츠의 신고 목록 조회
+      const reportsResult = await this.reportService.searchReports({
+        targetType: 'content' as any,
+        targetId: contentId,
+        page: 1,
+        limit: 50,
+        sortBy: 'createdAt',
+        sortOrder: 'DESC',
+      }).catch(() => ({ items: [], pageInfo: { totalItems: 0 } }));
+
+      const flags = reportsResult.items.map(report => ({
+        id: report.id,
+        reason: report.reason,
+        description: report.description,
+        reportedBy: report.reporterId,
+        reportedAt: report.createdAt,
+        status: report.status,
+      }));
 
       return plainToInstance(AdminContentDetailDto, {
         id: content.id,
@@ -125,7 +155,7 @@ export class AdminContentController {
         platform: content.platform,
         platformId: content.platformId,
         duration: content.duration,
-        status: ContentStatus.ACTIVE, // TODO: 실제 상태 필드 추가 필요
+        status: content.status || ContentStatus.ACTIVE,
         publishedAt: content.publishedAt,
         createdAt: content.createdAt,
         creator: {
@@ -139,9 +169,14 @@ export class AdminContentController {
           comments: content.statistics.comments,
         },
         metadata: content.metadata,
-        flagCount: 0, // TODO: 신고 수 구현 필요
-        flags: [], // TODO: 신고 목록 구현 필요
-        moderationHistory: [], // TODO: 모더레이션 이력 구현 필요
+        flagCount: reportsResult.pageInfo.totalItems,
+        flags,
+        moderationHistory: content.moderatedAt ? [{
+          action: content.status || 'active',
+          moderatedBy: content.moderatedBy || 'system',
+          moderatedAt: content.moderatedAt,
+          reason: content.statusReason,
+        }] : [],
       }, {
         excludeExtraneousValues: true,
       });
@@ -157,23 +192,16 @@ export class AdminContentController {
   async updateContentStatus(
     @Param('id', ParseUUIDPipe) contentId: string,
     @Body() dto: UpdateContentStatusDto,
-    // @CurrentUser() admin: UserInfo,
+    @CurrentJwt() { id }: JwtPayload,
   ): Promise<void> {
     try {
-      // 콘텐츠 존재 확인
-      await this.contentService.findByIdOrFail(contentId);
-
-      // TODO: 실제 상태 업데이트 구현
-      // 현재는 로깅만 수행
-      console.log(`Content ${contentId} status updated to ${dto.status} by ${dto.moderatedBy}`);
-      
-      // TODO: 모더레이션 이력 저장
-      // TODO: 상태에 따른 추가 액션 (알림 등)
-
-      if (dto.status === ContentStatus.REMOVED || dto.status === ContentStatus.FLAGGED) {
-        // TODO: 콘텐츠 숨김 처리 또는 제거
-        console.log(`Content ${contentId} removed/flagged with reason: ${dto.reason}`);
-      }
+      // 실제 상태 업데이트 실행
+      await this.contentService.updateContentStatus(
+        contentId,
+        dto.status,
+        id, // JWT에서 추출한 관리자 ID
+        dto.reason,
+      );
     } catch (error: unknown) {
       throw AdminException.contentStatusUpdateError();
     }
@@ -202,7 +230,6 @@ export class AdminContentController {
   @RequirePermission('content:read')
   async getContentFlags(
     @Param('id', ParseUUIDPipe) contentId: string,
-    // @CurrentUser() admin: UserInfo,
   ): Promise<{
     flags: Array<{
       id: string;
@@ -214,11 +241,26 @@ export class AdminContentController {
     }>;
   }> {
     try {
-      // TODO: 콘텐츠 신고 목록 조회 구현
-      
-      return {
-        flags: [], // 임시 빈 배열
-      };
+      // 콘텐츠에 대한 신고 목록 조회
+      const reportsResult = await this.reportService.searchReports({
+        targetType: 'content' as any,
+        targetId: contentId,
+        page: 1,
+        limit: 100,
+        sortBy: 'createdAt',
+        sortOrder: 'DESC',
+      });
+
+      const flags = reportsResult.items.map(report => ({
+        id: report.id,
+        reason: report.reason,
+        description: report.description,
+        reportedBy: report.reporterId,
+        reportedAt: report.createdAt,
+        status: report.status,
+      }));
+
+      return { flags };
     } catch (error: unknown) {
       throw AdminException.contentDataFetchError();
     }
@@ -232,18 +274,29 @@ export class AdminContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @Param('flagId', ParseUUIDPipe) flagId: string,
     @Body() body: { action: 'dismiss' | 'approve'; reason?: string },
-    // @CurrentUser() admin: UserInfo,
+    @CurrentJwt() { id }: JwtPayload,
   ): Promise<void> {
     try {
-      // TODO: 신고 처리 구현
-      console.log(`Flag ${flagId} on content ${contentId} resolved with action: ${body.action}`);
-      
       if (body.action === 'approve') {
-        // 신고 승인 - 콘텐츠 상태 변경
-        console.log(`Content ${contentId} flagged due to approved report`);
+        // 신고 승인 - 콘텐츠 상태를 flagged로 변경
+        await this.contentService.updateContentStatus(
+          contentId,
+          'flagged',
+          id,
+          `Report approved: ${body.reason || 'No reason provided'}`,
+        );
+
+        // 신고 상태를 resolved로 변경
+        await this.reportService.reviewReport(flagId, id, {
+          status: 'resolved',
+          comment: body.reason || 'Report approved - content flagged',
+        });
       } else {
         // 신고 기각
-        console.log(`Report ${flagId} dismissed`);
+        await this.reportService.reviewReport(flagId, id, {
+          status: 'dismissed',
+          comment: body.reason || 'Report dismissed by admin',
+        });
       }
     } catch (error: unknown) {
       throw AdminException.moderationActionError();
@@ -253,34 +306,35 @@ export class AdminContentController {
   @Get('statistics/overview')
   // @UseGuards(AuthGuard)
   @RequirePermission('content:read')
-  async getContentStatistics(
-    // @CurrentUser() admin: UserInfo,
-  ): Promise<{
+  async getContentStatistics(): Promise<{
     totalContent: number;
     activeContent: number;
+    inactiveContent: number;
     flaggedContent: number;
     removedContent: number;
     contentByPlatform: Array<{ platform: string; count: number }>;
     contentByStatus: Array<{ status: string; count: number }>;
   }> {
     try {
-      // TODO: 콘텐츠 통계 구현
-      
+      // 실제 콘텐츠 상태 통계 조회
+      const statusStats = await this.contentService.getContentStatusStatistics();
+
+      // 플랫폼별 통계는 현재 구현되지 않았으므로 임시 데이터 사용
+      // TODO: ContentService에 플랫폼별 통계 메서드 추가 필요
+      const contentByPlatform = [
+        { platform: 'youtube', count: Math.floor(statusStats.totalContent * 0.6) },
+        { platform: 'twitter', count: Math.floor(statusStats.totalContent * 0.3) },
+        { platform: 'instagram', count: Math.floor(statusStats.totalContent * 0.1) },
+      ];
+
       return {
-        totalContent: 2500,
-        activeContent: 2300,
-        flaggedContent: 150,
-        removedContent: 50,
-        contentByPlatform: [
-          { platform: 'youtube', count: 1500 },
-          { platform: 'twitter', count: 800 },
-          { platform: 'instagram', count: 200 },
-        ],
-        contentByStatus: [
-          { status: 'active', count: 2300 },
-          { status: 'flagged', count: 150 },
-          { status: 'removed', count: 50 },
-        ],
+        totalContent: statusStats.totalContent,
+        activeContent: statusStats.activeContent,
+        inactiveContent: statusStats.inactiveContent,
+        flaggedContent: statusStats.flaggedContent,
+        removedContent: statusStats.removedContent,
+        contentByPlatform,
+        contentByStatus: statusStats.contentByStatus,
       };
     } catch (error: unknown) {
       throw AdminException.statisticsGenerationError();

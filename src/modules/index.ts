@@ -3,6 +3,7 @@ export * from './user-subscription/user-subscription.module.js';
 export * from './creator-application/creator-application.module.js';
 export * from './content/content.module.js';
 export * from './user-interaction/user-interaction.module.js';
+export * from './report/report.module.js';
 export * from './admin/admin.module.js';
 export * from './external-api/external-api.module.js';
 export * from './platform-application/platform-application.module.js';

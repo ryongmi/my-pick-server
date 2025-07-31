@@ -1105,4 +1105,188 @@ export class ContentService {
       return 0;
     }
   }
+
+  // ==================== 상태 관리 메서드 ====================
+
+  async updateContentStatus(
+    contentId: string,
+    status: 'active' | 'inactive' | 'flagged' | 'removed',
+    moderatedBy: string,
+    reason?: string,
+    transactionManager?: EntityManager,
+  ): Promise<void> {
+    try {
+      // 1. 콘텐츠 존재 확인
+      await this.findByIdOrFail(contentId);
+
+      // 2. 상태 업데이트
+      const updateData: Partial<ContentEntity> = {
+        status,
+        moderatedBy,
+        moderatedAt: new Date(),
+      };
+
+      if (reason) {
+        updateData.statusReason = reason;
+      }
+
+      const repo = transactionManager ? transactionManager.getRepository(ContentEntity) : this.contentRepo;
+      await repo.update(contentId, updateData);
+
+      this.logger.log('Content status updated successfully', {
+        contentId,
+        status,
+        moderatedBy,
+        reason,
+      });
+
+      // 3. 상태별 추가 처리
+      if (status === 'removed') {
+        // TODO: 콘텐츠 제거 시 추가 처리 (알림, 캐시 무효화 등)
+        this.logger.debug('Content marked as removed', { contentId });
+      } else if (status === 'flagged') {
+        // TODO: 플래그된 콘텐츠 처리 (관리자 알림 등)
+        this.logger.debug('Content flagged for review', { contentId });
+      }
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Content status update failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        contentId,
+        status,
+        moderatedBy,
+      });
+      throw ContentException.contentUpdateError();
+    }
+  }
+
+  async getContentsByStatus(
+    status: 'active' | 'inactive' | 'flagged' | 'removed',
+    limit?: number,
+  ): Promise<ContentEntity[]> {
+    try {
+      const queryOptions: any = {
+        where: { status },
+        order: { moderatedAt: 'DESC' },
+      };
+
+      if (limit) {
+        queryOptions.take = limit;
+      }
+
+      return await this.contentRepo.find(queryOptions);
+    } catch (error: unknown) {
+      this.logger.error('Failed to get contents by status', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status,
+        limit,
+      });
+      throw ContentException.contentFetchError();
+    }
+  }
+
+  async getContentStatusStatistics(): Promise<{
+    totalContent: number;
+    activeContent: number;
+    inactiveContent: number;
+    flaggedContent: number;
+    removedContent: number;
+    contentByStatus: Array<{ status: string; count: number }>;
+  }> {
+    try {
+      const [
+        totalContent,
+        activeContent,
+        inactiveContent,
+        flaggedContent,
+        removedContent,
+      ] = await Promise.all([
+        this.contentRepo.count(),
+        this.contentRepo.count({ where: { status: 'active' } }),
+        this.contentRepo.count({ where: { status: 'inactive' } }),
+        this.contentRepo.count({ where: { status: 'flagged' } }),
+        this.contentRepo.count({ where: { status: 'removed' } }),
+      ]);
+
+      const contentByStatus = [
+        { status: 'active', count: activeContent },
+        { status: 'inactive', count: inactiveContent },
+        { status: 'flagged', count: flaggedContent },
+        { status: 'removed', count: removedContent },
+      ];
+
+      this.logger.debug('Content status statistics calculated', {
+        totalContent,
+        activeContent,
+        inactiveContent,
+        flaggedContent,
+        removedContent,
+      });
+
+      return {
+        totalContent,
+        activeContent,
+        inactiveContent,
+        flaggedContent,
+        removedContent,
+        contentByStatus,
+      };
+    } catch (error: unknown) {
+      this.logger.error('Failed to get content status statistics', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw ContentException.contentFetchError();
+    }
+  }
+
+  async getContentReports(contentId: string): Promise<Array<{
+    id: string;
+    reportedBy: string;
+    reason: string;
+    status: string;
+    reportedAt: Date;
+    reviewedAt?: Date;
+    reviewComment?: string;
+  }>> {
+    try {
+      // 콘텐츠 존재 확인
+      await this.findByIdOrFail(contentId);
+
+      // ReportService는 circular dependency를 피하기 위해 직접 주입하지 않음
+      // AdminContentController에서 직접 ReportService를 사용하도록 구조 변경
+      
+      this.logger.debug('Content reports request', { contentId });
+      return [];
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Failed to get content reports', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        contentId,
+      });
+      throw ContentException.contentFetchError();
+    }
+  }
+
+  async getContentReportCount(contentId: string): Promise<number> {
+    try {
+      // 콘텐츠 존재 확인
+      await this.findByIdOrFail(contentId);
+
+      // TODO: ReportService 연동 후 실제 신고 수 반환
+      // 현재는 0 반환
+      return 0;
+    } catch (error: unknown) {
+      this.logger.error('Failed to get content report count', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        contentId,
+      });
+      return 0;
+    }
+  }
 }

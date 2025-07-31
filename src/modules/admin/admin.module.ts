@@ -7,6 +7,7 @@ import { UserSubscriptionModule } from '../user-subscription/user-subscription.m
 import { UserInteractionModule } from '../user-interaction/user-interaction.module.js';
 import { CreatorApplicationModule } from '../creator-application/creator-application.module.js';
 import { PlatformApplicationModule } from '../platform-application/platform-application.module.js';
+import { ReportModule } from '../report/report.module.js';
 
 import { AdminDashboardService } from './services/index.js';
 import { 
@@ -16,6 +17,7 @@ import {
   AdminCreatorController,
   AdminCreatorApplicationController,
   AdminPlatformApplicationController,
+  AdminReportController,
 } from './controllers/index.js';
 
 @Module({
@@ -27,6 +29,7 @@ import {
     UserInteractionModule,
     CreatorApplicationModule,
     PlatformApplicationModule,
+    ReportModule,
   ],
   controllers: [
     AdminDashboardController,
@@ -35,6 +38,7 @@ import {
     AdminCreatorController,
     AdminCreatorApplicationController,
     AdminPlatformApplicationController,
+    AdminReportController,
   ],
   providers: [
     AdminDashboardService,

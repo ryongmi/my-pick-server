@@ -37,6 +37,13 @@ export class AdminException {
     });
   }
 
+  static userNotFound(): HttpException {
+    return new NotFoundException({
+      code: 'ADMIN_204',
+      message: '사용자를 찾을 수 없습니다.',
+    });
+  }
+
   static contentDataFetchError(): HttpException {
     return new InternalServerErrorException({
       code: 'ADMIN_203',

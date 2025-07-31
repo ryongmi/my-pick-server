@@ -14,6 +14,14 @@ export class AdminUserSearchQueryDto {
   search?: string; // 이메일이나 이름에서 검색
 
   @IsOptional()
+  @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
   @IsEnum(UserStatus)
   status?: UserStatus;
 
@@ -24,6 +32,14 @@ export class AdminUserSearchQueryDto {
   @IsOptional()
   @IsDateString()
   registeredBefore?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 
   @IsOptional()
   @IsNumber()

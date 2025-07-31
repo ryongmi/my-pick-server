@@ -60,6 +60,18 @@ export class ContentEntity {
   @Column({ default: false })
   isAuthorizedData?: boolean; // 인증된 데이터 여부 (크리에이터 동의 기반)
 
+  @Column({ type: 'enum', enum: ['active', 'inactive', 'flagged', 'removed'], default: 'active' })
+  status!: 'active' | 'inactive' | 'flagged' | 'removed';
+
+  @Column({ nullable: true })
+  statusReason?: string; // 상태 변경 사유
+
+  @Column({ nullable: true })
+  moderatedBy?: string; // 모더레이션 처리자 ID
+
+  @Column({ nullable: true })
+  moderatedAt?: Date; // 모더레이션 처리 시간
+
   @CreateDateColumn()
   createdAt!: Date;
 

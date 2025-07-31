@@ -4,3 +4,4 @@ export * from './admin-user.controller.js';
 export * from './admin-creator.controller.js';
 export * from './admin-creator-application.controller.js';
 export * from './admin-platform-application.controller.js';
+export * from './admin-report.controller.js';
