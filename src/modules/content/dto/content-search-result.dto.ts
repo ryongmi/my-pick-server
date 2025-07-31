@@ -1,101 +1,103 @@
 import { Exclude, Expose, Type } from 'class-transformer';
-import { ContentType, ContentMetadata } from '../entities';
+
+import { ContentType } from '../enums/index.js';
+import { ContentMetadata } from '../interfaces/index.js';
 
 class CreatorInfoDto {
   @Expose()
-  id: string;
+  id!: string;
 
   @Expose()
-  name: string;
+  name!: string;
 
   @Expose()
-  displayName: string;
+  displayName!: string;
 
   @Expose()
-  avatar?: string;
+  avatar?: string | undefined;
 
   @Expose()
-  isVerified: boolean;
+  isVerified!: boolean;
 }
 
 class ContentStatisticsDto {
   @Expose()
-  views: number;
+  views!: number;
 
   @Expose()
-  likes: number;
+  likes!: number;
 
   @Expose()
-  comments: number;
+  comments!: number;
 
   @Expose()
-  shares: number;
+  shares!: number;
 
   @Expose()
-  engagementRate: number;
+  engagementRate!: number;
 
   @Expose()
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 
 export class ContentSearchResultDto {
   @Expose()
-  id: string;
+  id!: string;
 
   @Expose()
-  type: ContentType;
+  type!: ContentType;
 
   @Expose()
-  title: string;
+  title!: string;
 
   @Expose()
-  description?: string;
+  description?: string | undefined;
 
   @Expose()
-  thumbnail: string;
+  thumbnail!: string;
 
   @Expose()
-  url: string;
+  url!: string;
 
   @Expose()
-  platform: string;
+  platform!: string;
 
   @Expose()
-  platformId: string;
+  platformId!: string;
 
   @Expose()
-  duration?: number;
+  duration?: number | undefined;
 
   @Expose()
-  publishedAt: Date;
+  publishedAt!: Date;
 
   @Expose()
-  creatorId: string;
+  creatorId!: string;
 
   @Expose()
   @Type(() => CreatorInfoDto)
-  creator?: CreatorInfoDto | null;
+  creator?: CreatorInfoDto | undefined;
 
   @Expose()
   @Type(() => ContentStatisticsDto)
-  statistics: ContentStatisticsDto;
+  statistics!: ContentStatisticsDto;
 
   @Expose()
-  metadata: ContentMetadata;
+  metadata!: ContentMetadata;
 
   @Expose()
-  createdAt: Date;
+  createdAt!: Date;
 
   // 사용자별 상호작용 정보 (옵셔널)
   @Expose()
-  isBookmarked?: boolean;
+  isBookmarked?: boolean | undefined;
 
   @Expose()
-  isLiked?: boolean;
+  isLiked?: boolean | undefined;
 
   @Expose()
-  watchedAt?: Date;
+  watchedAt?: Date | undefined;
 
   @Expose()
-  rating?: number;
+  rating?: number | undefined;
 }

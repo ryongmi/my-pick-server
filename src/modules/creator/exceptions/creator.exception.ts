@@ -59,6 +59,14 @@ export class CreatorException {
     });
   }
 
+  // 플랫폼 관련 (250-299)
+  static platformFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_250',
+      message: '플랫폼 정보 조회 중 오류가 발생했습니다.',
+    });
+  }
+
   // 구독 관련 (300-399)
   static subscriptionAlreadyExists(): HttpException {
     return new ConflictException({

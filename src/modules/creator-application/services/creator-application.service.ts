@@ -1,18 +1,20 @@
 import { Injectable, Logger, HttpException, Inject } from '@nestjs/common';
-import { plainToInstance } from 'class-transformer';
 import { ClientProxy } from '@nestjs/microservices';
 
-import { CreatorApplicationRepository } from '../repositories';
-import { CreatorApplicationEntity, ApplicationStatus } from '../entities';
-import {
-  CreateApplicationDto,
-  ReviewApplicationDto,
-  ApplicationDetailDto,
-} from '../dto';
-import { CreatorApplicationException } from '../exceptions';
-import { PaginatedResult } from '../../creator/dto';
-import { CreatorService } from '../../creator/services';
-import { CreateCreatorDto } from '../../creator/dto';
+import { plainToInstance } from 'class-transformer';
+
+import { LimitType } from '@krgeobuk/core/enum';
+import type { PaginatedResult } from '@krgeobuk/core/interfaces';
+
+import { PlatformType } from '@common/enums/index.js';
+
+import { CreatorApplicationRepository } from '../repositories/index.js';
+import { CreatorApplicationEntity } from '../entities/index.js';
+import { ApplicationStatus } from '../enums/index.js';
+import { CreateApplicationDto, ReviewApplicationDto, ApplicationDetailDto } from '../dto/index.js';
+import { CreatorApplicationException } from '../exceptions/index.js';
+import { CreatorService } from '../../creator/services/index.js';
+import { CreateCreatorDto } from '../../creator/dto/index.js';
 
 @Injectable()
 export class CreatorApplicationService {
@@ -21,7 +23,7 @@ export class CreatorApplicationService {
   constructor(
     private readonly applicationRepo: CreatorApplicationRepository,
     private readonly creatorService: CreatorService,
-    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
+    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy
   ) {}
 
   // ==================== PUBLIC METHODS ====================
@@ -50,7 +52,7 @@ export class CreatorApplicationService {
   // 복합 조회 메서드들
   async getApplicationById(
     applicationId: string,
-    requestUserId?: string,
+    requestUserId?: string
   ): Promise<ApplicationDetailDto> {
     try {
       const application = await this.findByIdOrFail(applicationId);
@@ -93,7 +95,7 @@ export class CreatorApplicationService {
   async getApplicationStatus(userId: string): Promise<ApplicationDetailDto | null> {
     try {
       const application = await this.applicationRepo.findByUserId(userId);
-      
+
       if (!application) {
         return null;
       }
@@ -129,7 +131,7 @@ export class CreatorApplicationService {
           status: ApplicationStatus.PENDING,
         },
       });
-      
+
       if (existingApplication) {
         this.logger.warn('Active application already exists', {
           userId: dto.userId,
@@ -178,10 +180,7 @@ export class CreatorApplicationService {
     }
   }
 
-  async reviewApplication(
-    applicationId: string,
-    dto: ReviewApplicationDto,
-  ): Promise<void> {
+  async reviewApplication(applicationId: string, dto: ReviewApplicationDto): Promise<void> {
     try {
       const application = await this.findByIdOrFail(applicationId);
 
@@ -251,29 +250,24 @@ export class CreatorApplicationService {
   async searchApplicationsForAdmin(options: {
     status?: ApplicationStatus;
     page?: number;
-    limit?: number;
+    limit?: LimitType;
   }): Promise<PaginatedResult<ApplicationDetailDto>> {
     try {
-      const { items, total } = await this.applicationRepo.searchApplications(options);
+      const { items, pageInfo } = await this.applicationRepo.searchApplications(options);
 
       const applicationDtos = items.map((application) =>
         plainToInstance(ApplicationDetailDto, application, {
           excludeExtraneousValues: true,
-        }),
+        })
       );
 
       this.logger.debug('Admin applications search completed', {
-        totalFound: total,
+        totalFound: pageInfo.totalItems,
         page: options.page,
         status: options.status,
       });
 
-      return new PaginatedResult(
-        applicationDtos,
-        total,
-        options.page || 1,
-        options.limit || 20,
-      );
+      return { items: applicationDtos, pageInfo };
     } catch (error: unknown) {
       this.logger.error('Admin applications search failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -306,9 +300,7 @@ export class CreatorApplicationService {
 
   // ==================== PRIVATE HELPER METHODS ====================
 
-  private async createCreatorFromApplication(
-    application: CreatorApplicationEntity,
-  ): Promise<void> {
+  private async createCreatorFromApplication(application: CreatorApplicationEntity): Promise<void> {
     try {
       const { applicationData } = application;
       const { channelInfo } = applicationData;
@@ -323,7 +315,7 @@ export class CreatorApplicationService {
         tags: [], // 초기에는 빈 배열
         platforms: [
           {
-            type: channelInfo.platform as any, // PlatformType enum으로 캐스팅
+            type: channelInfo.platform as PlatformType, // PlatformType enum으로 캐스팅
             platformId: channelInfo.channelId,
             url: channelInfo.channelUrl,
             followerCount: applicationData.subscriberCount,
@@ -349,10 +341,11 @@ export class CreatorApplicationService {
         userId: application.userId,
         platform: application.applicationData.channelInfo.platform,
       });
-      
+
       // Creator 생성 실패는 심각한 문제이므로 별도 알림 필요
       // 현재는 로깅만 하고 에러를 throw하지 않음 (승인 프로세스는 완료)
       // TODO: 관리자 알림 시스템 구현 시 알림 발송 추가
     }
   }
 }
+

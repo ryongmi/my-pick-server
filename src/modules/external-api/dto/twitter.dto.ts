@@ -1,169 +1,287 @@
-import { Expose } from 'class-transformer';
+import { Expose, Type } from 'class-transformer';
+
+// ==================== 공통 타입들 ====================
+
+export class TwitterEntityUrlDto {
+  @Expose()
+  start!: number;
+
+  @Expose()
+  end!: number;
+
+  @Expose()
+  url!: string;
+
+  @Expose()
+  expanded_url!: string;
+
+  @Expose()
+  display_url!: string;
+}
+
+export class TwitterHashtagDto {
+  @Expose()
+  start!: number;
+
+  @Expose()
+  end!: number;
+
+  @Expose()
+  tag!: string;
+}
+
+export class TwitterMentionDto {
+  @Expose()
+  start!: number;
+
+  @Expose()
+  end!: number;
+
+  @Expose()
+  username!: string;
+
+  @Expose()
+  id!: string;
+}
+
+export class TwitterCashtagDto {
+  @Expose()
+  start!: number;
+
+  @Expose()
+  end!: number;
+
+  @Expose()
+  tag!: string;
+}
+
+// ==================== TwitterUser 관련 DTO ====================
+
+export class TwitterUserPublicMetricsDto {
+  @Expose()
+  followersCount!: number;
+
+  @Expose()
+  followingCount!: number;
+
+  @Expose()
+  tweetCount!: number;
+
+  @Expose()
+  listedCount!: number;
+}
+
+export class TwitterUserUrlEntitiesDto {
+  @Expose()
+  @Type(() => TwitterEntityUrlDto)
+  urls!: TwitterEntityUrlDto[];
+}
+
+export class TwitterUserDescriptionEntitiesDto {
+  @Expose()
+  @Type(() => TwitterEntityUrlDto)
+  urls!: TwitterEntityUrlDto[];
+}
+
+export class TwitterUserEntitiesDto {
+  @Expose()
+  @Type(() => TwitterUserUrlEntitiesDto)
+  url?: TwitterUserUrlEntitiesDto | undefined;
+
+  @Expose()
+  @Type(() => TwitterUserDescriptionEntitiesDto)
+  description?: TwitterUserDescriptionEntitiesDto | undefined;
+}
+
+// ==================== TwitterTweet 관련 DTO ====================
+
+export class TwitterTweetAuthorDto {
+  @Expose()
+  id!: string;
+
+  @Expose()
+  username!: string;
+
+  @Expose()
+  name!: string;
+
+  @Expose()
+  profileImageUrl?: string | undefined;
+}
+
+export class TwitterTweetPublicMetricsDto {
+  @Expose()
+  retweetCount!: number;
+
+  @Expose()
+  likeCount!: number;
+
+  @Expose()
+  replyCount!: number;
+
+  @Expose()
+  quoteCount!: number;
+}
+
+export class TwitterReferencedTweetDto {
+  @Expose()
+  type!: 'retweeted' | 'quoted' | 'replied_to';
+
+  @Expose()
+  id!: string;
+}
+
+export class TwitterTweetEntitiesDto {
+  @Expose()
+  @Type(() => TwitterEntityUrlDto)
+  urls!: TwitterEntityUrlDto[];
+
+  @Expose()
+  @Type(() => TwitterHashtagDto)
+  hashtags!: TwitterHashtagDto[];
+
+  @Expose()
+  @Type(() => TwitterMentionDto)
+  mentions!: TwitterMentionDto[];
+
+  @Expose()
+  @Type(() => TwitterCashtagDto)
+  cashtags!: TwitterCashtagDto[];
+}
+
+export class TwitterMediaDto {
+  @Expose()
+  mediaKey!: string;
+
+  @Expose()
+  type!: 'photo' | 'video' | 'animated_gif';
+
+  @Expose()
+  url?: string | undefined;
+
+  @Expose()
+  previewImageUrl?: string | undefined;
+
+  @Expose()
+  width?: number | undefined;
+
+  @Expose()
+  height?: number | undefined;
+
+  @Expose()
+  durationMs?: number | undefined;
+}
+
+export class TwitterAttachmentsDto {
+  @Expose()
+  mediaKeys!: string[];
+
+  @Expose()
+  @Type(() => TwitterMediaDto)
+  media!: TwitterMediaDto[];
+}
+
+// ==================== 메인 DTO 클래스들 ====================
 
 export class TwitterUserDto {
   @Expose()
-  id: string;
+  id!: string;
 
   @Expose()
-  username: string;
+  username!: string;
 
   @Expose()
-  name: string;
+  name!: string;
 
   @Expose()
-  description: string;
+  description!: string;
 
   @Expose()
-  location?: string;
+  location?: string | undefined;
 
   @Expose()
-  url?: string;
+  url?: string | undefined;
 
   @Expose()
-  profileImageUrl?: string;
+  profileImageUrl?: string | undefined;
 
   @Expose()
-  protected: boolean;
+  protected!: boolean;
 
   @Expose()
-  verified: boolean;
+  verified!: boolean;
 
   @Expose()
-  createdAt: Date;
+  createdAt!: Date;
 
   @Expose()
-  pinnedTweetId?: string;
+  pinnedTweetId?: string | undefined;
 
   @Expose()
-  publicMetrics: {
-    followersCount: number;
-    followingCount: number;
-    tweetCount: number;
-    listedCount: number;
-  };
+  @Type(() => TwitterUserPublicMetricsDto)
+  publicMetrics!: TwitterUserPublicMetricsDto;
 
   @Expose()
-  entities: {
-    url?: {
-      urls: Array<{
-        start: number;
-        end: number;
-        url: string;
-        expanded_url: string;
-        display_url: string;
-      }>;
-    };
-    description?: {
-      urls: Array<{
-        start: number;
-        end: number;
-        url: string;
-        expanded_url: string;
-        display_url: string;
-      }>;
-    };
-  };
+  @Type(() => TwitterUserEntitiesDto)
+  entities!: TwitterUserEntitiesDto;
 }
 
 export class TwitterTweetDto {
   @Expose()
-  id: string;
+  id!: string;
 
   @Expose()
-  text: string;
+  text!: string;
 
   @Expose()
-  authorId: string;
+  authorId!: string;
 
   @Expose()
-  author?: {
-    id: string;
-    username: string;
-    name: string;
-    profileImageUrl?: string;
-  };
+  @Type(() => TwitterTweetAuthorDto)
+  author?: TwitterTweetAuthorDto | undefined;
 
   @Expose()
-  createdAt: Date;
+  createdAt!: Date;
 
   @Expose()
-  lang?: string;
+  lang?: string | undefined;
 
   @Expose()
-  source?: string;
+  source?: string | undefined;
 
   @Expose()
-  inReplyToUserId?: string;
+  inReplyToUserId?: string | undefined;
 
   @Expose()
-  replySettings?: string;
+  replySettings?: string | undefined;
 
   @Expose()
-  publicMetrics: {
-    retweetCount: number;
-    likeCount: number;
-    replyCount: number;
-    quoteCount: number;
-  };
+  @Type(() => TwitterTweetPublicMetricsDto)
+  publicMetrics!: TwitterTweetPublicMetricsDto;
 
   @Expose()
-  referencedTweets: Array<{
-    type: 'retweeted' | 'quoted' | 'replied_to';
-    id: string;
-  }>;
+  @Type(() => TwitterReferencedTweetDto)
+  referencedTweets!: TwitterReferencedTweetDto[];
 
   @Expose()
-  entities: {
-    urls: Array<{
-      start: number;
-      end: number;
-      url: string;
-      expanded_url: string;
-      display_url: string;
-    }>;
-    hashtags: Array<{
-      start: number;
-      end: number;
-      tag: string;
-    }>;
-    mentions: Array<{
-      start: number;
-      end: number;
-      username: string;
-      id: string;
-    }>;
-    cashtags: Array<{
-      start: number;
-      end: number;
-      tag: string;
-    }>;
-  };
+  @Type(() => TwitterTweetEntitiesDto)
+  entities!: TwitterTweetEntitiesDto;
 
   @Expose()
-  attachments: {
-    mediaKeys: string[];
-    media: Array<{
-      mediaKey: string;
-      type: 'photo' | 'video' | 'animated_gif';
-      url?: string;
-      previewImageUrl?: string;
-      width?: number;
-      height?: number;
-      durationMs?: number;
-    }>;
-  };
+  @Type(() => TwitterAttachmentsDto)
+  attachments!: TwitterAttachmentsDto;
 
   @Expose()
-  url: string;
+  url!: string;
 }
 
 export class TwitterSearchResultDto {
   @Expose()
-  tweets: TwitterTweetDto[];
+  tweets!: TwitterTweetDto[];
 
   @Expose()
-  nextToken?: string;
+  nextToken?: string | undefined;
 
   @Expose()
-  resultCount: number;
+  resultCount!: number;
 }

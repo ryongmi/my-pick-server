@@ -1,62 +1,63 @@
 import { IsOptional, IsString, IsArray, IsNumber, IsEnum, IsDateString, Min, Max } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { ContentType } from '../entities';
+
+import { ContentType } from '../enums/index.js';
 
 export class ContentSearchQueryDto {
   @IsOptional()
   @IsString()
-  creatorId?: string;
+  creatorId?: string | undefined;
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   @Transform(({ value }) => typeof value === 'string' ? value.split(',') : value)
-  creatorIds?: string[];
+  creatorIds?: string[] | undefined;
 
   @IsOptional()
   @IsEnum(ContentType)
-  type?: ContentType;
+  type?: ContentType | undefined;
 
   @IsOptional()
   @IsString()
-  platform?: string;
+  platform?: string | undefined;
 
   @IsOptional()
   @IsString()
-  category?: string;
+  category?: string | undefined;
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   @Transform(({ value }) => typeof value === 'string' ? value.split(',') : value)
-  tags?: string[];
+  tags?: string[] | undefined;
 
   @IsOptional()
   @IsDateString()
-  startDate?: string;
+  startDate?: string | undefined;
 
   @IsOptional()
   @IsDateString()
-  endDate?: string;
+  endDate?: string | undefined;
 
   @IsOptional()
   @IsNumber()
   @Type(() => Number)
   @Min(1)
-  page?: number = 1;
+  page?: number | undefined = 1;
 
   @IsOptional()
   @IsNumber()
   @Type(() => Number)
   @Min(1)
   @Max(100)
-  limit?: number = 20;
+  limit?: number | undefined = 20;
 
   @IsOptional()
   @IsEnum(['publishedAt', 'views', 'likes', 'createdAt'])
-  sortBy?: 'publishedAt' | 'views' | 'likes' | 'createdAt' = 'publishedAt';
+  sortBy?: 'publishedAt' | 'views' | 'likes' | 'createdAt' | undefined = 'publishedAt';
 
   @IsOptional()
   @IsEnum(['ASC', 'DESC'])
-  sortOrder?: 'ASC' | 'DESC' = 'DESC';
+  sortOrder?: 'ASC' | 'DESC' | undefined = 'DESC';
 }

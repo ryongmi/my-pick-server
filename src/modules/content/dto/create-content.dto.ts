@@ -1,22 +1,24 @@
 import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, ValidateNested, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ContentType, ContentMetadata } from '../entities';
+
+import { ContentType } from '../enums/index.js';
+import { ContentMetadata } from '../interfaces/index.js';
 
 class CreateContentMetadataDto {
   @IsString({ each: true })
-  tags: string[];
+  tags!: string[];
 
   @IsString()
-  category: string;
+  category!: string;
 
   @IsString()
-  language: string;
+  language!: string;
 
   @IsOptional()
   isLive?: boolean = false;
 
   @IsEnum(['sd', 'hd', '4k'])
-  quality: 'sd' | 'hd' | '4k';
+  quality!: 'sd' | 'hd' | '4k';
 
   @IsOptional()
   ageRestriction?: boolean;
@@ -24,26 +26,26 @@ class CreateContentMetadataDto {
 
 export class CreateContentDto {
   @IsEnum(ContentType)
-  type: ContentType;
+  type!: ContentType;
 
   @IsString()
-  title: string;
+  title!: string;
 
   @IsOptional()
   @IsString()
   description?: string;
 
   @IsString()
-  thumbnail: string;
+  thumbnail!: string;
 
   @IsString()
-  url: string;
+  url!: string;
 
   @IsString()
-  platform: string;
+  platform!: string;
 
   @IsString()
-  platformId: string;
+  platformId!: string;
 
   @IsOptional()
   @IsNumber()
@@ -51,14 +53,14 @@ export class CreateContentDto {
   duration?: number;
 
   @IsDateString()
-  publishedAt: string;
+  publishedAt!: string;
 
   @IsString()
-  creatorId: string;
+  creatorId!: string;
 
   @ValidateNested()
   @Type(() => CreateContentMetadataDto)
-  metadata: CreateContentMetadataDto;
+  metadata!: CreateContentMetadataDto;
 
   // 초기 통계 정보 (외부 API에서 가져온 경우)
   @IsOptional()
@@ -80,4 +82,16 @@ export class CreateContentDto {
   @IsNumber()
   @Min(0)
   initialShares?: number;
+
+  // 데이터 만료 및 동기화 관련 (external-api에서 사용)
+  @IsOptional()
+  @IsDateString()
+  expiresAt?: string;
+
+  @IsOptional()
+  @IsDateString()
+  lastSyncedAt?: string;
+
+  @IsOptional()
+  isAuthorizedData?: boolean;
 }

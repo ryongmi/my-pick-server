@@ -1,14 +1,8 @@
 import { Exclude, Expose, Type } from 'class-transformer';
 import { IsOptional, IsEnum, IsString, IsNumber, Min } from 'class-validator';
-import { ContentType } from '../../content/entities';
 
-export enum ContentStatus {
-  ACTIVE = 'active',
-  INACTIVE = 'inactive',
-  UNDER_REVIEW = 'under_review',
-  FLAGGED = 'flagged',
-  REMOVED = 'removed',
-}
+import { ContentType } from '../../content/enums/index.js';
+import { ContentStatus } from '../enums/index.js';
 
 export class AdminContentSearchQueryDto {
   @IsOptional()
@@ -52,42 +46,42 @@ export class AdminContentSearchQueryDto {
 
 export class AdminContentListItemDto {
   @Expose()
-  id: string;
+  id!: string;
 
   @Expose()
-  type: ContentType;
+  type!: ContentType;
 
   @Expose()
-  title: string;
+  title!: string;
 
   @Expose()
-  platform: string;
+  platform!: string;
 
   @Expose()
-  status: ContentStatus;
+  status!: ContentStatus;
 
   @Expose()
-  publishedAt: Date;
+  publishedAt!: Date;
 
   @Expose()
-  createdAt: Date;
+  createdAt!: Date;
 
   @Expose()
-  creator: {
+  creator!: {
     id: string;
     name: string;
     displayName: string;
   };
 
   @Expose()
-  statistics: {
+  statistics!: {
     views: number;
     likes: number;
     comments: number;
   };
 
   @Expose()
-  flagCount: number;
+  flagCount!: number;
 
   @Expose()
   lastModeratedAt?: Date;
@@ -101,22 +95,22 @@ export class AdminContentDetailDto extends AdminContentListItemDto {
   description?: string;
 
   @Expose()
-  thumbnail: string;
+  thumbnail!: string;
 
   @Expose()
-  url: string;
+  url!: string;
 
   @Expose()
-  platformId: string;
+  platformId!: string;
 
   @Expose()
   duration?: number;
 
   @Expose()
-  metadata: any;
+  metadata!: Record<string, unknown>;
 
   @Expose()
-  flags: Array<{
+  flags!: Array<{
     id: string;
     reason: string;
     description?: string;
@@ -126,7 +120,7 @@ export class AdminContentDetailDto extends AdminContentListItemDto {
   }>;
 
   @Expose()
-  moderationHistory: Array<{
+  moderationHistory!: Array<{
     action: 'approved' | 'flagged' | 'removed' | 'restored';
     reason?: string;
     moderatedBy: string;
@@ -136,12 +130,12 @@ export class AdminContentDetailDto extends AdminContentListItemDto {
 
 export class UpdateContentStatusDto {
   @IsEnum(ContentStatus)
-  status: ContentStatus;
+  status!: ContentStatus;
 
   @IsOptional()
   @IsString()
   reason?: string;
 
   @IsString()
-  moderatedBy: string; // 관리자 ID
+  moderatedBy!: string; // 관리자 ID
 }

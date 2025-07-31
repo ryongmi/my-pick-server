@@ -1,19 +1,20 @@
 import { IsEnum, IsString, IsUrl, IsOptional, IsNumber, IsBoolean, Min } from 'class-validator';
 import { Expose } from 'class-transformer';
-import { PlatformType } from '../entities';
+
+import { PlatformType } from '@common/enums/index.js';
 
 export class AddPlatformDto {
   @Expose()
   @IsEnum(PlatformType, { message: '유효한 플랫폼 타입을 선택해주세요.' })
-  type: PlatformType;
+  type!: PlatformType;
 
   @Expose()
   @IsString({ message: '플랫폼 ID는 문자열이어야 합니다.' })
-  platformId: string;
+  platformId!: string;
 
   @Expose()
   @IsUrl({}, { message: '유효한 URL을 입력해주세요.' })
-  url: string;
+  url!: string;
 
   @Expose()
   @IsOptional()

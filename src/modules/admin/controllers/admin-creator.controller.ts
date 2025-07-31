@@ -21,23 +21,25 @@ import {
   SwaggerApiParam,
   SwaggerApiBody,
   SwaggerApiOkResponse,
-  SwaggerApiCreatedResponse,
-  SwaggerApiNoContentResponse,
+  // SwaggerApiCreatedResponse,
+  // SwaggerApiNoContentResponse,
   SwaggerApiPaginatedResponse,
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
+import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
-import { CreatorService } from '../../creator/services';
-import { UserSubscriptionService } from '../../user-subscription/services';
+import { CreatorService } from '../../creator/services/index.js';
+import { UserSubscriptionService } from '../../user-subscription/services/index.js';
 import {
   CreatorSearchQueryDto,
   CreatorSearchResultDto,
   CreatorDetailDto,
   CreateCreatorDto,
   UpdateCreatorDto,
-  PaginatedResult,
-} from '../../creator/dto';
+  AddPlatformDto,
+  UpdatePlatformDto,
+} from '../../creator/dto/index.js';
 
 // TODO: @krgeobuk/authorization 패키지 설치 후 import
 // import { RequirePermission } from '@krgeobuk/authorization';
@@ -47,20 +49,20 @@ const RequirePermission = (permission: string) => () => {};
 
 // 관리자 전용 크리에이터 상태 DTO
 export class UpdateCreatorStatusDto {
-  status: 'active' | 'inactive' | 'suspended';
+  status!: 'active' | 'inactive' | 'suspended';
   reason?: string;
 }
 
 // 관리자 전용 크리에이터 상세 DTO (추가 정보 포함)
 export class AdminCreatorDetailDto extends CreatorDetailDto {
-  createdAt: Date;
-  updatedAt: Date;
-  status: 'active' | 'inactive' | 'suspended';
-  lastSyncAt?: Date;
-  platformCount: number;
-  subscriptionCount: number;
-  contentCount: number;
-  reportCount: number;
+  declare createdAt: Date;
+  declare updatedAt: Date;
+  status!: 'active' | 'inactive' | 'suspended';
+  lastSyncAt?: Date | undefined;
+  platformCount!: number;
+  subscriptionCount!: number;
+  declare contentCount: number;
+  reportCount!: number;
 }
 
 @SwaggerApiTags({ tags: ['admin-creators'] })
@@ -78,12 +80,12 @@ export class AdminCreatorController {
     summary: '관리자용 크리에이터 목록 조회',
     description: '관리자가 모든 크리에이터 목록을 조회합니다. 검색, 필터링, 페이지네이션을 지원합니다.'
   })
-  @SwaggerApiPaginatedResponse(CreatorSearchResultDto)
+  @SwaggerApiPaginatedResponse({ dto: CreatorSearchResultDto, status: 200, description: '크리에이터 목록 조회 성공' })
   // @RequirePermission('admin.creator.read')
   async getCreators(
     @Query() query: CreatorSearchQueryDto,
   ): Promise<PaginatedResult<CreatorSearchResultDto>> {
-    return this.creatorService.searchCreators(query);
+    return await this.creatorService.searchCreators(query);
   }
 
   @Post()
@@ -92,8 +94,8 @@ export class AdminCreatorController {
     summary: '관리자용 크리에이터 수동 생성',
     description: '관리자가 크리에이터를 수동으로 생성합니다. 크리에이터 신청 승인과 별개로 직접 생성할 때 사용합니다.'
   })
-  @SwaggerApiBody({ type: CreateCreatorDto })
-  @SwaggerApiCreatedResponse({ description: '크리에이터 생성 완료' })
+  @SwaggerApiBody({ dto: CreateCreatorDto })
+  @SwaggerApiOkResponse({ status: 201, description: '크리에이터 생성 완료' })
   // @RequirePermission('admin.creator.create')
   async createCreator(@Body() dto: CreateCreatorDto): Promise<void> {
     await this.creatorService.createCreator(dto);
@@ -104,8 +106,8 @@ export class AdminCreatorController {
     summary: '관리자용 크리에이터 상세 조회',
     description: '관리자가 크리에이터의 상세 정보를 조회합니다. 일반 사용자 조회와 달리 관리용 추가 정보를 포함합니다.'
   })
-  @SwaggerApiParam({ name: 'id', description: '크리에이터 ID' })
-  @SwaggerApiOkResponse({ type: AdminCreatorDetailDto })
+  @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
+  @SwaggerApiOkResponse({ dto: AdminCreatorDetailDto, status: 200, description: '크리에이터 상세 조회 성공' })
   // @RequirePermission('admin.creator.read')
   async getCreatorById(
     @Param('id', ParseUUIDPipe) creatorId: string,
@@ -123,7 +125,7 @@ export class AdminCreatorController {
       lastSyncAt: undefined, // TODO: 마지막 동기화 시간
       platformCount: 0, // TODO: 연결된 플랫폼 수
       subscriptionCount,
-      contentCount: creator.contentCount,
+      contentCount: 0, // TODO: Content에서 개수 계산
       reportCount: 0, // TODO: 신고 수
     };
 
@@ -133,9 +135,9 @@ export class AdminCreatorController {
   @Patch(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @SwaggerApiOperation({ summary: '관리자용 크리에이터 정보 수정' })
-  @SwaggerApiParam({ name: 'id', description: '크리에이터 ID' })
-  @SwaggerApiBody({ type: UpdateCreatorDto })
-  @SwaggerApiNoContentResponse({ description: '크리에이터 수정 완료' })
+  @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
+  @SwaggerApiBody({ dto: UpdateCreatorDto })
+  @SwaggerApiOkResponse({ status: 204, description: '크리에이터 수정 완료' })
   // @RequirePermission('admin.creator.update')
   async updateCreator(
     @Param('id', ParseUUIDPipe) creatorId: string,
@@ -150,9 +152,9 @@ export class AdminCreatorController {
     summary: '크리에이터 상태 변경',
     description: '관리자가 크리에이터의 상태를 변경합니다 (활성/비활성/정지). 관리자 전용 기능입니다.'
   })
-  @SwaggerApiParam({ name: 'id', description: '크리에이터 ID' })
-  @SwaggerApiBody({ type: UpdateCreatorStatusDto })
-  @SwaggerApiNoContentResponse({ description: '상태 변경 완료' })
+  @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
+  @SwaggerApiBody({ dto: UpdateCreatorStatusDto })
+  @SwaggerApiOkResponse({ status: 204, description: '상태 변경 완료' })
   // @RequirePermission('admin.creator.status.update')
   async updateCreatorStatus(
     @Param('id', ParseUUIDPipe) creatorId: string,
@@ -168,8 +170,8 @@ export class AdminCreatorController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @SwaggerApiOperation({ summary: '관리자용 크리에이터 삭제' })
-  @SwaggerApiParam({ name: 'id', description: '크리에이터 ID' })
-  @SwaggerApiNoContentResponse({ description: '크리에이터 삭제 완료' })
+  @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
+  @SwaggerApiOkResponse({ status: 204, description: '크리에이터 삭제 완료' })
   // @RequirePermission('admin.creator.delete')
   async deleteCreator(@Param('id', ParseUUIDPipe) creatorId: string): Promise<void> {
     await this.creatorService.deleteCreator(creatorId);
@@ -180,21 +182,10 @@ export class AdminCreatorController {
     summary: '크리에이터 상세 통계 (관리자용)',
     description: '관리자가 크리에이터의 상세한 통계 정보를 조회합니다. 일반 통계보다 더 많은 정보를 포함합니다.'
   })
-  @SwaggerApiParam({ name: 'id', description: '크리에이터 ID' })
+  @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
   @SwaggerApiOkResponse({
-    schema: {
-      properties: {
-        subscriberCount: { type: 'number' },
-        followerCount: { type: 'number' },
-        contentCount: { type: 'number' },
-        totalViews: { type: 'number' },
-        avgEngagementRate: { type: 'number' },
-        weeklyGrowth: { type: 'number' },
-        monthlyGrowth: { type: 'number' },
-        topContent: { type: 'array' },
-        recentActivity: { type: 'array' },
-      },
-    },
+    status: 200,
+    description: '크리에이터 통계 조회 성공'
   })
   // @RequirePermission('admin.creator.statistics.read')
   async getCreatorStatistics(
@@ -207,8 +198,8 @@ export class AdminCreatorController {
     avgEngagementRate: number;
     weeklyGrowth: number;
     monthlyGrowth: number;
-    topContent: any[];
-    recentActivity: any[];
+    topContent: unknown[];
+    recentActivity: unknown[];
   }> {
     const creator = await this.creatorService.findByIdOrFail(creatorId);
     const subscriberCount = await this.userSubscriptionService.getSubscriberCount(creatorId);
@@ -216,9 +207,9 @@ export class AdminCreatorController {
     // TODO: 실제 통계 데이터 계산 로직 구현
     return {
       subscriberCount,
-      followerCount: creator.followerCount,
-      contentCount: creator.contentCount,
-      totalViews: Number(creator.totalViews),
+      followerCount: 0, // TODO: CreatorPlatform에서 총합 계산
+      contentCount: 0, // TODO: Content에서 개수 계산  
+      totalViews: 0, // TODO: ContentStatistics에서 총합 계산
       avgEngagementRate: 5.2, // TODO: 실제 계산
       weeklyGrowth: 2.1, // TODO: 실제 계산
       monthlyGrowth: 8.5, // TODO: 실제 계산
@@ -232,32 +223,92 @@ export class AdminCreatorController {
     summary: '크리에이터 플랫폼 목록 (관리자용)',
     description: '관리자가 크리에이터가 연결한 모든 플랫폼 목록과 동기화 상태를 조회합니다.'
   })
-  @SwaggerApiParam({ name: 'id', description: '크리에이터 ID' })
+  @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
   @SwaggerApiOkResponse({
-    schema: {
-      type: 'array',
-      items: {
-        properties: {
-          id: { type: 'string' },
-          type: { type: 'string' },
-          platformId: { type: 'string' },
-          url: { type: 'string' },
-          followerCount: { type: 'number' },
-          isActive: { type: 'boolean' },
-          lastSyncAt: { type: 'string' },
-          syncStatus: { type: 'string' },
-        },
-      },
-    },
+    status: 200,
+    description: '크리에이터 플랫폼 목록 조회 성공'
   })
   // @RequirePermission('admin.creator.platforms.read')
   async getCreatorPlatforms(
     @Param('id', ParseUUIDPipe) creatorId: string,
-  ): Promise<any[]> {
-    // TODO: CreatorPlatformService 구현 후 실제 데이터 반환
-    await this.creatorService.findByIdOrFail(creatorId); // 존재 확인
-    
-    return []; // TODO: 실제 플랫폼 목록 반환
+  ): Promise<{
+    id: string;
+    type: string;
+    platformId: string;
+    url: string;
+    displayName?: string;
+    followerCount: number;
+    contentCount: number;
+    totalViews: number;
+    isActive: boolean;
+    lastSyncAt?: Date | undefined;
+    syncStatus: string;
+  }[]> {
+    return this.creatorService.getCreatorPlatforms(creatorId);
+  }
+
+  // ==================== PLATFORM 관리 API (관리자 전용) ====================
+
+  @Post(':id/platforms')
+  @HttpCode(HttpStatus.CREATED)
+  @SwaggerApiOperation({ 
+    summary: '크리에이터에 플랫폼 추가 (관리자 전용)',
+    description: '관리자가 크리에이터에게 플랫폼을 직접 추가합니다.'
+  })
+  @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
+  @SwaggerApiOkResponse({ status: 201, description: '플랫폼이 성공적으로 추가되었습니다.' })
+  // @RequirePermission('admin.creator.platform.create')
+  async addPlatformToCreator(
+    @Param('id', ParseUUIDPipe) creatorId: string,
+    @Body() dto: AddPlatformDto,
+  ): Promise<void> {
+    await this.creatorService.addPlatformToCreator(creatorId, dto);
+  }
+
+  @Patch('platforms/:platformId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @SwaggerApiOperation({ 
+    summary: '크리에이터 플랫폼 정보 수정 (관리자 전용)',
+    description: '관리자가 크리에이터의 플랫폼 정보를 수정합니다.'
+  })
+  @SwaggerApiParam({ name: 'platformId', type: String, description: '플랫폼 ID' })
+  @SwaggerApiOkResponse({ status: 204, description: '플랫폼 정보가 성공적으로 수정되었습니다.' })
+  // @RequirePermission('admin.creator.platform.update')
+  async updateCreatorPlatform(
+    @Param('platformId', ParseUUIDPipe) platformId: string,
+    @Body() dto: UpdatePlatformDto,
+  ): Promise<void> {
+    await this.creatorService.updateCreatorPlatform(platformId, dto);
+  }
+
+  @Delete('platforms/:platformId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @SwaggerApiOperation({ 
+    summary: '크리에이터 플랫폼 삭제 (관리자 전용)',
+    description: '관리자가 크리에이터의 플랫폼을 삭제합니다.'
+  })
+  @SwaggerApiParam({ name: 'platformId', type: String, description: '플랫폼 ID' })
+  @SwaggerApiOkResponse({ status: 204, description: '플랫폼이 성공적으로 삭제되었습니다.' })
+  // @RequirePermission('admin.creator.platform.delete')
+  async removeCreatorPlatform(
+    @Param('platformId', ParseUUIDPipe) platformId: string,
+  ): Promise<void> {
+    await this.creatorService.removeCreatorPlatform(platformId);
+  }
+
+  @Post('platforms/:platformId/sync')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @SwaggerApiOperation({ 
+    summary: '플랫폼 데이터 동기화 (관리자 전용)',
+    description: '관리자가 플랫폼 데이터를 강제로 동기화합니다.'
+  })
+  @SwaggerApiParam({ name: 'platformId', type: String, description: '플랫폼 ID' })
+  @SwaggerApiOkResponse({ status: 204, description: '플랫폼 데이터가 성공적으로 동기화되었습니다.' })
+  // @RequirePermission('admin.creator.platform.sync')
+  async syncPlatformData(
+    @Param('platformId', ParseUUIDPipe) platformId: string,
+  ): Promise<void> {
+    await this.creatorService.syncPlatformData(platformId);
   }
 
   @Get(':id/reports')
@@ -265,26 +316,15 @@ export class AdminCreatorController {
     summary: '크리에이터 신고 목록 (관리자용)',
     description: '관리자가 특정 크리에이터에 대한 모든 신고 내역을 조회합니다. 신고 처리 상태도 함께 확인할 수 있습니다.'
   })
-  @SwaggerApiParam({ name: 'id', description: '크리에이터 ID' })
+  @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
   @SwaggerApiOkResponse({
-    schema: {
-      type: 'array',
-      items: {
-        properties: {
-          id: { type: 'string' },
-          reportType: { type: 'string' },
-          reason: { type: 'string' },
-          reportedBy: { type: 'string' },
-          status: { type: 'string' },
-          createdAt: { type: 'string' },
-        },
-      },
-    },
+    status: 200,
+    description: '신고 이력 조회 성공'
   })
   // @RequirePermission('admin.creator.reports.read')
   async getCreatorReports(
     @Param('id', ParseUUIDPipe) creatorId: string,
-  ): Promise<any[]> {
+  ): Promise<unknown[]> {
     // TODO: ReportService 구현 후 실제 데이터 반환
     await this.creatorService.findByIdOrFail(creatorId); // 존재 확인
     

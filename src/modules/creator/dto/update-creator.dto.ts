@@ -3,6 +3,10 @@ import { IsString, IsOptional, IsArray, IsBoolean, IsNumber, Min } from 'class-v
 export class UpdateCreatorDto {
   @IsOptional()
   @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
   displayName?: string;
 
   @IsOptional()

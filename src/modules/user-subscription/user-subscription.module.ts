@@ -9,7 +9,6 @@ import { UserSubscriptionService } from './services/index.js';
 import {
   UserSubscriptionController,
   CreatorSubscriberController,
-  UserSubscriptionTcpController,
 } from './controllers/index.js';
 
 @Module({
@@ -20,7 +19,6 @@ import {
   controllers: [
     UserSubscriptionController,
     CreatorSubscriberController,
-    UserSubscriptionTcpController,
   ],
   providers: [UserSubscriptionRepository, UserSubscriptionService],
   exports: [UserSubscriptionService, UserSubscriptionRepository],

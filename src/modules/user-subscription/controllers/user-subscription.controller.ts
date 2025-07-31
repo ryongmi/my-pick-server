@@ -26,25 +26,11 @@ import {
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 
-import { UserSubscriptionService } from '../services';
-import { CreatorService } from '../../creator/services';
-import { SubscribeCreatorDto } from '../dto';
-import { CreatorSearchResultDto } from '../../creator/dto';
+import { UserSubscriptionService } from '../services/index.js';
+import { CreatorService } from '../../creator/services/index.js';
+import { SubscribeCreatorDto } from '../dto/index.js';
+import { CreatorSearchResultDto } from '../../creator/dto/index.js';
 
-// TODO: @krgeobuk/authorization 패키지 설치 후 import
-// import { AuthGuard, CurrentUser, RequirePermission } from '@krgeobuk/authorization';
-
-// 임시 인터페이스 (실제로는 @krgeobuk/authorization에서 import)
-interface UserInfo {
-  id: string;
-  email: string;
-  roles: string[];
-}
-
-// 임시 데코레이터 (실제로는 @krgeobuk/authorization에서 import)
-const AuthGuard = () => () => {};
-const CurrentUser = () => (target: any, propertyKey: string, parameterIndex: number) => {};
-const RequirePermission = (permission: string) => () => {};
 
 @SwaggerApiTags({ tags: ['user-subscriptions'] })
 @SwaggerApiBearerAuth()
@@ -57,12 +43,19 @@ export class UserSubscriptionController {
   ) {}
 
   @Get()
+  @HttpCode(200)
   @SwaggerApiOperation({ summary: '사용자 구독 목록 조회' })
-  @SwaggerApiParam({ name: 'userId', description: '사용자 ID' })
-  @SwaggerApiOkResponse({ type: [CreatorSearchResultDto] })
-  @SwaggerApiOkResponse({ dto: CreatorSearchResultDto, status: 200, description: '' })
-  // @UseGuards(AuthGuard)
-  // @RequirePermission('user.subscriptions.read')
+  @SwaggerApiParam({ name: 'userId', type: String, description: '사용자 ID' })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '사용자 구독 목록 조회 성공',
+    dto: CreatorSearchResultDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '사용자를 찾을 수 없습니다.',
+  })
+  @Serialize({ dto: CreatorSearchResultDto })
   async getUserSubscriptions(
     @Param('userId', ParseUUIDPipe) userId: string
   ): Promise<CreatorSearchResultDto[]> {
@@ -83,11 +76,18 @@ export class UserSubscriptionController {
   }
 
   @Get(':creatorId/exists')
+  @HttpCode(200)
   @SwaggerApiOperation({ summary: '구독 관계 존재 확인' })
-  @SwaggerApiParam({ name: 'userId', description: '사용자 ID' })
-  @SwaggerApiParam({ name: 'creatorId', description: '크리에이터 ID' })
-  @SwaggerApiOkResponse({ schema: { properties: { exists: { type: 'boolean' } } } })
-  // @UseGuards(AuthGuard)
+  @SwaggerApiParam({ name: 'userId', type: String, description: '사용자 ID' })
+  @SwaggerApiParam({ name: 'creatorId', type: String, description: '크리에이터 ID' })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '구독 관계 존재 확인 성공'
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '사용자 또는 크리에이터를 찾을 수 없습니다.',
+  })
   async checkSubscriptionExists(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Param('creatorId', ParseUUIDPipe) creatorId: string
@@ -99,16 +99,24 @@ export class UserSubscriptionController {
   @Post(':creatorId')
   @HttpCode(HttpStatus.CREATED)
   @SwaggerApiOperation({ summary: '크리에이터 구독하기' })
-  @SwaggerApiParam({ name: 'userId', description: '사용자 ID' })
-  @SwaggerApiParam({ name: 'creatorId', description: '크리에이터 ID' })
+  @SwaggerApiParam({ name: 'userId', type: String, description: '사용자 ID' })
+  @SwaggerApiParam({ name: 'creatorId', type: String, description: '크리에이터 ID' })
   @SwaggerApiBody({
-    schema: {
-      properties: {
-        notificationEnabled: { type: 'boolean', description: '알림 활성화 여부' },
-      },
-    },
+    dto: SubscribeCreatorDto,
+    description: '구독 정보'
   })
-  // @UseGuards(AuthGuard)
+  @SwaggerApiOkResponse({
+    status: 201,
+    description: '크리에이터 구독이 성공적으로 생성되었습니다.',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '크리에이터를 찾을 수 없습니다.',
+  })
+  @SwaggerApiErrorResponse({
+    status: 409,
+    description: '이미 구독 중인 크리에이터입니다.',
+  })
   async createSubscription(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Param('creatorId', ParseUUIDPipe) creatorId: string,
@@ -129,9 +137,16 @@ export class UserSubscriptionController {
   @Delete(':creatorId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @SwaggerApiOperation({ summary: '크리에이터 구독 해제' })
-  @SwaggerApiParam({ name: 'userId', description: '사용자 ID' })
-  @SwaggerApiParam({ name: 'creatorId', description: '크리에이터 ID' })
-  // @UseGuards(AuthGuard)
+  @SwaggerApiParam({ name: 'userId', type: String, description: '사용자 ID' })
+  @SwaggerApiParam({ name: 'creatorId', type: String, description: '크리에이터 ID' })
+  @SwaggerApiOkResponse({
+    status: 204,
+    description: '크리에이터 구독이 성공적으로 해제되었습니다.',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '구독 관계를 찾을 수 없습니다.',
+  })
   async deleteSubscription(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Param('creatorId', ParseUUIDPipe) creatorId: string

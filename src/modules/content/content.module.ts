@@ -1,16 +1,16 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { ContentEntity, ContentStatisticsEntity } from './entities';
-import { ContentRepository } from './repositories';
-import { ContentService } from './services';
+import { UserInteractionModule } from '../user-interaction/user-interaction.module.js';
+
+import { ContentEntity, ContentStatisticsEntity } from './entities/index.js';
+import { ContentRepository } from './repositories/index.js';
+import { ContentService } from './services/index.js';
 import {
   ContentController,
   ContentBookmarkController,
   UserContentInteractionController,
-  ContentTcpController,
-} from './controllers';
-import { UserInteractionModule } from '../user-interaction/user-interaction.module';
+} from './controllers/index.js';
 
 @Module({
   imports: [
@@ -21,7 +21,6 @@ import { UserInteractionModule } from '../user-interaction/user-interaction.modu
     ContentController,
     ContentBookmarkController,
     UserContentInteractionController,
-    ContentTcpController,
   ],
   providers: [ContentRepository, ContentService],
   exports: [ContentService, ContentRepository],

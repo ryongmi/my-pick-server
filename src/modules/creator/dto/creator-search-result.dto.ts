@@ -2,96 +2,96 @@ import { Exclude, Expose, Type } from 'class-transformer';
 
 class CreatorPlatformDto {
   @Expose()
-  id: string;
+  id!: string;
 
   @Expose()
-  type: string;
+  type!: string;
 
   @Expose()
-  platformId: string;
+  platformId!: string;
 
   @Expose()
-  url: string;
+  url!: string;
 
   @Expose()
-  followerCount: number;
+  followerCount!: number;
 
   @Expose()
-  contentCount: number;
+  contentCount!: number;
 
   @Expose()
-  totalViews: number;
+  totalViews!: number;
 
   @Expose()
-  isActive: boolean;
+  isActive!: boolean;
 }
 
 export class CreatorSearchResultDto {
   @Expose()
-  id: string;
+  id!: string;
 
   @Expose()
-  name: string;
+  name!: string;
 
   @Expose()
-  displayName: string;
+  displayName!: string;
 
   @Expose()
-  avatar?: string;
+  avatar?: string | undefined;
 
   @Expose()
-  description?: string;
+  description?: string | undefined;
 
   @Expose()
-  isVerified: boolean;
+  isVerified!: boolean;
 
   @Expose()
-  followerCount: number;
+  followerCount!: number;
 
   @Expose()
-  subscriberCount: number;
+  subscriberCount!: number;
 
   @Expose()
-  contentCount: number;
+  contentCount!: number;
 
   @Expose()
-  totalViews: number;
+  totalViews!: number;
 
   @Expose()
-  category: string;
+  category!: string;
 
   @Expose()
-  tags?: string[];
+  tags?: string[] | undefined;
 
   @Expose()
   @Type(() => CreatorPlatformDto)
-  platforms: CreatorPlatformDto[];
+  platforms!: CreatorPlatformDto[];
 
   @Expose()
-  createdAt: Date;
+  createdAt!: Date;
 }
 
 export class PaginatedResult<T> {
   @Expose()
-  items: T[];
+  items!: T[];
 
   @Expose()
-  total: number;
+  total!: number;
 
   @Expose()
-  page: number;
+  page!: number;
 
   @Expose()
-  limit: number;
+  limit!: number;
 
   @Expose()
-  totalPages: number;
+  totalPages!: number;
 
   @Expose()
-  hasNext: boolean;
+  hasNext!: boolean;
 
   @Expose()
-  hasPrev: boolean;
+  hasPrev!: boolean;
 
   constructor(items: T[], total: number, page: number, limit: number) {
     this.items = items;

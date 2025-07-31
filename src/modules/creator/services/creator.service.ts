@@ -7,6 +7,7 @@ import { plainToInstance } from 'class-transformer';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
 import { UserSubscriptionService } from '@modules/user-subscription/index.js';
+import { VideoSyncStatus, SyncStatus } from '@common/enums/index.js';
 
 import { CreatorRepository } from '../repositories/index.js';
 import { CreatorEntity, CreatorPlatformEntity } from '../entities/index.js';
@@ -16,14 +17,13 @@ import {
   CreatorDetailDto,
   CreateCreatorDto,
   UpdateCreatorDto,
+  CreatorPlatformDto,
+  AddPlatformDto,
+  UpdatePlatformDto,
 } from '../dto/index.js';
 import { CreatorException } from '../exceptions/index.js';
 
 import { CreatorPlatformService } from './creator-platform.service.js';
-import { VideoSyncStatus } from '@common/enums/index.js';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { CreatorPlatformEntity } from '../entities/creator-platform.entity.js';
 
 interface CreatorFilter {
   name?: string;
@@ -39,9 +39,7 @@ export class CreatorService {
     private readonly creatorRepo: CreatorRepository,
     private readonly creatorPlatformService: CreatorPlatformService,
     private readonly userSubscriptionService: UserSubscriptionService,
-    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
-    @InjectRepository(CreatorPlatformEntity)
-    private readonly creatorPlatformRepo: Repository<CreatorPlatformEntity>
+    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy
   ) {}
 
   // ==================== PUBLIC METHODS ====================
@@ -169,9 +167,9 @@ export class CreatorService {
       ]);
 
       // 🔥 플랫폼별 데이터 실시간 집계
-      const totalFollowerCount = platforms.reduce((sum, p) => sum + p.followerCount, 0);
-      const totalContentCount = platforms.reduce((sum, p) => sum + p.contentCount, 0);
-      const totalViews = platforms.reduce((sum, p) => sum + p.totalViews, 0);
+      const totalFollowerCount = platforms.reduce((sum, p) => sum + (p?.followerCount ?? 0), 0);
+      const totalContentCount = platforms.reduce((sum, p) => sum + (p?.contentCount ?? 0), 0);
+      const totalViews = platforms.reduce((sum, p) => sum + (p?.totalViews ?? 0), 0);
 
       const detailDto = plainToInstance(CreatorDetailDto, creator, {
         excludeExtraneousValues: true,
@@ -206,6 +204,41 @@ export class CreatorService {
         error: error instanceof Error ? error.message : 'Unknown error',
         creatorId,
         userId,
+      });
+      throw CreatorException.creatorFetchError();
+    }
+  }
+
+  async getCreatorPlatforms(creatorId: string): Promise<CreatorPlatformDto[]> {
+    try {
+      // 1. Creator 존재 확인
+      await this.findByIdOrFail(creatorId);
+
+      // 2. 플랫폼 목록 조회
+      const platforms = await this.creatorPlatformService.findByCreatorId(creatorId);
+
+      // 3. 응답 형식으로 변환
+      return platforms.map(platform => ({
+        id: platform.id,
+        type: platform.type,
+        platformId: platform.platformId,
+        url: platform.url,
+        displayName: platform.displayName || '',
+        followerCount: platform.followerCount,
+        contentCount: platform.contentCount,
+        totalViews: platform.totalViews,
+        isActive: platform.isActive,
+        lastSyncAt: platform.lastSyncAt,
+        syncStatus: platform.syncStatus,
+      }));
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Creator platforms fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
       });
       throw CreatorException.creatorFetchError();
     }
@@ -266,10 +299,10 @@ export class CreatorService {
     try {
       const creator = await this.findByIdOrFail(creatorId);
       const now = new Date();
-      
+
       // 동의 상태가 변경되었는지 확인
       const consentChanged = creator.hasDataConsent !== hasConsent;
-      
+
       if (!consentChanged) {
         this.logger.debug('Data consent status unchanged', {
           creatorId,
@@ -288,11 +321,11 @@ export class CreatorService {
       if (hasConsent) {
         // 동의 승인 시
         updateData.consentGrantedAt = now;
-        updateData.consentExpiresAt = new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000)); // 1년 후
+        updateData.consentExpiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // 1년 후
       } else {
         // 동의 철회 시
-        updateData.consentGrantedAt = null;
-        updateData.consentExpiresAt = null;
+        (updateData as any).consentGrantedAt = null;
+        (updateData as any).consentExpiresAt = null;
       }
 
       await this.creatorRepo.update(creatorId, updateData);
@@ -331,28 +364,30 @@ export class CreatorService {
   }> {
     try {
       const creator = await this.findByIdOrFail(creatorId);
-      
+
       if (!creator.hasDataConsent || !creator.consentExpiresAt) {
         return { isValid: false, isExpiringSoon: false };
       }
 
       const now = new Date();
       const expiryDate = creator.consentExpiresAt;
-      const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      
+      const daysUntilExpiry = Math.ceil(
+        (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
       const isExpired = now > expiryDate;
       const isExpiringSoon = daysUntilExpiry <= 30; // 30일 이내 만료 예정
 
       if (isExpired) {
         // 동의 만료 시 자동으로 철회 처리
         await this.updateDataConsent(creatorId, false);
-        
+
         this.logger.warn('Creator consent expired and revoked', {
           creatorId,
           expiryDate: expiryDate.toISOString(),
           daysOverdue: Math.abs(daysUntilExpiry),
         });
-        
+
         return { isValid: false, isExpiringSoon: false };
       }
 
@@ -394,7 +429,8 @@ export class CreatorService {
       const thresholdDate = new Date();
       thresholdDate.setDate(thresholdDate.getDate() + daysThreshold);
 
-      const creators = await this.creatorRepo.createQueryBuilder('creator')
+      const creators = await this.creatorRepo
+        .createQueryBuilder('creator')
         .where('creator.hasDataConsent = :hasConsent', { hasConsent: true })
         .andWhere('creator.consentExpiresAt <= :thresholdDate', { thresholdDate })
         .orderBy('creator.consentExpiresAt', 'ASC')
@@ -437,7 +473,7 @@ export class CreatorService {
       for (const creator of consentedCreators) {
         try {
           const status = await this.checkConsentExpiry(creator.id);
-          
+
           if (!status.isValid) {
             expiredCount++;
           } else if (status.isExpiringSoon) {
@@ -495,8 +531,8 @@ export class CreatorService {
       // 4. 플랫폼 정보 배치 생성 및 저장
       if (dto.platforms && dto.platforms.length > 0) {
         await this.creatorPlatformService.addMultiplePlatformsToCreator(
-          creator.id, 
-          dto.platforms, 
+          creator.id,
+          dto.platforms,
           transactionManager
         );
       }
@@ -646,17 +682,8 @@ export class CreatorService {
     transactionManager?: EntityManager
   ): Promise<void> {
     try {
-      const platforms = await this.creatorPlatformRepo.find({
-        where: { creatorId, isActive: true },
-      });
-
-      if (platforms.length === 0) {
-        this.logger.debug('No active platforms found for consent update', { creatorId });
-        return;
-      }
-
-      // 동의 상태에 따른 동기화 상태 업데이트
-      const updateData: Partial<CreatorPlatformEntity> = hasConsent
+      // 동의 상태에 따른 동기화 상태 결정
+      const updateData = hasConsent
         ? {
             // 동의 승인 시: 전체 재동기화 필요
             videoSyncStatus: VideoSyncStatus.CONSENT_CHANGED,
@@ -666,19 +693,16 @@ export class CreatorService {
             videoSyncStatus: VideoSyncStatus.INCREMENTAL,
           };
 
-      // 모든 플랫폼 일괄 업데이트
-      const platformIds = platforms.map(p => p.id);
-      
-      if (transactionManager) {
-        await transactionManager.update(CreatorPlatformEntity, platformIds, updateData);
-      } else {
-        await this.creatorPlatformRepo.update(platformIds, updateData);
-      }
+      // CreatorPlatformService를 통한 일괄 업데이트
+      await this.creatorPlatformService.updatePlatformSyncStatusByCreatorId(
+        creatorId,
+        updateData,
+        transactionManager
+      );
 
       this.logger.debug('Platform sync status updated for consent change', {
         creatorId,
         hasConsent,
-        platformCount: platforms.length,
         newSyncStatus: updateData.videoSyncStatus,
       });
     } catch (error: unknown) {
@@ -712,15 +736,15 @@ export class CreatorService {
         id: creator.id!,
         name: creator.name!,
         displayName: creator.displayName!,
-        avatar: creator.avatar,
-        description: creator.description,
+        avatar: creator.avatar || '',
+        description: creator.description || undefined,
         isVerified: creator.isVerified!,
         followerCount: totalFollowerCount, // 🔥 실시간 집계된 팔로워 수
         subscriberCount, // 🔥 실시간 계산된 구독자 수
         contentCount: totalContentCount, // 🔥 실시간 집계된 콘텐츠 수
         totalViews: totalViews, // 🔥 실시간 집계된 총 조회수
         category: creator.category!,
-        tags: creator.tags,
+        tags: creator.tags || undefined,
         platforms: creatorPlatforms.map((p) => ({
           // 🔥 중첩 플랫폼 정보
           id: p.id,
@@ -745,7 +769,7 @@ export class CreatorService {
       id: creator.id!,
       name: creator.name!,
       displayName: creator.displayName!,
-      avatar: creator.avatar,
+      avatar: creator.avatar || '',
       description: creator.description,
       isVerified: creator.isVerified!,
       followerCount: 0, // 🔥 플랫폼 데이터 없을 때 기본값
@@ -753,10 +777,113 @@ export class CreatorService {
       contentCount: 0, // 🔥 플랫폼 데이터 없을 때 기본값
       totalViews: 0, // 🔥 플랫폼 데이터 없을 때 기본값
       category: creator.category!,
-      tags: creator.tags,
+      tags: creator.tags || undefined,
       platforms: [], // 🔥 빈 배열로 폴백
       createdAt: creator.createdAt!,
     }));
+  }
+
+  // ==================== PLATFORM 관리 메서드 (관리자 전용) ====================
+
+  async addPlatformToCreator(creatorId: string, dto: AddPlatformDto): Promise<void> {
+    try {
+      await this.creatorPlatformService.addPlatformToCreator(creatorId, dto);
+
+      this.logger.log('Platform added to creator via admin', {
+        creatorId,
+        platformType: dto.type,
+        platformId: dto.platformId,
+      });
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Add platform to creator failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+        platformType: dto.type,
+      });
+      throw CreatorException.platformCreateError();
+    }
+  }
+
+  async updateCreatorPlatform(platformId: string, dto: UpdatePlatformDto): Promise<void> {
+    try {
+      await this.creatorPlatformService.updateCreatorPlatform(platformId, dto);
+
+      this.logger.log('Creator platform updated via admin', {
+        platformId,
+        updatedFields: Object.keys(dto),
+      });
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Update creator platform failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        platformId,
+      });
+      throw CreatorException.platformUpdateError();
+    }
+  }
+
+  async removeCreatorPlatform(platformId: string): Promise<void> {
+    try {
+      // 플랫폼 존재 확인
+      const platform = await this.creatorPlatformService.findByIdOrFail(platformId);
+
+      // 플랫폼 삭제
+      await this.creatorPlatformService.deleteCreatorPlatform(platformId);
+
+      this.logger.log('Creator platform removed via admin', {
+        platformId,
+        creatorId: platform.creatorId,
+        platformType: platform.type,
+      });
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Remove creator platform failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        platformId,
+      });
+      throw CreatorException.platformDeleteError();
+    }
+  }
+
+  async syncPlatformData(platformId: string): Promise<void> {
+    try {
+      // 플랫폼 존재 확인
+      const platform = await this.creatorPlatformService.findByIdOrFail(platformId);
+
+      // 동기화 상태 업데이트
+      await this.creatorPlatformService.updateSyncStatus(platformId, { syncStatus: SyncStatus.ACTIVE });
+
+      this.logger.log('Platform data sync triggered via admin', {
+        platformId,
+        creatorId: platform.creatorId,
+        platformType: platform.type,
+      });
+
+      // TODO: 실제 외부 API 동기화 로직 구현
+      // - YouTube Data API 호출
+      // - Twitter API 호출
+      // - 통계 데이터 업데이트
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Platform data sync failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        platformId,
+      });
+      throw CreatorException.platformSyncError();
+    }
   }
 }
 

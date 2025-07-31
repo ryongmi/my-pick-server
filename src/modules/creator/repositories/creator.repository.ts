@@ -16,7 +16,7 @@ export interface CreatorSearchQuery {
   page?: number;
   limit?: LimitType;
   sortOrder?: SortOrderType;
-  sortBy?: 'name' | 'createdAt';
+  sortBy?: 'name' | 'followerCount' | 'createdAt';
 }
 
 @Injectable()

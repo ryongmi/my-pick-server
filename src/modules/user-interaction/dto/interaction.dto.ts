@@ -2,67 +2,67 @@ import { IsString, IsOptional, IsBoolean, IsNumber, IsDateString, Min, Max } fro
 
 export class BookmarkContentDto {
   @IsString()
-  userId: string;
+  userId!: string;
 
   @IsString()
-  contentId: string;
+  contentId!: string;
 }
 
 export class LikeContentDto {
   @IsString()
-  userId: string;
+  userId!: string;
 
   @IsString()
-  contentId: string;
+  contentId!: string;
 }
 
 export class WatchContentDto {
   @IsString()
-  userId: string;
+  userId!: string;
 
   @IsString()
-  contentId: string;
+  contentId!: string;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
-  watchDuration?: number;
+  watchDuration?: number | undefined;
 }
 
 export class RateContentDto {
   @IsString()
-  userId: string;
+  userId!: string;
 
   @IsString()
-  contentId: string;
+  contentId!: string;
 
   @IsNumber()
   @Min(1)
   @Max(5)
-  rating: number;
+  rating!: number;
 }
 
 export class UpdateInteractionDto {
   @IsOptional()
   @IsBoolean()
-  isBookmarked?: boolean;
+  isBookmarked?: boolean | undefined;
 
   @IsOptional()
   @IsBoolean()
-  isLiked?: boolean;
+  isLiked?: boolean | undefined;
 
   @IsOptional()
   @IsDateString()
-  watchedAt?: string;
+  watchedAt?: string | undefined;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
-  watchDuration?: number;
+  watchDuration?: number | undefined;
 
   @IsOptional()
   @IsNumber()
   @Min(1)
   @Max(5)
-  rating?: number;
+  rating?: number | undefined;
 }

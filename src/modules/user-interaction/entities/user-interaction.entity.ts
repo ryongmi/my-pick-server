@@ -9,16 +9,16 @@ import {
 @Entity('user_interactions')
 export class UserInteractionEntity {
   @PrimaryColumn()
-  userId: string;
+  userId!: string;
 
   @PrimaryColumn()
-  contentId: string;
+  contentId!: string;
 
   @Column({ default: false })
-  isBookmarked: boolean;
+  isBookmarked!: boolean;
 
   @Column({ default: false })
-  isLiked: boolean;
+  isLiked!: boolean;
 
   @Column({ nullable: true })
   watchedAt?: Date;
@@ -30,10 +30,10 @@ export class UserInteractionEntity {
   rating?: number;
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updatedAt!: Date;
 
   // FK 없이 contentId 저장해서 직접 조회
 }

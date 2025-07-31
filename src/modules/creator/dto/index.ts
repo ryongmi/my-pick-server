@@ -5,3 +5,6 @@ export * from './create-creator.dto.js';
 export * from './update-creator.dto.js';
 export * from './add-platform.dto.js';
 export * from './update-platform.dto.js';
+export * from './creator-platform.dto.js';
+export * from './creator-stats.dto.js';
+export * from './admin-creator-stats.dto.js';

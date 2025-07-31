@@ -3,47 +3,47 @@ import { Type } from 'class-transformer';
 
 class ChannelInfoDto {
   @IsString()
-  platform: string;
+  platform!: string;
 
   @IsString()
-  channelId: string;
+  channelId!: string;
 
   @IsString()
-  channelUrl: string;
+  channelUrl!: string;
 }
 
 class SampleVideoDto {
   @IsString()
-  title: string;
+  title!: string;
 
   @IsString()
-  url: string;
+  url!: string;
 
   @IsNumber()
   @Min(0)
-  views: number;
+  views!: number;
 }
 
 export class CreateApplicationDto {
   @IsString()
-  userId: string;
+  userId!: string;
 
   @ValidateNested()
   @Type(() => ChannelInfoDto)
-  channelInfo: ChannelInfoDto;
+  channelInfo!: ChannelInfoDto;
 
   @IsNumber()
   @Min(0)
-  subscriberCount: number;
+  subscriberCount!: number;
 
   @IsString()
-  contentCategory: string;
+  contentCategory!: string;
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SampleVideoDto)
-  sampleVideos: SampleVideoDto[];
+  sampleVideos!: SampleVideoDto[];
 
   @IsString()
-  description: string;
+  description!: string;
 }

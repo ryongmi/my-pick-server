@@ -27,8 +27,11 @@ export class CreatorSubscriberController {
 
   @Get('count')
   @SwaggerApiOperation({ summary: '크리에이터 구독자 수 조회' })
-  @SwaggerApiParam({ name: 'creatorId', description: '크리에이터 ID' })
-  @SwaggerApiOkResponse({ schema: { properties: { count: { type: 'number' } } } })
+  @SwaggerApiParam({ name: 'creatorId', type: String, description: '크리에이터 ID' })
+  @SwaggerApiOkResponse({ 
+    status: 200,
+    description: '구독자 수 조회 성공'
+  })
   async getSubscriberCount(
     @Param('creatorId', ParseUUIDPipe) creatorId: string
   ): Promise<{ count: number }> {
@@ -38,9 +41,10 @@ export class CreatorSubscriberController {
 
   @Get()
   @SwaggerApiOperation({ summary: '크리에이터 구독자 목록 조회' })
-  @SwaggerApiParam({ name: 'creatorId', description: '크리에이터 ID' })
+  @SwaggerApiParam({ name: 'creatorId', type: String, description: '크리에이터 ID' })
   @SwaggerApiOkResponse({
-    schema: { properties: { userIds: { type: 'array', items: { type: 'string' } } } },
+    status: 200,
+    description: '구독자 ID 목록 조회 성공'
   })
   // @RequirePermission('creator.subscribers.read')
   async getSubscribers(

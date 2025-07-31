@@ -2,58 +2,58 @@ import { Exclude, Expose } from 'class-transformer';
 
 export class AdminDashboardStatsDto {
   @Expose()
-  totalUsers: number;
+  totalUsers!: number;
 
   @Expose()
-  totalCreators: number;
+  totalCreators!: number;
 
   @Expose()
-  totalContent: number;
+  totalContent!: number;
 
   @Expose()
-  totalSubscriptions: number;
+  totalSubscriptions!: number;
 
   @Expose()
-  totalInteractions: number;
+  totalInteractions!: number;
 
   @Expose()
-  pendingApplications: number;
+  pendingApplications!: number;
 
   @Expose()
-  approvedApplications: number;
+  approvedApplications!: number;
 
   @Expose()
-  rejectedApplications: number;
+  rejectedApplications!: number;
 }
 
 export class AdminDashboardMetricsDto {
   @Expose()
-  dailyActiveUsers: number;
+  dailyActiveUsers!: number;
 
   @Expose()
-  weeklyActiveUsers: number;
+  weeklyActiveUsers!: number;
 
   @Expose()
-  monthlyActiveUsers: number;
+  monthlyActiveUsers!: number;
 
   @Expose()
-  dailyNewContent: number;
+  dailyNewContent!: number;
 
   @Expose()
-  weeklyNewContent: number;
+  weeklyNewContent!: number;
 
   @Expose()
-  monthlyNewContent: number;
+  monthlyNewContent!: number;
 
   @Expose()
-  topCreatorsBySubscribers: Array<{
+  topCreatorsBySubscribers!: Array<{
     creatorId: string;
     name: string;
     subscriberCount: number;
   }>;
 
   @Expose()
-  topContentByViews: Array<{
+  topContentByViews!: Array<{
     contentId: string;
     title: string;
     views: number;
@@ -61,14 +61,14 @@ export class AdminDashboardMetricsDto {
   }>;
 
   @Expose()
-  platformDistribution: Array<{
+  platformDistribution!: Array<{
     platform: string;
     contentCount: number;
     percentage: number;
   }>;
 
   @Expose()
-  categoryDistribution: Array<{
+  categoryDistribution!: Array<{
     category: string;
     contentCount: number;
     percentage: number;
@@ -77,13 +77,13 @@ export class AdminDashboardMetricsDto {
 
 export class AdminDashboardOverviewDto {
   @Expose()
-  stats: AdminDashboardStatsDto;
+  stats!: AdminDashboardStatsDto;
 
   @Expose()
-  metrics: AdminDashboardMetricsDto;
+  metrics!: AdminDashboardMetricsDto;
 
   @Expose()
-  recentActivities: Array<{
+  recentActivities!: Array<{
     type: 'content_created' | 'creator_approved' | 'user_registered' | 'application_submitted';
     description: string;
     timestamp: Date;
@@ -91,7 +91,7 @@ export class AdminDashboardOverviewDto {
   }>;
 
   @Expose()
-  systemHealth: {
+  systemHealth!: {
     status: 'healthy' | 'warning' | 'critical';
     checks: Array<{
       name: string;

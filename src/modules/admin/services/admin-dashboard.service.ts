@@ -1,19 +1,20 @@
 import { Injectable, Logger, Inject, HttpException } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+
 import { plainToInstance } from 'class-transformer';
 
-import { CreatorService } from '../../creator/services';
-import { ContentService } from '../../content/services';
-import { UserSubscriptionService } from '../../user-subscription/services';
-import { UserInteractionService } from '../../user-interaction/services';
-import { CreatorApplicationService } from '../../creator-application/services';
+import { CreatorService } from '../../creator/services/index.js';
+import { ContentService } from '../../content/services/index.js';
+import { UserSubscriptionService } from '../../user-subscription/services/index.js';
+import { UserInteractionService } from '../../user-interaction/services/index.js';
+import { CreatorApplicationService } from '../../creator-application/services/index.js';
 import {
   AdminDashboardStatsDto,
   AdminDashboardMetricsDto,
   AdminDashboardOverviewDto,
-} from '../dto';
-import { AdminException } from '../exceptions';
-import { ApplicationStatus } from '../../creator-application/entities';
+} from '../dto/index.js';
+import { AdminException } from '../exceptions/index.js';
+import { ApplicationStatus } from '../../creator-application/enums/index.js';
 
 @Injectable()
 export class AdminDashboardService {
@@ -220,9 +221,9 @@ export class AdminDashboardService {
       // 임시: 검색 결과에서 추정
       const searchResult = await this.creatorService.searchCreators({
         page: 1,
-        limit: 1,
+        limit: 15,
       });
-      return searchResult.total;
+      return searchResult.pageInfo.totalItems;
     } catch (error: unknown) {
       this.logger.warn('Failed to get total creators', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -239,9 +240,9 @@ export class AdminDashboardService {
       // 임시: 검색 결과에서 추정
       const searchResult = await this.contentService.searchContent({
         page: 1,
-        limit: 1,
+        limit: 15,
       });
-      return searchResult.total;
+      return searchResult.pageInfo.totalItems;
     } catch (error: unknown) {
       this.logger.warn('Failed to get total content', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -288,10 +289,10 @@ export class AdminDashboardService {
       const searchResult = await this.contentService.searchContent({
         startDate: startDate.toISOString(),
         page: 1,
-        limit: 1,
+        limit: 15,
       });
 
-      return searchResult.total;
+      return searchResult.pageInfo.totalItems;
     } catch (error: unknown) {
       this.logger.warn('Failed to get new content count', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -453,7 +454,7 @@ export class AdminDashboardService {
         { name: 'External APIs', status: 'warning' as const, message: 'Twitter API rate limit near threshold' },
       ];
 
-      const hasFailures = checks.some(check => check.status === 'fail');
+      const hasFailures = checks.some(check => (check as any).status === 'fail'); // Mock data, no failures currently
       const hasWarnings = checks.some(check => check.status === 'warning');
 
       return {

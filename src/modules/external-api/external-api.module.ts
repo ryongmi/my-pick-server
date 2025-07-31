@@ -4,12 +4,13 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { YouTubeApiService, TwitterApiService, ExternalApiSchedulerService, QuotaMonitorService } from './services';
-import { ApiQuotaUsageEntity } from './entities';
 
-import { CreatorModule } from '../creator/creator.module';
-import { ContentModule } from '../content/content.module';
-import { CreatorPlatformEntity } from '../creator/entities';
+import { CreatorModule } from '../creator/creator.module.js';
+import { ContentModule } from '../content/content.module.js';
+import { CreatorPlatformEntity } from '../creator/entities/index.js';
+
+import { ApiQuotaUsageEntity } from './entities/index.js';
+import { YouTubeApiService, TwitterApiService, ExternalApiSchedulerService, QuotaMonitorService } from './services/index.js';
 
 @Module({
   imports: [

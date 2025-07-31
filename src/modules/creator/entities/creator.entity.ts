@@ -14,13 +14,13 @@ export class CreatorEntity extends BaseEntityUUID {
   displayName!: string;
 
   @Column({ nullable: true })
-  avatar?: string | null;
+  avatar?: string;
 
   @Column({ type: 'text', nullable: true })
-  description?: string | null;
+  description?: string;
 
   @Column({ default: false })
-  isVerified?: boolean;
+  isVerified!: boolean;
 
   @Column()
   category!: string;
@@ -31,7 +31,7 @@ export class CreatorEntity extends BaseEntityUUID {
   // ==================== 데이터 수집 동의 관리 ====================
   
   @Column({ default: false })
-  hasDataConsent?: boolean; // 데이터 수집 동의 여부
+  hasDataConsent!: boolean; // 데이터 수집 동의 여부
 
   @Column({ nullable: true })
   consentGrantedAt?: Date; // 동의 시점

@@ -6,28 +6,28 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 
-import { AdminDashboardService } from '../services';
+import { Serialize } from '@krgeobuk/core/decorators';
+import {
+  SwaggerApiTags,
+  SwaggerApiOperation,
+  SwaggerApiBearerAuth,
+  SwaggerApiOkResponse,
+  SwaggerApiErrorResponse,
+} from '@krgeobuk/swagger/decorators';
+import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
+import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
+import { RequirePermission } from '@krgeobuk/authorization/decorators';
+
+import { AdminDashboardService } from '../services/index.js';
 import {
   AdminDashboardOverviewDto,
   AdminDashboardStatsDto,
   AdminDashboardMetricsDto,
-} from '../dto';
+} from '../dto/index.js';
 
-// TODO: @krgeobuk/authorization 패키지 설치 후 import
-// import { AuthGuard, RequirePermission, CurrentUser } from '@krgeobuk/authorization';
-
-// 임시 인터페이스 (실제로는 @krgeobuk/authorization에서 import)
-interface UserInfo {
-  id: string;
-  email: string;
-  roles: string[];
-}
-
-// 임시 데코레이터 (실제로는 @krgeobuk/authorization에서 import)
-const AuthGuard = () => () => {};
-const CurrentUser = () => (target: any, propertyKey: string, parameterIndex: number) => {};
-const RequirePermission = (permission: string) => () => {};
-
+@SwaggerApiTags({ tags: ['admin-dashboard'] })
+@SwaggerApiBearerAuth()
+@UseGuards(AccessTokenGuard, AuthorizationGuard)
 @Controller('admin/dashboard')
 export class AdminDashboardController {
   constructor(
@@ -35,29 +35,56 @@ export class AdminDashboardController {
   ) {}
 
   @Get()
-  // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.dashboard.read')
-  async getDashboardOverview(
-    // @CurrentUser() admin: UserInfo,
-  ): Promise<AdminDashboardOverviewDto> {
+  @HttpCode(200)
+  @SwaggerApiOperation({ summary: '관리자 대시보드 개요 조회' })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '관리자 대시보드 개요 조회 성공',
+    dto: AdminDashboardOverviewDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: 403,
+    description: '관리자 권한이 필요합니다.',
+  })
+  @RequirePermission('admin.dashboard.read')
+  @Serialize({ dto: AdminDashboardOverviewDto })
+  async getDashboardOverview(): Promise<AdminDashboardOverviewDto> {
     return this.adminDashboardService.getDashboardOverview();
   }
 
   @Get('stats')
-  // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.dashboard.stats')
-  async getDashboardStats(
-    // @CurrentUser() admin: UserInfo,
-  ): Promise<AdminDashboardStatsDto> {
+  @HttpCode(200)
+  @SwaggerApiOperation({ summary: '관리자 대시보드 통계 조회' })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '관리자 대시보드 통계 조회 성공',
+    dto: AdminDashboardStatsDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: 403,
+    description: '관리자 권한이 필요합니다.',
+  })
+  @RequirePermission('admin.dashboard.stats')
+  @Serialize({ dto: AdminDashboardStatsDto })
+  async getDashboardStats(): Promise<AdminDashboardStatsDto> {
     return this.adminDashboardService.getDashboardStats();
   }
 
   @Get('metrics')
-  // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.dashboard.metrics')
-  async getDashboardMetrics(
-    // @CurrentUser() admin: UserInfo,
-  ): Promise<AdminDashboardMetricsDto> {
+  @HttpCode(200)
+  @SwaggerApiOperation({ summary: '관리자 대시보드 메트릭 조회' })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '관리자 대시보드 메트릭 조회 성공',
+    dto: AdminDashboardMetricsDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: 403,
+    description: '관리자 권한이 필요합니다.',
+  })
+  @RequirePermission('admin.dashboard.metrics')
+  @Serialize({ dto: AdminDashboardMetricsDto })
+  async getDashboardMetrics(): Promise<AdminDashboardMetricsDto> {
     return this.adminDashboardService.getDashboardMetrics();
   }
 }

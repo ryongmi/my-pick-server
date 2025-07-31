@@ -12,20 +12,21 @@ import {
   Inject,
 } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+
 import { plainToInstance } from 'class-transformer';
 
-import { UserSubscriptionService } from '../../user-subscription/services';
-import { UserInteractionService } from '../../user-interaction/services';
-import { CreatorService } from '../../creator/services';
+import { UserSubscriptionService } from '../../user-subscription/services/index.js';
+import { UserInteractionService } from '../../user-interaction/services/index.js';
+import { CreatorService } from '../../creator/services/index.js';
 import {
   AdminUserSearchQueryDto,
   AdminUserListItemDto,
   AdminUserDetailDto,
   UpdateUserStatusDto,
   UserStatus,
-} from '../dto';
-import { PaginatedResult } from '../../creator/dto';
-import { AdminException } from '../exceptions';
+} from '../dto/index.js';
+import { PaginatedResult } from '../../creator/dto/index.js';
+import { AdminException } from '../exceptions/index.js';
 
 // TODO: @krgeobuk/authorization 패키지 설치 후 import
 // import { AuthGuard, RequirePermission, CurrentUser } from '@krgeobuk/authorization';

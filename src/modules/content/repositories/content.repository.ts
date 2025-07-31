@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
+
 import { DataSource, In } from 'typeorm';
+
 import { BaseRepository } from '@krgeobuk/core/repositories';
 import { LimitType, SortOrderType } from '@krgeobuk/core/enum';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
-import { ContentEntity, ContentType } from '../entities';
+
+import { ContentEntity } from '../entities/index.js';
+import { ContentType } from '../enums/index.js';
 
 export interface ContentSearchOptions {
   creatorId?: string;
@@ -28,7 +32,9 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
 
   // 기본 조회 메서드들은 BaseRepository 직접 사용 (findOneById, find, findOne 등)
 
-  async searchContent(options: ContentSearchOptions): Promise<PaginatedResult<Partial<ContentEntity>>> {
+  async searchContent(
+    options: ContentSearchOptions
+  ): Promise<PaginatedResult<Partial<ContentEntity>>> {
     const {
       creatorId,
       creatorIds,
@@ -39,7 +45,7 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
       startDate,
       endDate,
       page = 1,
-      limit = LimitType.TWENTY,
+      limit = LimitType.THIRTY,
       sortBy = 'publishedAt',
       sortOrder = SortOrderType.DESC,
     } = options;
@@ -115,10 +121,7 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
     qb.offset(skip).limit(limit);
 
     // 최적화: 병렬로 COUNT와 데이터 조회
-    const [rows, total] = await Promise.all([
-      qb.getRawMany(),
-      qb.getCount()
-    ]);
+    const [rows, total] = await Promise.all([qb.getRawMany(), qb.getCount()]);
 
     // 타입 안전한 결과 매핑
     const items: Partial<ContentEntity>[] = rows.map((row) => ({
@@ -158,10 +161,7 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
 
   // 기본 변경/조회 메서드들은 BaseRepository 직접 사용 (saveEntity, delete, exists, count 등)
 
-  async getTrendingContent(
-    hours: number = 24,
-    limit: number = 50,
-  ): Promise<ContentEntity[]> {
+  async getTrendingContent(hours: number = 24, limit: number = 50): Promise<ContentEntity[]> {
     const startTime = new Date();
     startTime.setHours(startTime.getHours() - hours);
 
@@ -172,10 +172,7 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
       .getMany();
   }
 
-  async getRecentContent(
-    creatorIds: string[],
-    limit: number = 20,
-  ): Promise<ContentEntity[]> {
+  async getRecentContent(creatorIds: string[], limit: number = 20): Promise<ContentEntity[]> {
     if (creatorIds.length === 0) return [];
 
     return this.find({

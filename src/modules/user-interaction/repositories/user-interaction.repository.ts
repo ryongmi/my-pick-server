@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
+
 import { DataSource, In } from 'typeorm';
+
 import { BaseRepository } from '@krgeobuk/core/repositories';
-import { UserInteractionEntity } from '../entities';
+
+import { UserInteractionEntity } from '../entities/index.js';
 
 @Injectable()
 export class UserInteractionRepository extends BaseRepository<UserInteractionEntity> {
@@ -22,10 +25,9 @@ export class UserInteractionRepository extends BaseRepository<UserInteractionEnt
     });
   }
 
-  async findOne(userId: string, contentId: string): Promise<UserInteractionEntity | null> {
+  async findByUserAndContent(userId: string, contentId: string): Promise<UserInteractionEntity | null> {
     return super.findOne({
-      where: { userId, contentId },
-      relations: ['content'],
+      where: { userId, contentId }
     });
   }
 

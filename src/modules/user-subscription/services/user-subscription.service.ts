@@ -39,7 +39,7 @@ export class UserSubscriptionService {
 
   async exists(userId: string, creatorId: string): Promise<boolean> {
     try {
-      return await this.userSubscriptionRepo.exists(userId, creatorId);
+      return await this.userSubscriptionRepo.exists({ userId, creatorId });
     } catch (error: unknown) {
       this.logger.error('Check subscription existence failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -68,7 +68,7 @@ export class UserSubscriptionService {
   async subscribeToCreator(dto: SubscribeCreatorDto): Promise<void> {
     try {
       // 1. 중복 구독 확인
-      const exists = await this.userSubscriptionRepo.exists(dto.userId, dto.creatorId);
+      const exists = await this.userSubscriptionRepo.exists({ userId: dto.userId, creatorId: dto.creatorId });
       if (exists) {
         this.logger.warn('Subscription already exists', {
           userId: dto.userId,
@@ -111,7 +111,7 @@ export class UserSubscriptionService {
   async unsubscribeFromCreator(userId: string, creatorId: string): Promise<void> {
     try {
       // 1. 구독 존재 확인
-      const exists = await this.userSubscriptionRepo.exists(userId, creatorId);
+      const exists = await this.userSubscriptionRepo.exists({ userId, creatorId });
       if (!exists) {
         this.logger.warn('Subscription not found for unsubscribe', {
           userId,
@@ -121,7 +121,7 @@ export class UserSubscriptionService {
       }
 
       // 2. 구독 삭제
-      await this.userSubscriptionRepo.delete(userId, creatorId);
+      await this.userSubscriptionRepo.delete({ userId, creatorId });
 
       // 3. 성공 로깅
       this.logger.log('User unsubscribed from creator successfully', {
@@ -216,7 +216,7 @@ export class UserSubscriptionService {
     creatorId: string
   ): Promise<UserSubscriptionEntity | null> {
     try {
-      return await this.userSubscriptionRepo.findOne(userId, creatorId);
+      return await this.userSubscriptionRepo.findByUserAndCreator(userId, creatorId);
     } catch (error: unknown) {
       this.logger.error('Get subscription detail failed', {
         error: error instanceof Error ? error.message : 'Unknown error',

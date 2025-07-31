@@ -14,33 +14,32 @@ import {
 
 import { plainToInstance } from 'class-transformer';
 
-import { UserInteractionService } from '@modules/user-interaction/index.js';
-
-import { ContentService } from '../services';
-import { ContentSearchQueryDto, ContentSearchResultDto, ContentDetailDto } from '../dto';
+import { Serialize } from '@krgeobuk/core/decorators';
 import {
+  SwaggerApiTags,
+  SwaggerApiOperation,
+  SwaggerApiBearerAuth,
+  SwaggerApiParam,
+  SwaggerApiBody,
+  SwaggerApiOkResponse,
+  SwaggerApiErrorResponse,
+} from '@krgeobuk/swagger/decorators';
+import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
+import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
+import type { PaginatedResult } from '@krgeobuk/core/interfaces';
+
+import {
+  UserInteractionService,
   BookmarkContentDto,
   LikeContentDto,
   WatchContentDto,
   RateContentDto,
-} from '../../user-interaction/dto';
-import { PaginatedResult } from '../../creator/dto';
+} from '@modules/user-interaction/index.js';
 
-// TODO: @krgeobuk/authorization 패키지 설치 후 import
-// import { AuthGuard, CurrentUser, RequirePermission } from '@krgeobuk/authorization';
+import { ContentService } from '../services/index.js';
+import { ContentSearchQueryDto, ContentSearchResultDto, ContentDetailDto } from '../dto/index.js';
 
-// 임시 인터페이스 (실제로는 @krgeobuk/authorization에서 import)
-interface UserInfo {
-  id: string;
-  email: string;
-  roles: string[];
-}
-
-// 임시 데코레이터 (실제로는 @krgeobuk/authorization에서 import)
-const AuthGuard = () => () => {};
-const CurrentUser = () => (target: any, propertyKey: string, parameterIndex: number) => {};
-const RequirePermission = (permission: string) => () => {};
-
+@SwaggerApiTags({ tags: ['content'] })
 @Controller('content')
 export class ContentController {
   constructor(
@@ -49,16 +48,34 @@ export class ContentController {
   ) {}
 
   @Get()
+  @HttpCode(200)
+  @SwaggerApiOperation({ summary: '콘텐츠 목록 조회' })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '콘텐츠 목록 조회 성공',
+    dto: ContentSearchResultDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: 500,
+    description: '콘텐츠 조회 중 오류가 발생했습니다.',
+  })
+  @Serialize({ dto: ContentSearchResultDto })
   async getContent(
     @Query() query: ContentSearchQueryDto
-    // @CurrentUser() user?: UserInfo,
   ): Promise<PaginatedResult<ContentSearchResultDto>> {
-    // const userId = user?.id;
-    const userId = undefined; // 임시
+    const userId = undefined; // TODO: 인증 시스템 구현 후 사용자 ID 얻어오기
     return this.contentService.searchContent(query, userId);
   }
 
   @Get('trending')
+  @HttpCode(200)
+  @SwaggerApiOperation({ summary: '트렌딩 콘텐츠 조회' })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '트렌딩 콘텐츠 조회 성공',
+    dto: ContentSearchResultDto,
+  })
+  @Serialize({ dto: ContentSearchResultDto })
   async getTrendingContent(
     @Query('hours') hours: number = 24,
     @Query('limit') limit: number = 50
@@ -67,6 +84,14 @@ export class ContentController {
   }
 
   @Get('recent')
+  @HttpCode(200)
+  @SwaggerApiOperation({ summary: '최신 콘텐츠 조회' })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '최신 콘텐츠 조회 성공',
+    dto: ContentSearchResultDto,
+  })
+  @Serialize({ dto: ContentSearchResultDto })
   async getRecentContent(
     @Query('creatorIds') creatorIds: string,
     @Query('limit') limit: number = 20
@@ -76,26 +101,47 @@ export class ContentController {
   }
 
   @Get(':id')
-  async getContentById(
-    @Param('id', ParseUUIDPipe) contentId: string
-    // @CurrentUser() user?: UserInfo,
-  ): Promise<ContentDetailDto> {
-    // const userId = user?.id;
-    const userId = undefined; // 임시
+  @HttpCode(200)
+  @SwaggerApiOperation({ summary: '콘텐츠 상세 조회' })
+  @SwaggerApiParam({
+    name: 'id',
+    description: '콘텐츠 ID',
+    type: String,
+  })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '콘텐츠 상세 조회 성공',
+    dto: ContentDetailDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '콘텐츠를 찾을 수 없습니다.',
+  })
+  @Serialize({ dto: ContentDetailDto })
+  async getContentById(@Param('id', ParseUUIDPipe) contentId: string): Promise<ContentDetailDto> {
+    const userId = undefined; // TODO: 인증 시스템 구현 후 사용자 ID 얻어오기
     return this.contentService.getContentById(contentId, userId);
   }
 
   @Post(':id/bookmark')
   @HttpCode(HttpStatus.NO_CONTENT)
-  // @UseGuards(AuthGuard)
-  async bookmarkContent(
-    @Param('id', ParseUUIDPipe) contentId: string
-    // @CurrentUser() user: UserInfo,
-  ): Promise<void> {
-    // 임시 사용자 ID (실제로는 CurrentUser 데코레이터에서 가져옴)
-    const userId = 'temp-user-id';
+  @SwaggerApiOperation({ summary: '콘텐츠 북마크 추가' })
+  @SwaggerApiParam({
+    name: 'id',
+    description: '콘텐츠 ID',
+    type: String,
+  })
+  @SwaggerApiOkResponse({
+    status: 204,
+    description: '콘텐츠 북마크가 성공적으로 추가되었습니다.',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '콘텐츠를 찾을 수 없습니다.',
+  })
+  async bookmarkContent(@Param('id', ParseUUIDPipe) contentId: string): Promise<void> {
+    const userId = 'temp-user-id'; // TODO: 인증 시스템 구현 후 실제 사용자 ID 사용
 
-    // 콘텐츠 존재 확인
     await this.contentService.findByIdOrFail(contentId);
 
     const dto: BookmarkContentDto = {

@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
   BadRequestException,
   ServiceUnavailableException,
-  TooManyRequestsException,
+  // TooManyRequestsException, // NestJS에서 제공하지 않음
 } from '@nestjs/common';
 
 export class ExternalApiException {
@@ -31,7 +31,7 @@ export class ExternalApiException {
   }
 
   static youtubeRateLimitExceeded(): HttpException {
-    return new TooManyRequestsException({
+    return new ServiceUnavailableException({
       code: 'EXTERNAL_API_104',
       message: 'YouTube API 요청 한도를 초과했습니다.',
     });
@@ -74,7 +74,7 @@ export class ExternalApiException {
   }
 
   static twitterRateLimitExceeded(): HttpException {
-    return new TooManyRequestsException({
+    return new ServiceUnavailableException({
       code: 'EXTERNAL_API_204',
       message: 'Twitter API 요청 한도를 초과했습니다.',
     });
@@ -162,7 +162,7 @@ export class ExternalApiException {
 
   // 쿼터 관리 관련 (600-699)
   static quotaExceeded(): HttpException {
-    return new TooManyRequestsException({
+    return new ServiceUnavailableException({
       code: 'EXTERNAL_API_601',
       message: 'API 할당량을 초과했습니다. 잠시 후 다시 시도해주세요.',
     });

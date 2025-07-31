@@ -1,15 +1,15 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
 
-import { UserInteractionRepository } from '../repositories';
-import { UserInteractionEntity } from '../entities';
+import { UserInteractionRepository } from '../repositories/index.js';
+import { UserInteractionEntity } from '../entities/index.js';
 import {
   BookmarkContentDto,
   LikeContentDto,
   WatchContentDto,
   RateContentDto,
   UpdateInteractionDto,
-} from '../dto';
-import { UserInteractionException } from '../exceptions';
+} from '../dto/index.js';
+import { UserInteractionException } from '../exceptions/index.js';
 
 @Injectable()
 export class UserInteractionService {
@@ -69,7 +69,7 @@ export class UserInteractionService {
 
   async exists(userId: string, contentId: string): Promise<boolean> {
     try {
-      return await this.userInteractionRepo.exists(userId, contentId);
+      return await this.userInteractionRepo.exists({ userId, contentId });
     } catch (error: unknown) {
       this.logger.error('Check interaction existence failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -124,7 +124,7 @@ export class UserInteractionService {
   async bookmarkContent(dto: BookmarkContentDto): Promise<void> {
     try {
       // 1. 기존 상호작용 조회 또는 생성
-      let interaction = await this.userInteractionRepo.findOne(dto.userId, dto.contentId);
+      let interaction = await this.userInteractionRepo.findByUserAndContent(dto.userId, dto.contentId);
 
       if (!interaction) {
         interaction = new UserInteractionEntity();
@@ -168,7 +168,7 @@ export class UserInteractionService {
 
   async removeBookmark(userId: string, contentId: string): Promise<void> {
     try {
-      const interaction = await this.userInteractionRepo.findOne(userId, contentId);
+      const interaction = await this.userInteractionRepo.findByUserAndContent(userId, contentId);
 
       if (!interaction || !interaction.isBookmarked) {
         this.logger.warn('Bookmark not found for removal', {
@@ -185,7 +185,7 @@ export class UserInteractionService {
         await this.userInteractionRepo.save(interaction);
       } else {
         // 다른 상호작용이 없으면 완전 삭제
-        await this.userInteractionRepo.delete(userId, contentId);
+        await this.userInteractionRepo.delete({ userId, contentId });
       }
 
       this.logger.log('Bookmark removed successfully', {
@@ -210,7 +210,7 @@ export class UserInteractionService {
   async likeContent(dto: LikeContentDto): Promise<void> {
     try {
       // 1. 기존 상호작용 조회 또는 생성
-      let interaction = await this.userInteractionRepo.findOne(dto.userId, dto.contentId);
+      let interaction = await this.userInteractionRepo.findByUserAndContent(dto.userId, dto.contentId);
 
       if (!interaction) {
         interaction = new UserInteractionEntity();
@@ -254,7 +254,7 @@ export class UserInteractionService {
 
   async removeLike(userId: string, contentId: string): Promise<void> {
     try {
-      const interaction = await this.userInteractionRepo.findOne(userId, contentId);
+      const interaction = await this.userInteractionRepo.findByUserAndContent(userId, contentId);
 
       if (!interaction || !interaction.isLiked) {
         this.logger.warn('Like not found for removal', {
@@ -271,7 +271,7 @@ export class UserInteractionService {
         await this.userInteractionRepo.save(interaction);
       } else {
         // 다른 상호작용이 없으면 완전 삭제
-        await this.userInteractionRepo.delete(userId, contentId);
+        await this.userInteractionRepo.delete({ userId, contentId });
       }
 
       this.logger.log('Like removed successfully', {
@@ -296,7 +296,7 @@ export class UserInteractionService {
   async watchContent(dto: WatchContentDto): Promise<void> {
     try {
       // 1. 기존 상호작용 조회 또는 생성
-      let interaction = await this.userInteractionRepo.findOne(dto.userId, dto.contentId);
+      let interaction = await this.userInteractionRepo.findByUserAndContent(dto.userId, dto.contentId);
 
       if (!interaction) {
         interaction = new UserInteractionEntity();
@@ -332,7 +332,7 @@ export class UserInteractionService {
   async rateContent(dto: RateContentDto): Promise<void> {
     try {
       // 1. 기존 상호작용 조회 또는 생성
-      let interaction = await this.userInteractionRepo.findOne(dto.userId, dto.contentId);
+      let interaction = await this.userInteractionRepo.findByUserAndContent(dto.userId, dto.contentId);
 
       if (!interaction) {
         interaction = new UserInteractionEntity();
@@ -446,7 +446,7 @@ export class UserInteractionService {
     contentId: string
   ): Promise<UserInteractionEntity | null> {
     try {
-      return await this.userInteractionRepo.findOne(userId, contentId);
+      return await this.userInteractionRepo.findByUserAndContent(userId, contentId);
     } catch (error: unknown) {
       this.logger.error('Get interaction detail failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -506,3 +506,4 @@ export class UserInteractionService {
     }
   }
 }
+

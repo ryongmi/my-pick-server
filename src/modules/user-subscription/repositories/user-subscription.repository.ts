@@ -25,7 +25,7 @@ export class UserSubscriptionRepository extends BaseRepository<UserSubscriptionE
     });
   }
 
-  async findOne(userId: string, creatorId: string): Promise<UserSubscriptionEntity | null> {
+  async findByUserAndCreator(userId: string, creatorId: string): Promise<UserSubscriptionEntity | null> {
     return this.findOne({
       where: { userId, creatorId },
       relations: ['creator'],

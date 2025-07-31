@@ -1,18 +1,20 @@
 import { Exclude, Expose, Type } from 'class-transformer';
-import { ApplicationStatus, ApplicationData, ReviewData } from '../entities';
+
+import { ApplicationStatus } from '../enums/index.js';
+import { ApplicationData, ReviewData } from '../interfaces/index.js';
 
 export class ApplicationDetailDto {
   @Expose()
-  id: string;
+  id!: string;
 
   @Expose()
-  userId: string;
+  userId!: string;
 
   @Expose()
-  status: ApplicationStatus;
+  status!: ApplicationStatus;
 
   @Expose()
-  appliedAt: Date;
+  appliedAt!: Date;
 
   @Expose()
   reviewedAt?: Date;
@@ -21,7 +23,7 @@ export class ApplicationDetailDto {
   reviewerId?: string;
 
   @Expose()
-  applicationData: ApplicationData;
+  applicationData!: ApplicationData;
 
   @Expose()
   reviewData?: ReviewData;

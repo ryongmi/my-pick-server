@@ -1,6 +1,7 @@
 import { IsOptional, IsUrl, IsNumber, IsBoolean, IsEnum, Min } from 'class-validator';
 import { Expose } from 'class-transformer';
-import { SyncStatus } from '../entities';
+
+import { SyncStatus } from '@common/enums/index.js';
 
 export class UpdatePlatformDto {
   @Expose()

@@ -2,48 +2,48 @@ import { Exclude, Expose, Type } from 'class-transformer';
 
 class CreatorPlatformDetailDto {
   @Expose()
-  id: string;
+  id!: string;
 
   @Expose()
-  type: string;
+  type!: string;
 
   @Expose()
-  platformId: string;
+  platformId!: string;
 
   @Expose()
-  url: string;
+  url!: string;
 
   @Expose()
-  followerCount: number;
+  followerCount!: number;
 
   @Expose()
-  contentCount: number;
+  contentCount!: number;
 
   @Expose()
-  totalViews: number;
+  totalViews!: number;
 
   @Expose()
-  isActive: boolean;
+  isActive!: boolean;
 
   @Expose()
   lastSyncAt?: Date;
 
   @Expose()
-  syncStatus: string;
+  syncStatus!: string;
 }
 
 export class CreatorDetailDto {
   @Expose()
-  id: string;
+  id!: string;
 
   @Expose()
   userId?: string;
 
   @Expose()
-  name: string;
+  name!: string;
 
   @Expose()
-  displayName: string;
+  displayName!: string;
 
   @Expose()
   avatar?: string;
@@ -52,32 +52,32 @@ export class CreatorDetailDto {
   description?: string;
 
   @Expose()
-  isVerified: boolean;
+  isVerified!: boolean;
 
   @Expose()
-  followerCount: number;
+  followerCount!: number;
 
   @Expose()
-  contentCount: number;
+  contentCount!: number;
 
   @Expose()
-  totalViews: number;
+  totalViews!: number;
 
   @Expose()
-  category: string;
+  category!: string;
 
   @Expose()
   tags?: string[];
 
   @Expose()
   @Type(() => CreatorPlatformDetailDto)
-  platforms: CreatorPlatformDetailDto[];
+  platforms!: CreatorPlatformDetailDto[];
 
   @Expose()
-  createdAt: Date;
+  createdAt!: Date;
 
   @Expose()
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @Expose()
   subscriberCount?: number;

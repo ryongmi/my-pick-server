@@ -11,18 +11,20 @@ import {
   HttpStatus,
   ParseUUIDPipe,
 } from '@nestjs/common';
+
 import { plainToInstance } from 'class-transformer';
 
-import { ContentService } from '../../content/services';
+import type { PaginatedResult } from '@krgeobuk/core/interfaces';
+
+import { ContentService } from '../../content/services/index.js';
 import {
   AdminContentSearchQueryDto,
   AdminContentListItemDto,
   AdminContentDetailDto,
   UpdateContentStatusDto,
   ContentStatus,
-} from '../dto';
-import { PaginatedResult } from '../../creator/dto';
-import { AdminException } from '../exceptions';
+} from '../dto/index.js';
+import { AdminException } from '../exceptions/index.js';
 
 // TODO: @krgeobuk/authorization 패키지 설치 후 import
 // import { AuthGuard, RequirePermission, CurrentUser } from '@krgeobuk/authorization';
@@ -60,7 +62,7 @@ export class AdminContentController {
         platform: query.platform,
         page: query.page,
         limit: query.limit,
-        sortBy: query.sortBy,
+        sortBy: query.sortBy === 'title' ? 'createdAt' : query.sortBy, // title 정렬은 createdAt로 매핑
         sortOrder: query.sortOrder,
       };
 
@@ -76,10 +78,14 @@ export class AdminContentController {
           status: ContentStatus.ACTIVE, // TODO: 실제 상태 필드 추가 필요
           publishedAt: content.publishedAt,
           createdAt: content.createdAt,
-          creator: {
+          creator: content.creator ? {
             id: content.creator.id,
             name: content.creator.name,
             displayName: content.creator.displayName,
+          } : {
+            id: 'unknown',
+            name: 'Unknown Creator',
+            displayName: 'Unknown Creator',
           },
           statistics: {
             views: Number(content.statistics.views),
@@ -94,7 +100,17 @@ export class AdminContentController {
         });
       });
 
-      return new PaginatedResult(adminItems, result.total, result.page, result.limit);
+      return {
+        items: adminItems,
+        pageInfo: {
+          page: result.pageInfo.page,
+          limit: result.pageInfo.limit,
+          totalItems: result.pageInfo.totalItems,
+          totalPages: result.pageInfo.totalPages,
+          hasPreviousPage: result.pageInfo.hasPreviousPage,
+          hasNextPage: result.pageInfo.hasNextPage
+        }
+      } as PaginatedResult<AdminContentListItemDto>;
     } catch (error: unknown) {
       throw AdminException.contentDataFetchError();
     }

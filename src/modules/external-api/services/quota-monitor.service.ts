@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, LessThan } from 'typeorm';
 
 import { ApiQuotaUsageEntity } from '../entities/index.js';
+import { ApiProvider, ApiOperation } from '../enums/index.js';
 
 interface QuotaConfig {
   youtube: {
@@ -59,8 +60,8 @@ export class QuotaMonitorService {
    * API 호출 시 쿼터 사용량 기록
    */
   async recordQuotaUsage(
-    apiProvider: 'youtube' | 'twitter',
-    operation: string,
+    apiProvider: ApiProvider,
+    operation: ApiOperation,
     quotaUnits?: number,
     requestDetails?: Record<string, unknown>,
     responseStatus?: string,
@@ -74,9 +75,9 @@ export class QuotaMonitorService {
       usage.apiProvider = apiProvider;
       usage.operation = operation;
       usage.quotaUnits = units;
-      usage.requestDetails = requestDetails ? JSON.stringify(requestDetails) : undefined;
-      usage.responseStatus = responseStatus;
-      usage.errorMessage = errorMessage;
+      usage.requestDetails = requestDetails ? JSON.stringify(requestDetails) : '';
+      usage.responseStatus = responseStatus || '';
+      usage.errorMessage = errorMessage || '';
       // date 필드 제거 - createdAt에서 날짜 추출
 
       await this.quotaUsageRepo.save(usage);
@@ -90,7 +91,7 @@ export class QuotaMonitorService {
       });
 
       // 실시간 쿼터 체크 - 현재 날짜로 체크
-      const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const dateStr = new Date().toISOString().split('T')[0]!; // YYYY-MM-DD
       await this.checkQuotaThresholds(apiProvider, dateStr);
     } catch (error: unknown) {
       this.logger.error('Failed to record quota usage', {
@@ -109,7 +110,7 @@ export class QuotaMonitorService {
    * 일별 쿼터 사용량 조회
    */
   async getDailyQuotaUsage(
-    apiProvider: 'youtube' | 'twitter',
+    apiProvider: ApiProvider,
     date?: string
   ): Promise<{
     date: string;
@@ -121,7 +122,7 @@ export class QuotaMonitorService {
     warningLevel: 'safe' | 'warning' | 'critical';
   }> {
     try {
-      const targetDate = date || new Date().toISOString().split('T')[0];
+      const targetDate = date || new Date().toISOString().split('T')[0]!;
 
       // createdAt 기준으로 날짜 필터링
       const startDate = new Date(targetDate + 'T00:00:00.000Z');
@@ -148,8 +149,8 @@ export class QuotaMonitorService {
         if (!operationBreakdown[usage.operation]) {
           operationBreakdown[usage.operation] = { requests: 0, units: 0 };
         }
-        operationBreakdown[usage.operation].requests++;
-        operationBreakdown[usage.operation].units += usage.quotaUnits;
+        operationBreakdown[usage.operation]!.requests++;
+        operationBreakdown[usage.operation]!.units += usage.quotaUnits;
       });
 
       // 경고 레벨 결정
@@ -192,7 +193,7 @@ export class QuotaMonitorService {
   /**
    * 주간 쿼터 사용량 트렌드 조회
    */
-  async getWeeklyQuotaTrend(apiProvider: 'youtube' | 'twitter'): Promise<
+  async getWeeklyQuotaTrend(apiProvider: ApiProvider): Promise<
     Array<{
       date: string;
       totalUnits: number;
@@ -221,14 +222,14 @@ export class QuotaMonitorService {
         errorCount: number;
         usagePercentage?: number;
       }
-      
+
       const dailyStats: Record<string, DailyStat> = {};
       const dailyLimit = this.quotaConfig[apiProvider].dailyLimit;
 
       usages.forEach((usage) => {
         // createdAt에서 YYYY-MM-DD 형식으로 날짜 추출
-        const dateKey = usage.createdAt.toISOString().split('T')[0];
-        
+        const dateKey = usage.createdAt.toISOString().split('T')[0]!;
+
         if (!dailyStats[dateKey]) {
           dailyStats[dateKey] = {
             date: dateKey,
@@ -275,7 +276,7 @@ export class QuotaMonitorService {
    * 쿼터 임계값 체크 및 경고
    */
   private async checkQuotaThresholds(
-    apiProvider: 'youtube' | 'twitter',
+    apiProvider: ApiProvider,
     date: string
   ): Promise<void> {
     try {
@@ -313,7 +314,7 @@ export class QuotaMonitorService {
    * 쿼터 사용 가능 여부 체크
    */
   async canUseQuota(
-    apiProvider: 'youtube' | 'twitter',
+    apiProvider: ApiProvider,
     requiredUnits: number = 1
   ): Promise<{
     canUse: boolean;
@@ -323,7 +324,7 @@ export class QuotaMonitorService {
     estimatedHoursUntilReset: number;
   }> {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toISOString().split('T')[0]!;
       const usage = await this.getDailyQuotaUsage(apiProvider, today);
 
       const dailyLimit = this.quotaConfig[apiProvider].dailyLimit;
@@ -412,6 +413,10 @@ export class QuotaMonitorService {
       usagePercentage: number;
       remainingQuota: number;
       canUse: boolean;
+      totalUnits: number;
+      totalRequests: number;
+      errorCount: number;
+      warningLevel: 'safe' | 'warning' | 'critical';
     } | null;
     twitter: {
       dailyUsage: number;
@@ -419,21 +424,49 @@ export class QuotaMonitorService {
       usagePercentage: number;
       remainingQuota: number;
       canUse: boolean;
+      totalUnits: number;
+      totalRequests: number;
+      errorCount: number;
+      warningLevel: 'safe' | 'warning' | 'critical';
     } | null;
     totalRecords: number;
   }> {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toISOString().split('T')[0]!;
 
       const [youtubeUsage, twitterUsage, totalRecords] = await Promise.all([
-        this.getDailyQuotaUsage('youtube', today).catch(() => null),
-        this.getDailyQuotaUsage('twitter', today).catch(() => null),
+        this.getDailyQuotaUsage(ApiProvider.YOUTUBE, today).catch(() => null),
+        this.getDailyQuotaUsage(ApiProvider.TWITTER, today).catch(() => null),
         this.quotaUsageRepo.count(),
       ]);
 
       return {
-        youtube: youtubeUsage,
-        twitter: twitterUsage,
+        youtube: youtubeUsage
+          ? {
+              dailyUsage: youtubeUsage.totalUnits,
+              dailyLimit: this.quotaConfig.youtube.dailyLimit,
+              usagePercentage: youtubeUsage.usagePercentage,
+              remainingQuota: this.quotaConfig.youtube.dailyLimit - youtubeUsage.totalUnits,
+              canUse: youtubeUsage.warningLevel !== 'critical',
+              totalUnits: youtubeUsage.totalUnits,
+              totalRequests: youtubeUsage.totalRequests,
+              errorCount: youtubeUsage.errorCount,
+              warningLevel: youtubeUsage.warningLevel,
+            }
+          : null,
+        twitter: twitterUsage
+          ? {
+              dailyUsage: twitterUsage.totalUnits,
+              dailyLimit: this.quotaConfig.twitter.dailyLimit,
+              usagePercentage: twitterUsage.usagePercentage,
+              remainingQuota: this.quotaConfig.twitter.dailyLimit - twitterUsage.totalUnits,
+              canUse: twitterUsage.warningLevel !== 'critical',
+              totalUnits: twitterUsage.totalUnits,
+              totalRequests: twitterUsage.totalRequests,
+              errorCount: twitterUsage.errorCount,
+              warningLevel: twitterUsage.warningLevel,
+            }
+          : null,
         totalRecords,
       };
     } catch (error: unknown) {
@@ -444,3 +477,4 @@ export class QuotaMonitorService {
     }
   }
 }
+

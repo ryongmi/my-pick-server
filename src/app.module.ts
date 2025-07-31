@@ -19,6 +19,7 @@ import {
   UserInteractionModule,
   AdminModule,
   ExternalApiModule,
+  PlatformApplicationModule,
 } from '@modules/index.js';
 
 @Module({
@@ -44,6 +45,8 @@ import {
     AdminModule,
     // Phase 6: External API Integration
     ExternalApiModule,
+    // Platform Application Management
+    PlatformApplicationModule,
   ],
   providers: [
     {

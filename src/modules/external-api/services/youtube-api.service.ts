@@ -7,6 +7,7 @@ import { lastValueFrom, map } from 'rxjs';
 import { transformAndValidate } from '@krgeobuk/core/utils';
 
 import { ExternalApiException } from '../exceptions/index.js';
+import { ApiProvider, ApiOperation } from '../enums/index.js';
 import {
   YouTubeChannelDto,
   YouTubeVideoDto,
@@ -62,7 +63,7 @@ export class YouTubeApiService {
     private readonly configService: ConfigService,
     private readonly quotaMonitorService: QuotaMonitorService
   ) {
-    this.apiKey = this.configService.get<string>('YOUTUBE_API_KEY');
+    this.apiKey = this.configService.get<string>('YOUTUBE_API_KEY') || '';
 
     if (!this.apiKey) {
       this.logger.error('YouTube API key not configured');
@@ -77,7 +78,7 @@ export class YouTubeApiService {
       this.logger.debug('Fetching YouTube channel info', { channelId });
 
       // 쿼터 사용 가능 여부 체크
-      const quotaCheck = await this.quotaMonitorService.canUseQuota('youtube', 1);
+      const quotaCheck = await this.quotaMonitorService.canUseQuota(ApiProvider.YOUTUBE, 1);
       if (!quotaCheck.canUse) {
         this.logger.warn('YouTube API quota limit reached', {
           currentUsage: quotaCheck.currentUsage,
@@ -111,8 +112,8 @@ export class YouTubeApiService {
 
       // 쿼터 사용량 기록
       await this.quotaMonitorService.recordQuotaUsage(
-        'youtube',
-        'channels',
+        ApiProvider.YOUTUBE,
+        ApiOperation.CHANNEL_INFO,
         1,
         { ...requestDetails, responseTime },
         response.status.toString()
@@ -140,7 +141,7 @@ export class YouTubeApiService {
         id: channel.id,
         title: channel.snippet.title,
         description: channel.snippet.description,
-        customUrl: channel.snippet.customUrl,
+        customUrl: channel.snippet.customUrl || undefined,
         publishedAt: new Date(channel.snippet.publishedAt),
         thumbnails: {
           default: channel.snippet.thumbnails.default?.url,
@@ -170,8 +171,8 @@ export class YouTubeApiService {
       // 에러 발생 시 쿼터 사용량 기록 (에러 포함)
       await this.quotaMonitorService
         .recordQuotaUsage(
-          'youtube',
-          'channels',
+          ApiProvider.YOUTUBE,
+          ApiOperation.CHANNEL_INFO,
           1,
           { channelId, operation: 'channels' },
           undefined,
@@ -277,7 +278,7 @@ export class YouTubeApiService {
 
       // 쿼터 사용량 계산 (playlistItems 1 + videos 1 = 총 2 유닛)
       const totalQuotaUnits = 2;
-      const quotaCheck = await this.quotaMonitorService.canUseQuota('youtube', totalQuotaUnits);
+      const quotaCheck = await this.quotaMonitorService.canUseQuota(ApiProvider.YOUTUBE, totalQuotaUnits);
       if (!quotaCheck.canUse) {
         this.logger.warn('YouTube API quota limit reached for channel videos', {
           channelId,
@@ -372,8 +373,8 @@ export class YouTubeApiService {
 
       // 쿼터 사용량 기록 (성공)
       await this.quotaMonitorService.recordQuotaUsage(
-        'youtube',
-        'channelVideos',
+        ApiProvider.YOUTUBE,
+        ApiOperation.CHANNEL_VIDEOS,
         totalQuotaUnits,
         { ...requestDetails, responseTime, videoCount: videos.length },
         '200'
@@ -396,8 +397,8 @@ export class YouTubeApiService {
       // 에러 발생 시 쿼터 사용량 기록 (에러 포함)
       await this.quotaMonitorService
         .recordQuotaUsage(
-          'youtube',
-          'channelVideos',
+          ApiProvider.YOUTUBE,
+          ApiOperation.CHANNEL_VIDEOS,
           2, // 실패했어도 쿼터는 소모됨
           { channelId, maxResults, operation: 'channelVideos' },
           undefined,
@@ -523,7 +524,7 @@ export class YouTubeApiService {
       if (videoIds.length === 0) {
         return {
           videos: [],
-          nextPageToken: searchResponse.nextPageToken,
+          nextPageToken: searchResponse.nextPageToken || undefined,
           totalResults: 0,
         };
       }

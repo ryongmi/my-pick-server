@@ -1,16 +1,17 @@
 import { IsString, IsOptional, IsArray, IsEnum, ValidateNested, IsNumber, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PlatformType } from '../entities';
+
+import { PlatformType } from '@common/enums/index.js';
 
 class CreateCreatorPlatformDto {
   @IsEnum(PlatformType)
-  type: PlatformType;
+  type!: PlatformType;
 
   @IsString()
-  platformId: string;
+  platformId!: string;
 
   @IsString()
-  url: string;
+  url!: string;
 
   @IsOptional()
   @IsNumber()
@@ -24,10 +25,10 @@ export class CreateCreatorDto {
   userId?: string;
 
   @IsString()
-  name: string;
+  name!: string;
 
   @IsString()
-  displayName: string;
+  displayName!: string;
 
   @IsOptional()
   @IsString()
@@ -38,7 +39,7 @@ export class CreateCreatorDto {
   description?: string;
 
   @IsString()
-  category: string;
+  category!: string;
 
   @IsOptional()
   @IsArray()
@@ -48,5 +49,5 @@ export class CreateCreatorDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateCreatorPlatformDto)
-  platforms: CreateCreatorPlatformDto[];
+  platforms!: CreateCreatorPlatformDto[];
 }

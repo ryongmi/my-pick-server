@@ -11,165 +11,113 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 
-import { CreatorApplicationService } from '../services';
+import { Serialize } from '@krgeobuk/core/decorators';
 import {
-  CreateApplicationDto,
-  ReviewApplicationDto,
-  ApplicationDetailDto,
-} from '../dto';
-import { ApplicationStatus } from '../entities';
-import { PaginatedResult } from '../../creator/dto';
+  SwaggerApiTags,
+  SwaggerApiOperation,
+  SwaggerApiBearerAuth,
+  SwaggerApiParam,
+  SwaggerApiOkResponse,
+  SwaggerApiPaginatedResponse,
+  SwaggerApiBody,
+  SwaggerApiErrorResponse,
+} from '@krgeobuk/swagger/decorators';
+import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
+import { JwtPayload } from '@krgeobuk/jwt/interfaces';
+import { CurrentJwt } from '@krgeobuk/jwt/decorators';
+import { RequirePermission } from '@krgeobuk/authorization/decorators';
 
-// TODO: @krgeobuk/authorization 패키지 설치 후 import
-// import { AuthGuard, CurrentUser, RequirePermission } from '@krgeobuk/authorization';
+import { CreatorApplicationService } from '../services/index.js';
+import { CreateApplicationDto, ReviewApplicationDto, ApplicationDetailDto } from '../dto/index.js';
+import { ApplicationStatus } from '../enums/index.js';
+import { PaginatedResult } from '../../creator/dto/index.js';
 
-// 임시 인터페이스 (실제로는 @krgeobuk/authorization에서 import)
-interface UserInfo {
-  id: string;
-  email: string;
-  roles: string[];
-}
-
-// 임시 데코레이터 (실제로는 @krgeobuk/authorization에서 import)
-const AuthGuard = () => () => {};
-const CurrentUser = () => (target: any, propertyKey: string, parameterIndex: number) => {};
-const RequirePermission = (permission: string) => () => {};
-
+@SwaggerApiTags({ tags: ['creator-application'] })
+@SwaggerApiBearerAuth()
 @Controller('creator-application')
 export class CreatorApplicationController {
-  constructor(
-    private readonly creatorApplicationService: CreatorApplicationService,
-  ) {}
+  constructor(private readonly creatorApplicationService: CreatorApplicationService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  // @UseGuards(AuthGuard)
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiOperation({ summary: '크리에이터 신청' })
+  @SwaggerApiBody({ dto: CreateApplicationDto })
+  @SwaggerApiOkResponse({
+    status: 201,
+    description: '크리에이터 신청이 성공적으로 생성되었습니다.',
+  })
+  @SwaggerApiErrorResponse({
+    status: 400,
+    description: '잘못된 요청 데이터',
+  })
+  @SwaggerApiErrorResponse({
+    status: 409,
+    description: '이미 신청된 크리에이터입니다.',
+  })
   async createApplication(
     @Body() dto: CreateApplicationDto,
-    // @CurrentUser() user: UserInfo,
+    @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    // 실제로는 CurrentUser에서 가져온 user.id 사용
-    // dto.userId = user.id;
-    dto.userId = 'temp-user-id'; // 임시
-    
+    dto.userId = id;
+
     await this.creatorApplicationService.createApplication(dto);
   }
 
   @Get('status')
-  // @UseGuards(AuthGuard)
+  @HttpCode(200)
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiOperation({ summary: '내 크리에이터 신청 상태 조회' })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '크리에이터 신청 상태 조회 성공',
+    dto: ApplicationDetailDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: 500,
+    description: '신청 상태 조회 중 오류가 발생했습니다.',
+  })
+  @Serialize({ dto: ApplicationDetailDto })
   async getApplicationStatus(
-    // @CurrentUser() user: UserInfo,
+    @CurrentJwt() { id }: JwtPayload
   ): Promise<ApplicationDetailDto | { status: 'none' }> {
-    // 실제로는 CurrentUser에서 가져온 user.id 사용
-    const userId = 'temp-user-id'; // 임시
-    
-    const application = await this.creatorApplicationService.getApplicationStatus(userId);
-    
+    const application = await this.creatorApplicationService.getApplicationStatus(id);
+
     if (!application) {
       return { status: 'none' };
     }
-    
+
     return application;
   }
 
   @Get(':id')
-  // @UseGuards(AuthGuard)
+  @HttpCode(200)
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiOperation({ summary: '크리에이터 신청 상세 조회' })
+  @SwaggerApiParam({
+    name: 'id',
+    description: '크리에이터 신청 ID',
+    type: String,
+  })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '크리에이터 신청 상세 조회 성공',
+    dto: ApplicationDetailDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '크리에이터 신청을 찾을 수 없습니다.',
+  })
+  @SwaggerApiErrorResponse({
+    status: 403,
+    description: '해당 신청에 대한 접근 권한이 없습니다.',
+  })
+  @Serialize({ dto: ApplicationDetailDto })
   async getApplicationById(
     @Param('id', ParseUUIDPipe) applicationId: string,
-    // @CurrentUser() user: UserInfo,
+    @CurrentJwt() { id }: JwtPayload
   ): Promise<ApplicationDetailDto> {
-    // 실제로는 CurrentUser에서 가져온 user.id 사용
-    const userId = 'temp-user-id'; // 임시
-    
-    return this.creatorApplicationService.getApplicationById(applicationId, userId);
+    return this.creatorApplicationService.getApplicationById(applicationId, id);
   }
 }
 
-// 관리자 전용 컨트롤러
-@Controller('admin/creator-applications')
-export class AdminCreatorApplicationController {
-  constructor(
-    private readonly creatorApplicationService: CreatorApplicationService,
-  ) {}
-
-  @Get()
-  // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.creator-applications.read')
-  async getApplications(
-    @Query('status') status?: ApplicationStatus,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 20,
-  ): Promise<PaginatedResult<ApplicationDetailDto>> {
-    return this.creatorApplicationService.searchApplicationsForAdmin({
-      status,
-      page,
-      limit,
-    });
-  }
-
-  @Get('stats')
-  // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.creator-applications.stats')
-  async getApplicationStats(): Promise<{
-    pending: number;
-    approved: number;
-    rejected: number;
-  }> {
-    return this.creatorApplicationService.getApplicationStats();
-  }
-
-  @Get(':id')
-  // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.creator-applications.read')
-  async getApplicationByIdForAdmin(
-    @Param('id', ParseUUIDPipe) applicationId: string,
-  ): Promise<ApplicationDetailDto> {
-    // 관리자는 모든 신청서 조회 가능 (userId 검증 없음)
-    return this.creatorApplicationService.getApplicationById(applicationId);
-  }
-
-  @Post(':id/approve')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.creator-applications.approve')
-  async approveApplication(
-    @Param('id', ParseUUIDPipe) applicationId: string,
-    @Body() body: { comment?: string; requirements?: string[] },
-    // @CurrentUser() admin: UserInfo,
-  ): Promise<void> {
-    // 실제로는 CurrentUser에서 가져온 admin.id 사용
-    const reviewerId = 'temp-admin-id'; // 임시
-    
-    const dto: ReviewApplicationDto = {
-      status: ApplicationStatus.APPROVED,
-      reviewerId,
-      comment: body.comment,
-      requirements: body.requirements,
-    };
-
-    await this.creatorApplicationService.reviewApplication(applicationId, dto);
-  }
-
-  @Post(':id/reject')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  // @UseGuards(AuthGuard)
-  // @RequirePermission('admin.creator-applications.reject')
-  async rejectApplication(
-    @Param('id', ParseUUIDPipe) applicationId: string,
-    @Body() body: { reason?: string; comment?: string; requirements?: string[] },
-    // @CurrentUser() admin: UserInfo,
-  ): Promise<void> {
-    // 실제로는 CurrentUser에서 가져온 admin.id 사용
-    const reviewerId = 'temp-admin-id'; // 임시
-    
-    const dto: ReviewApplicationDto = {
-      status: ApplicationStatus.REJECTED,
-      reviewerId,
-      reason: body.reason,
-      comment: body.comment,
-      requirements: body.requirements,
-    };
-
-    await this.creatorApplicationService.reviewApplication(applicationId, dto);
-  }
-}

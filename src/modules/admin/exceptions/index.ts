@@ -1,1 +1,1 @@
-export * from './admin.exception';
+export * from './admin.exception.js';

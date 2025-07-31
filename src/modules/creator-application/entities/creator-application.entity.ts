@@ -1,51 +1,20 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-} from 'typeorm';
+import { Entity, Column, CreateDateColumn } from 'typeorm';
 
-export enum ApplicationStatus {
-  PENDING = 'pending',
-  APPROVED = 'approved',
-  REJECTED = 'rejected',
-}
+import { BaseEntityUUID } from '@krgeobuk/core/entities';
 
-export interface ApplicationData {
-  channelInfo: {
-    platform: string;
-    channelId: string;
-    channelUrl: string;
-  };
-  subscriberCount: number;
-  contentCategory: string;
-  sampleVideos: Array<{
-    title: string;
-    url: string;
-    views: number;
-  }>;
-  description: string;
-}
-
-export interface ReviewData {
-  reason?: string;
-  comment?: string;
-  requirements?: string[];
-}
+import { ApplicationStatus } from '../enums/index.js';
+import { ApplicationData, ReviewData } from '../interfaces/index.js';
 
 @Entity('creator_applications')
-export class CreatorApplicationEntity {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
-  @Column()
-  userId: string;
+export class CreatorApplicationEntity extends BaseEntityUUID {
+  @Column({ type: 'uuid' })
+  userId!: string;
 
   @Column({ type: 'enum', enum: ApplicationStatus })
-  status: ApplicationStatus;
+  status!: ApplicationStatus;
 
   @CreateDateColumn()
-  appliedAt: Date;
+  appliedAt!: Date;
 
   @Column({ nullable: true })
   reviewedAt?: Date;
@@ -54,8 +23,9 @@ export class CreatorApplicationEntity {
   reviewerId?: string;
 
   @Column({ type: 'json' })
-  applicationData: ApplicationData;
+  applicationData!: ApplicationData;
 
   @Column({ type: 'json', nullable: true })
   reviewData?: ReviewData;
 }
+

@@ -1,14 +1,12 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { InjectRepository } from '@nestjs/typeorm';
-
-import { Repository, In } from 'typeorm';
 
 import { ContentService } from '@modules/content/services/index.js';
 import { CreateContentDto } from '@modules/content/dto/index.js';
 import { ContentEntity } from '@modules/content/entities/index.js';
-import { VideoSyncStatus } from '@common/enums/index.js';
-import { CreatorService, CreatorEntity, CreatorPlatformEntity } from '@modules/creator/index.js';
+import { VideoSyncStatus, PlatformType, SyncStatus } from '@common/enums/index.js';
+import { CreatorService, CreatorEntity, CreatorPlatformEntity, CreatorPlatformService } from '@modules/creator/index.js';
+import { ContentType } from '@modules/content/enums/index.js';
 
 import { ExternalApiException } from '../exceptions/index.js';
 
@@ -26,10 +24,9 @@ export class ExternalApiSchedulerService {
     private readonly youtubeApiService: YouTubeApiService,
     private readonly twitterApiService: TwitterApiService,
     private readonly creatorService: CreatorService,
+    private readonly creatorPlatformService: CreatorPlatformService,
     private readonly contentService: ContentService,
-    private readonly quotaMonitorService: QuotaMonitorService,
-    @InjectRepository(CreatorPlatformEntity)
-    private readonly creatorPlatformRepo: Repository<CreatorPlatformEntity>
+    private readonly quotaMonitorService: QuotaMonitorService
   ) {}
 
   // ==================== SCHEDULED JOBS ====================
@@ -46,17 +43,7 @@ export class ExternalApiSchedulerService {
     try {
       this.logger.log('Starting YouTube content synchronization');
 
-      const youtubePlatforms = await this.creatorPlatformRepo.find({
-        where: {
-          type: 'youtube',
-          isActive: true,
-          syncStatus: 'active',
-        },
-        order: {
-          videoSyncStatus: 'ASC', // NEVER_SYNCED 우선, 그 다음 CONSENT_CHANGED, 마지막 INCREMENTAL
-          lastVideoSyncAt: 'ASC', // 오래된 것부터
-        },
-      });
+      const youtubePlatforms = await this.creatorPlatformService.findActiveYouTubePlatformsForSync();
 
       this.logger.debug('Found YouTube platforms to sync', {
         count: youtubePlatforms.length,
@@ -104,9 +91,9 @@ export class ExternalApiSchedulerService {
           totalErrors++;
 
           // 에러 상태로 업데이트
-          await this.creatorPlatformRepo.update(platform.id, {
+          await this.creatorPlatformService.updateSyncStatus(platform.id, {
             lastSyncAt: new Date(),
-            syncStatus: 'error',
+            syncStatus: SyncStatus.ERROR,
           });
 
           this.logger.error('YouTube channel sync failed', {
@@ -310,14 +297,7 @@ export class ExternalApiSchedulerService {
     try {
       this.logger.log('Starting Twitter content synchronization');
 
-      const twitterPlatforms = await this.creatorPlatformRepo.find({
-        where: {
-          type: 'twitter',
-          isActive: true,
-          syncStatus: 'active',
-        },
-        relations: ['creator'],
-      });
+      const twitterPlatforms = await this.creatorPlatformService.findActiveTwitterPlatformsForSync();
 
       this.logger.debug('Found Twitter platforms to sync', {
         count: twitterPlatforms.length,
@@ -335,9 +315,9 @@ export class ExternalApiSchedulerService {
           await this.updateTwitterUserInfo(platform);
 
           // 플랫폼 동기화 상태 업데이트
-          await this.creatorPlatformRepo.update(platform.id, {
+          await this.creatorPlatformService.updateSyncStatus(platform.id, {
             lastSyncAt: new Date(),
-            syncStatus: 'active',
+            syncStatus: SyncStatus.ACTIVE,
           });
 
           this.logger.debug('Twitter user synced successfully', {
@@ -349,9 +329,9 @@ export class ExternalApiSchedulerService {
           totalErrors++;
 
           // 에러 상태로 업데이트
-          await this.creatorPlatformRepo.update(platform.id, {
+          await this.creatorPlatformService.updateSyncStatus(platform.id, {
             lastSyncAt: new Date(),
-            syncStatus: 'error',
+            syncStatus: SyncStatus.ERROR,
           });
 
           this.logger.error('Twitter user sync failed', {
@@ -391,14 +371,11 @@ export class ExternalApiSchedulerService {
         platformType,
       });
 
-      const platform = await this.creatorPlatformRepo.findOne({
-        where: {
-          creatorId,
-          type: platformType,
-          isActive: true,
-        },
-        relations: ['creator'],
-      });
+      const platform = await this.creatorPlatformService.findByCreatorIdAndType(
+        creatorId,
+        platformType as any,
+        true // includeCreator
+      );
 
       if (!platform) {
         throw ExternalApiException.platformNotFound();
@@ -424,9 +401,9 @@ export class ExternalApiSchedulerService {
       }
 
       // 플랫폼 동기화 상태 업데이트
-      await this.creatorPlatformRepo.update(platform.id, {
+      await this.creatorPlatformService.updateSyncStatus(platform.id, {
         lastSyncAt: new Date(),
-        syncStatus: 'active',
+        syncStatus: SyncStatus.ACTIVE,
       });
 
       this.logger.log('Manual platform sync completed', {
@@ -454,10 +431,7 @@ export class ExternalApiSchedulerService {
     try {
       this.logger.log('Refreshing creator platform data', { creatorId });
 
-      const platforms = await this.creatorPlatformRepo.find({
-        where: { creatorId, isActive: true },
-        relations: ['creator'],
-      });
+      const platforms = await this.creatorPlatformService.findByCreatorId(creatorId);
 
       for (const platform of platforms) {
         try {
@@ -503,7 +477,7 @@ export class ExternalApiSchedulerService {
     let totalProcessed = 0;
 
     // 동기화 상태를 진행중으로 변경
-    await this.creatorPlatformRepo.update(platform.id, {
+    await this.creatorPlatformService.updateSyncStatus(platform.id, {
       videoSyncStatus: VideoSyncStatus.INITIAL_SYNCING,
       lastVideoSyncAt: new Date(),
     });
@@ -535,16 +509,16 @@ export class ExternalApiSchedulerService {
                 : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
               const createDto: CreateContentDto = {
-                type: 'youtube_video',
+                type: ContentType.YOUTUBE_VIDEO,
                 title: video.title,
-                description: video.description,
+                description: video.description || '',
                 thumbnail:
-                  video.thumbnails.high || video.thumbnails.medium || video.thumbnails.default,
+                  video.thumbnails.high || video.thumbnails.medium || video.thumbnails.default || '',
                 url: video.url,
                 platform: 'youtube',
                 platformId: video.id,
                 duration: video.duration,
-                publishedAt: video.publishedAt,
+                publishedAt: video.publishedAt.toISOString(),
                 creatorId: platform.creatorId,
                 metadata: {
                   tags: video.tags,
@@ -553,8 +527,8 @@ export class ExternalApiSchedulerService {
                   isLive: video.liveBroadcastContent === 'live',
                   quality: 'hd',
                 },
-                lastSyncedAt: now,
-                expiresAt,
+                expiresAt: expiresAt.toISOString(),
+                lastSyncedAt: now.toISOString(),
                 isAuthorizedData: hasConsent,
               };
 
@@ -582,7 +556,7 @@ export class ExternalApiSchedulerService {
         nextPageToken = result.nextPageToken;
 
         // 플랫폼 동기화 진행률 업데이트
-        await this.creatorPlatformRepo.update(platform.id, {
+        await this.creatorPlatformService.updateSyncStatus(platform.id, {
           syncedVideoCount: totalProcessed,
           totalVideoCount: result.totalResults,
           lastVideoSyncAt: new Date(),
@@ -595,9 +569,9 @@ export class ExternalApiSchedulerService {
       } while (nextPageToken);
 
       // 전체 동기화 완료 - 증분 모드로 전환
-      await this.creatorPlatformRepo.update(platform.id, {
+      await this.creatorPlatformService.updateSyncStatus(platform.id, {
         videoSyncStatus: VideoSyncStatus.INCREMENTAL,
-        syncStatus: 'active',
+        syncStatus: SyncStatus.ACTIVE,
         lastVideoSyncAt: new Date(),
         syncedVideoCount: totalProcessed,
       });
@@ -612,8 +586,8 @@ export class ExternalApiSchedulerService {
       return syncedCount;
     } catch (error: unknown) {
       // 동기화 실패 시 상태 업데이트
-      await this.creatorPlatformRepo.update(platform.id, {
-        syncStatus: 'error',
+      await this.creatorPlatformService.updateSyncStatus(platform.id, {
+        syncStatus: SyncStatus.ERROR,
         lastVideoSyncAt: new Date(),
       });
       throw error;
@@ -663,16 +637,16 @@ export class ExternalApiSchedulerService {
               : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
             const createDto: CreateContentDto = {
-              type: 'youtube_video',
+              type: ContentType.YOUTUBE_VIDEO,
               title: video.title,
               description: video.description,
               thumbnail:
-                video.thumbnails.high || video.thumbnails.medium || video.thumbnails.default,
+                video.thumbnails.high || video.thumbnails.medium || video.thumbnails.default || '',
               url: video.url,
               platform: 'youtube',
               platformId: video.id,
               duration: video.duration,
-              publishedAt: video.publishedAt,
+              publishedAt: video.publishedAt.toISOString(),
               creatorId: platform.creatorId,
               metadata: {
                 tags: video.tags,
@@ -681,8 +655,8 @@ export class ExternalApiSchedulerService {
                 isLive: video.liveBroadcastContent === 'live',
                 quality: 'hd',
               },
-              lastSyncedAt: now,
-              expiresAt,
+              lastSyncedAt: now.toISOString(),
+              expiresAt: expiresAt.toISOString(),
               isAuthorizedData: hasConsent,
             };
 
@@ -713,9 +687,9 @@ export class ExternalApiSchedulerService {
       }
 
       // 증분 동기화 완료 시점 업데이트
-      await this.creatorPlatformRepo.update(platform.id, {
+      await this.creatorPlatformService.updateSyncStatus(platform.id, {
         lastVideoSyncAt: new Date(),
-        syncStatus: 'active',
+        syncStatus: SyncStatus.ACTIVE,
         syncedVideoCount: (platform.syncedVideoCount || 0) + syncedCount,
       });
 
@@ -728,8 +702,8 @@ export class ExternalApiSchedulerService {
 
       return syncedCount;
     } catch (error: unknown) {
-      await this.creatorPlatformRepo.update(platform.id, {
-        syncStatus: 'error',
+      await this.creatorPlatformService.updateSyncStatus(platform.id, {
+        syncStatus: SyncStatus.ERROR,
         lastVideoSyncAt: new Date(),
       });
       throw error;
@@ -786,7 +760,7 @@ export class ExternalApiSchedulerService {
               : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 비동의: 30일 후
 
             const createDto: CreateContentDto = {
-              type: 'twitter_post',
+              type: ContentType.TWITTER_POST,
               title: this.generateTweetTitle(tweet.text),
               description: tweet.text,
               thumbnail:
@@ -796,7 +770,7 @@ export class ExternalApiSchedulerService {
               url: tweet.url,
               platform: 'twitter',
               platformId: tweet.id,
-              publishedAt: tweet.createdAt,
+              publishedAt: tweet.createdAt.toISOString(),
               creatorId: platform.creatorId,
               metadata: {
                 tags: tweet.entities.hashtags.map((tag) => tag.tag),
@@ -805,8 +779,8 @@ export class ExternalApiSchedulerService {
                 isLive: false,
                 quality: 'hd',
               },
-              lastSyncedAt: now,
-              expiresAt,
+              lastSyncedAt: now.toISOString(),
+              expiresAt: expiresAt.toISOString(),
               isAuthorizedData: hasConsent, // 동의 여부에 따른 인증 데이터 플래그
             };
 
@@ -856,7 +830,7 @@ export class ExternalApiSchedulerService {
   private async updateYouTubeChannelInfo(platform: CreatorPlatformEntity): Promise<void> {
     const channelInfo = await this.youtubeApiService.getChannelInfo(platform.platformId);
     if (channelInfo) {
-      await this.creatorPlatformRepo.update(platform.id, {
+      await this.creatorPlatformService.updateStatistics(platform.id, {
         followerCount: channelInfo.statistics.subscriberCount,
         contentCount: channelInfo.statistics.videoCount,
         totalViews: channelInfo.statistics.viewCount,
@@ -870,9 +844,9 @@ export class ExternalApiSchedulerService {
     if (userInfo) {
       // Twitter API를 통해 실제 트윗 수 계산
       const tweetsResult = await this.twitterApiService.getUserTweets(userInfo.id, 100);
-      const contentCount = tweetsResult.totalResults || 0;
+      const contentCount = tweetsResult.resultCount || 0;
 
-      await this.creatorPlatformRepo.update(platform.id, {
+      await this.creatorPlatformService.updateStatistics(platform.id, {
         followerCount: userInfo.publicMetrics.followersCount,
         contentCount,
         totalViews: 0, // Twitter API는 총 조회수를 제공하지 않음

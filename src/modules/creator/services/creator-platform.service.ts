@@ -1,11 +1,15 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
+
 import { EntityManager, In } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
 
+import { SyncStatus, PlatformType } from '@common/enums/index.js';
+
 import { CreatorPlatformRepository } from '../repositories/index.js';
-import { CreatorPlatformEntity, SyncStatus, PlatformType } from '../entities/index.js';
+import { CreatorPlatformEntity } from '../entities/index.js';
 import { AddPlatformDto, UpdatePlatformDto } from '../dto/index.js';
 import { CreatorException } from '../exceptions/index.js';
+
 import { CreatorService } from './creator.service.js';
 
 @Injectable()
@@ -190,6 +194,84 @@ export class CreatorPlatformService {
     }
   }
 
+  async createPlatform(
+    data: {
+      creatorId: string;
+      type: PlatformType;
+      platformId: string;
+      url: string;
+      displayName?: string;
+      isActive: boolean;
+      syncStatus: SyncStatus;
+    },
+    transactionManager?: EntityManager
+  ): Promise<void> {
+    try {
+      // 1. Creator 존재 확인
+      const creator = await this.creatorService.findByIdOrFail(data.creatorId);
+
+      // 2. 중복 플랫폼 확인
+      const existingPlatform = await this.creatorPlatformRepo.findOne({
+        where: {
+          creatorId: data.creatorId,
+          type: data.type,
+          platformId: data.platformId,
+        },
+      });
+
+      if (existingPlatform) {
+        this.logger.warn('Platform already exists for creator', {
+          creatorId: data.creatorId,
+          platformType: data.type,
+          platformId: data.platformId,
+        });
+        throw CreatorException.platformAlreadyExists();
+      }
+
+      // 3. Platform 엔티티 생성
+      const platform = new CreatorPlatformEntity();
+      Object.assign(platform, {
+        creatorId: data.creatorId,
+        type: data.type,
+        platformId: data.platformId,
+        url: data.url,
+        displayName: data.displayName,
+        followerCount: 0,
+        contentCount: 0,
+        totalViews: 0,
+        isActive: data.isActive,
+        syncStatus: data.syncStatus,
+      });
+
+      // 4. 저장
+      if (transactionManager) {
+        await transactionManager.save(platform);
+      } else {
+        await this.creatorPlatformRepo.saveEntity(platform);
+      }
+
+      this.logger.log('Platform created successfully', {
+        creatorId: data.creatorId,
+        platformId: platform.id,
+        platformType: data.type,
+        creatorName: creator.name,
+      });
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Platform creation failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId: data.creatorId,
+        platformType: data.type,
+        platformId: data.platformId,
+      });
+
+      throw CreatorException.platformCreateError();
+    }
+  }
+
   async updateCreatorPlatform(platformId: string, dto: UpdatePlatformDto): Promise<void> {
     try {
       // 1. Platform 존재 확인
@@ -255,6 +337,13 @@ export class CreatorPlatformService {
 
       throw CreatorException.platformDeleteError();
     }
+  }
+
+  /**
+   * Creator 플랫폼 삭제 (removeCreatorPlatform의 별칭)
+   */
+  async deleteCreatorPlatform(platformId: string): Promise<void> {
+    return this.removeCreatorPlatform(platformId);
   }
 
   async syncPlatformData(platformId: string): Promise<void> {
@@ -344,6 +433,192 @@ export class CreatorPlatformService {
       totalContentCount: platforms.reduce((sum, p) => sum + p.contentCount, 0),
       totalViews: platforms.reduce((sum, p) => sum + p.totalViews, 0),
     };
+  }
+
+  // ==================== BULK UPDATE METHODS ====================
+
+  /**
+   * 크리에이터의 모든 플랫폼 동기화 상태를 일괄 업데이트
+   */
+  async updatePlatformSyncStatusByCreatorId(
+    creatorId: string,
+    updateData: Partial<Pick<CreatorPlatformEntity, 'videoSyncStatus' | 'syncStatus' | 'lastSyncAt'>>,
+    transactionManager?: EntityManager
+  ): Promise<void> {
+    try {
+      const platforms = await this.creatorPlatformRepo.find({
+        where: { creatorId, isActive: true },
+      });
+
+      if (platforms.length === 0) {
+        this.logger.debug('No active platforms found for sync status update', { creatorId });
+        return;
+      }
+
+      // 모든 플랫폼 ID 수집
+      const platformIds = platforms.map((p) => p.id);
+
+      // 일괄 업데이트 수행
+      if (transactionManager) {
+        await transactionManager.update(CreatorPlatformEntity, platformIds, updateData);
+      } else {
+        await this.creatorPlatformRepo.update(platformIds, updateData);
+      }
+
+      this.logger.debug('Platform sync status updated for creator', {
+        creatorId,
+        platformCount: platforms.length,
+        updateData,
+      });
+    } catch (error: unknown) {
+      this.logger.error('Failed to update platform sync status by creator ID', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+        updateData,
+      });
+      throw CreatorException.platformUpdateError();
+    }
+  }
+
+  // ==================== SCHEDULER SUPPORT METHODS ====================
+
+  /**
+   * YouTube 동기화용 활성 플랫폼 조회
+   */
+  async findActiveYouTubePlatformsForSync(): Promise<CreatorPlatformEntity[]> {
+    try {
+      return await this.creatorPlatformRepo.find({
+        where: {
+          type: PlatformType.YOUTUBE,
+          isActive: true,
+          syncStatus: SyncStatus.ACTIVE,
+        },
+        order: {
+          videoSyncStatus: 'ASC', // NEVER_SYNCED 우선, 그 다음 CONSENT_CHANGED, 마지막 INCREMENTAL
+          lastVideoSyncAt: 'ASC', // 오래된 것부터
+        },
+      });
+    } catch (error: unknown) {
+      this.logger.error('Failed to find active YouTube platforms for sync', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw CreatorException.platformFetchError();
+    }
+  }
+
+  /**
+   * Twitter 동기화용 활성 플랫폼 조회
+   */
+  async findActiveTwitterPlatformsForSync(): Promise<CreatorPlatformEntity[]> {
+    try {
+      return await this.creatorPlatformRepo.find({
+        where: {
+          // type: PlatformType.TWITTER, // TWITTER enum 미지원으로 주석 처리
+          isActive: true,
+          syncStatus: SyncStatus.ACTIVE,
+        },
+        relations: ['creator'],
+      });
+    } catch (error: unknown) {
+      this.logger.error('Failed to find active Twitter platforms for sync', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw CreatorException.platformFetchError();
+    }
+  }
+
+  /**
+   * 특정 크리에이터의 특정 타입 플랫폼 조회
+   */
+  async findByCreatorIdAndType(
+    creatorId: string,
+    platformType: PlatformType,
+    includeCreator = false
+  ): Promise<CreatorPlatformEntity | null> {
+    try {
+      return await this.creatorPlatformRepo.findOne({
+        where: {
+          creatorId,
+          type: platformType,
+          isActive: true,
+        },
+        relations: includeCreator ? ['creator'] : [],
+      });
+    } catch (error: unknown) {
+      this.logger.error('Failed to find platform by creator ID and type', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+        platformType,
+      });
+      throw CreatorException.platformFetchError();
+    }
+  }
+
+  /**
+   * 플랫폼 동기화 상태 업데이트
+   */
+  async updateSyncStatus(
+    platformId: string,
+    updateData: Partial<Pick<CreatorPlatformEntity, 'syncStatus' | 'videoSyncStatus' | 'lastSyncAt' | 'lastVideoSyncAt' | 'syncedVideoCount' | 'totalVideoCount'>>
+  ): Promise<void> {
+    try {
+      await this.creatorPlatformRepo.update(platformId, updateData);
+
+      this.logger.debug('Platform sync status updated', {
+        platformId,
+        updateData,
+      });
+    } catch (error: unknown) {
+      this.logger.error('Failed to update platform sync status', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        platformId,
+        updateData,
+      });
+      throw CreatorException.platformUpdateError();
+    }
+  }
+
+  /**
+   * 플랫폼 통계 정보 업데이트
+   */
+  async updateStatistics(
+    platformId: string,
+    statistics: Partial<Pick<CreatorPlatformEntity, 'followerCount' | 'contentCount' | 'totalViews'>>
+  ): Promise<void> {
+    try {
+      await this.creatorPlatformRepo.update(platformId, statistics);
+
+      this.logger.debug('Platform statistics updated', {
+        platformId,
+        statistics,
+      });
+    } catch (error: unknown) {
+      this.logger.error('Failed to update platform statistics', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        platformId,
+        statistics,
+      });
+      throw CreatorException.platformUpdateError();
+    }
+  }
+
+  /**
+   * 플랫폼 목록을 ID로 조회
+   */
+  async findByIds(platformIds: string[]): Promise<CreatorPlatformEntity[]> {
+    try {
+      if (platformIds.length === 0) return [];
+
+      return await this.creatorPlatformRepo.find({
+        where: { id: In(platformIds) },
+      });
+    } catch (error: unknown) {
+      this.logger.error('Failed to find platforms by IDs', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        platformCount: platformIds.length,
+      });
+      throw CreatorException.platformFetchError();
+    }
   }
 
   // ==================== PRIVATE HELPER METHODS ====================

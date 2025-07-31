@@ -6,7 +6,8 @@ import { BaseRepository } from '@krgeobuk/core/repositories';
 import { LimitType, SortOrderType } from '@krgeobuk/core/enum';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
-import { CreatorApplicationEntity, ApplicationStatus } from '../entities/index.js';
+import { CreatorApplicationEntity } from '../entities/index.js';
+import { ApplicationStatus } from '../enums/index.js';
 
 export interface ApplicationSearchOptions {
   status?: ApplicationStatus;

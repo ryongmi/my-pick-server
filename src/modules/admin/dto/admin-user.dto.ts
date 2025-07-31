@@ -46,37 +46,37 @@ export class AdminUserSearchQueryDto {
 
 export class AdminUserListItemDto {
   @Expose()
-  id: string;
+  id!: string;
 
   @Expose()
-  email: string;
+  email!: string;
 
   @Expose()
   name?: string;
 
   @Expose()
-  status: UserStatus;
+  status!: UserStatus;
 
   @Expose()
-  isEmailVerified: boolean;
+  isEmailVerified!: boolean;
 
   @Expose()
-  registeredAt: Date;
+  registeredAt!: Date;
 
   @Expose()
   lastLoginAt?: Date;
 
   @Expose()
-  subscriptionCount: number;
+  subscriptionCount!: number;
 
   @Expose()
-  interactionCount: number;
+  interactionCount!: number;
 
   @Expose()
-  reportCount: number;
+  reportCount!: number;
 
   @Expose()
-  isCreator: boolean;
+  isCreator!: boolean;
 }
 
 export class AdminUserDetailDto extends AdminUserListItemDto {
@@ -92,18 +92,18 @@ export class AdminUserDetailDto extends AdminUserListItemDto {
   preferences?: {
     language: string;
     timezone: string;
-    notifications: any;
+    notifications: Record<string, unknown>;
   };
 
   @Expose()
-  subscriptions: Array<{
+  subscriptions!: Array<{
     creatorId: string;
     creatorName: string;
     subscribedAt: Date;
   }>;
 
   @Expose()
-  recentInteractions: Array<{
+  recentInteractions!: Array<{
     contentId: string;
     contentTitle: string;
     type: 'view' | 'like' | 'bookmark' | 'comment';
@@ -111,7 +111,7 @@ export class AdminUserDetailDto extends AdminUserListItemDto {
   }>;
 
   @Expose()
-  reports: Array<{
+  reports!: Array<{
     id: string;
     targetType: 'content' | 'creator' | 'user';
     targetId: string;
@@ -121,7 +121,7 @@ export class AdminUserDetailDto extends AdminUserListItemDto {
   }>;
 
   @Expose()
-  moderationHistory: Array<{
+  moderationHistory!: Array<{
     action: 'warned' | 'suspended' | 'banned' | 'unbanned';
     reason?: string;
     duration?: number; // 일 단위
@@ -132,7 +132,7 @@ export class AdminUserDetailDto extends AdminUserListItemDto {
 
 export class UpdateUserStatusDto {
   @IsEnum(UserStatus)
-  status: UserStatus;
+  status!: UserStatus;
 
   @IsOptional()
   @IsString()
@@ -144,5 +144,5 @@ export class UpdateUserStatusDto {
   suspensionDays?: number; // 정지 기간 (일)
 
   @IsString()
-  moderatedBy: string; // 관리자 ID
+  moderatedBy!: string; // 관리자 ID
 }

@@ -1,15 +1,17 @@
 import { Exclude, Expose, Type } from 'class-transformer';
-import { ContentType, ContentMetadata } from '../entities';
+
+import { ContentType } from '../enums/index.js';
+import { ContentMetadata } from '../interfaces/index.js';
 
 class CreatorDetailDto {
   @Expose()
-  id: string;
+  id!: string;
 
   @Expose()
-  name: string;
+  name!: string;
 
   @Expose()
-  displayName: string;
+  displayName!: string;
 
   @Expose()
   avatar?: string;
@@ -18,13 +20,13 @@ class CreatorDetailDto {
   description?: string;
 
   @Expose()
-  isVerified: boolean;
+  isVerified!: boolean;
 
   @Expose()
-  followerCount: number;
+  followerCount!: number;
 
   @Expose()
-  category: string;
+  category!: string;
 
   @Expose()
   tags?: string[];
@@ -32,74 +34,74 @@ class CreatorDetailDto {
 
 class ContentStatisticsDetailDto {
   @Expose()
-  views: number;
+  views!: number;
 
   @Expose()
-  likes: number;
+  likes!: number;
 
   @Expose()
-  comments: number;
+  comments!: number;
 
   @Expose()
-  shares: number;
+  shares!: number;
 
   @Expose()
-  engagementRate: number;
+  engagementRate!: number;
 
   @Expose()
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 
 export class ContentDetailDto {
   @Expose()
-  id: string;
+  id!: string;
 
   @Expose()
-  type: ContentType;
+  type!: ContentType;
 
   @Expose()
-  title: string;
+  title!: string;
 
   @Expose()
   description?: string;
 
   @Expose()
-  thumbnail: string;
+  thumbnail!: string;
 
   @Expose()
-  url: string;
+  url!: string;
 
   @Expose()
-  platform: string;
+  platform!: string;
 
   @Expose()
-  platformId: string;
+  platformId!: string;
 
   @Expose()
   duration?: number;
 
   @Expose()
-  publishedAt: Date;
+  publishedAt!: Date;
 
   @Expose()
-  creatorId: string;
+  creatorId!: string;
 
   @Expose()
   @Type(() => CreatorDetailDto)
-  creator: CreatorDetailDto;
+  creator!: CreatorDetailDto;
 
   @Expose()
   @Type(() => ContentStatisticsDetailDto)
-  statistics: ContentStatisticsDetailDto;
+  statistics!: ContentStatisticsDetailDto;
 
   @Expose()
-  metadata: ContentMetadata;
+  metadata!: ContentMetadata;
 
   @Expose()
-  createdAt: Date;
+  createdAt!: Date;
 
   @Expose()
-  updatedAt: Date;
+  updatedAt!: Date;
 
   // 사용자별 상호작용 정보 (옵셔널)
   @Expose()

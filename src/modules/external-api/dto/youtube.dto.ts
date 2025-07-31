@@ -1,86 +1,88 @@
 import { Expose, Type } from 'class-transformer';
 import { IsString, IsNumber, IsOptional, IsDate, IsArray, ValidateNested } from 'class-validator';
 
+import { YouTubeChannelBasicSnippet, YouTubeSearchSnippet } from '../interfaces/index.js';
+
 export class YouTubeChannelThumbnailsDto {
   @Expose()
   @IsOptional()
   @IsString()
-  default: string | undefined;
+  default?: string | undefined;
 
   @Expose()
   @IsOptional()
   @IsString()
-  medium: string | undefined;
+  medium?: string | undefined;
 
   @Expose()
   @IsOptional()
   @IsString()
-  high: string | undefined;
+  high?: string | undefined;
 }
 
 export class YouTubeChannelStatisticsDto {
   @Expose()
   @IsNumber()
-  viewCount: number;
+  viewCount!: number;
 
   @Expose()
   @IsNumber()
-  subscriberCount: number;
+  subscriberCount!: number;
 
   @Expose()
   @IsNumber()
-  videoCount: number;
+  videoCount!: number;
 }
 
 export class YouTubeChannelBrandingSettingsDto {
   @Expose()
   @IsOptional()
   @IsString()
-  bannerImageUrl: string | undefined;
+  bannerImageUrl?: string | undefined;
 
   @Expose()
   @IsOptional()
   @IsString()
-  keywords: string | undefined;
+  keywords?: string | undefined;
 
   @Expose()
   @IsOptional()
   @IsString()
-  country: string | undefined;
+  country?: string | undefined;
 }
 
 export class YouTubeChannelDto {
   @Expose()
   @IsString()
-  id: string;
+  id!: string;
 
   @Expose()
   @IsString()
-  title: string;
+  title!: string;
 
   @Expose()
   @IsString()
-  description: string;
+  description!: string;
 
   @Expose()
   @IsOptional()
   @IsString()
-  customUrl: string | undefined;
+  customUrl?: string | undefined;
 
   @Expose()
   @IsDate()
   @Type(() => Date)
-  publishedAt: Date;
+  publishedAt!: Date;
 
   @Expose()
   @ValidateNested()
   @Type(() => YouTubeChannelThumbnailsDto)
-  thumbnails: YouTubeChannelThumbnailsDto;
+  thumbnails!: YouTubeChannelThumbnailsDto;
 
   @Expose()
   @ValidateNested()
   @Type(() => YouTubeChannelStatisticsDto)
-  statistics: YouTubeChannelStatisticsDto;
+  statistics!: YouTubeChannelStatisticsDto;
 
   @Expose()
   @IsOptional()
@@ -93,87 +95,87 @@ export class YouTubeVideoThumbnailsDto {
   @Expose()
   @IsOptional()
   @IsString()
-  default: string | undefined;
+  default?: string | undefined;
 
   @Expose()
   @IsOptional()
   @IsString()
-  medium: string | undefined;
+  medium?: string | undefined;
 
   @Expose()
   @IsOptional()
   @IsString()
-  high: string | undefined;
+  high?: string | undefined;
 
   @Expose()
   @IsOptional()
   @IsString()
-  standard: string | undefined;
+  standard?: string | undefined;
 
   @Expose()
   @IsOptional()
   @IsString()
-  maxres: string | undefined;
+  maxres?: string | undefined;
 }
 
 export class YouTubeVideoStatisticsDto {
   @Expose()
   @IsNumber()
-  viewCount: number;
+  viewCount!: number;
 
   @Expose()
   @IsNumber()
-  likeCount: number;
+  likeCount!: number;
 
   @Expose()
   @IsNumber()
-  commentCount: number;
+  commentCount!: number;
 }
 
 export class YouTubeVideoDto {
   @Expose()
   @IsString()
-  id: string;
+  id!: string;
 
   @Expose()
   @IsString()
-  title: string;
+  title!: string;
 
   @Expose()
   @IsString()
-  description: string;
+  description!: string;
 
   @Expose()
   @IsDate()
   @Type(() => Date)
-  publishedAt: Date;
+  publishedAt!: Date;
 
   @Expose()
   @IsString()
-  channelId: string;
+  channelId!: string;
 
   @Expose()
   @IsString()
-  channelTitle: string;
+  channelTitle!: string;
 
   @Expose()
   @ValidateNested()
   @Type(() => YouTubeVideoThumbnailsDto)
-  thumbnails: YouTubeVideoThumbnailsDto;
+  thumbnails!: YouTubeVideoThumbnailsDto;
 
   @Expose()
   @ValidateNested()
   @Type(() => YouTubeVideoStatisticsDto)
-  statistics: YouTubeVideoStatisticsDto;
+  statistics!: YouTubeVideoStatisticsDto;
 
   @Expose()
   @IsNumber()
-  duration: number; // 초 단위
+  duration!: number; // 초 단위
 
   @Expose()
   @IsArray()
   @IsString({ each: true })
-  tags: string[];
+  tags!: string[];
 
   @Expose()
   @IsOptional()
@@ -192,60 +194,60 @@ export class YouTubeVideoDto {
 
   @Expose()
   @IsString()
-  url: string;
+  url!: string;
 }
 
 export class YouTubePlaylistThumbnailsDto {
   @Expose()
   @IsOptional()
   @IsString()
-  default: string | undefined;
+  default?: string | undefined;
 
   @Expose()
   @IsOptional()
   @IsString()
-  medium: string | undefined;
+  medium?: string | undefined;
 
   @Expose()
   @IsOptional()
   @IsString()
-  high: string | undefined;
+  high?: string | undefined;
 }
 
 export class YouTubePlaylistDto {
   @Expose()
   @IsString()
-  id: string;
+  id!: string;
 
   @Expose()
   @IsString()
-  title: string;
+  title!: string;
 
   @Expose()
   @IsString()
-  description: string;
+  description!: string;
 
   @Expose()
   @IsString()
-  channelId: string;
+  channelId!: string;
 
   @Expose()
   @IsString()
-  channelTitle: string;
+  channelTitle!: string;
 
   @Expose()
   @IsDate()
   @Type(() => Date)
-  publishedAt: Date;
+  publishedAt!: Date;
 
   @Expose()
   @ValidateNested()
   @Type(() => YouTubePlaylistThumbnailsDto)
-  thumbnails: YouTubePlaylistThumbnailsDto;
+  thumbnails!: YouTubePlaylistThumbnailsDto;
 
   @Expose()
   @IsNumber()
-  itemCount: number;
+  itemCount!: number;
 }
 
 export class YouTubeSearchResultDto {
@@ -253,60 +255,54 @@ export class YouTubeSearchResultDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => YouTubeVideoDto)
-  videos: YouTubeVideoDto[];
+  videos!: YouTubeVideoDto[];
 
   @Expose()
   @IsOptional()
   @IsString()
-  nextPageToken: string | undefined;
+  nextPageToken?: string | undefined;
 
   @Expose()
   @IsNumber()
-  totalResults: number;
+  totalResults!: number;
 }
 
 // ==================== API 응답 검증용 DTO ====================
 
-export interface YouTubeChannelBasicSnippet {
-  title?: string;
-  description?: string;
-  customUrl?: string;
-  publishedAt?: string;
-}
 
 export class YouTubeChannelBasicDto {
   @Expose()
   @IsString()
-  id: string;
+  id!: string;
 
   @Expose()
   @ValidateNested()
   @Type(() => Object)
-  snippet: YouTubeChannelBasicSnippet;
+  snippet!: YouTubeChannelBasicSnippet;
 }
 
 export class YouTubeChannelSnippetApiDto {
   @Expose()
   @IsString()
-  title: string;
+  title!: string;
 
   @Expose()
   @IsString()
-  description: string;
+  description!: string;
 
   @Expose()
   @IsOptional()
   @IsString()
-  customUrl?: string;
+  customUrl?: string | undefined;
 
   @Expose()
   @IsString()
-  publishedAt: string;
+  publishedAt!: string;
 
   @Expose()
   @ValidateNested()
   @Type(() => Object)
-  thumbnails: {
+  thumbnails!: {
     default?: { url: string };
     medium?: { url: string };
     high?: { url: string };
@@ -316,15 +312,15 @@ export class YouTubeChannelSnippetApiDto {
 export class YouTubeChannelStatisticsApiDto {
   @Expose()
   @IsString()
-  viewCount: string;
+  viewCount!: string;
 
   @Expose()
   @IsString()
-  subscriberCount: string;
+  subscriberCount!: string;
 
   @Expose()
   @IsString()
-  videoCount: string;
+  videoCount!: string;
 }
 
 export class YouTubeChannelBrandingSettingsApiDto {
@@ -349,17 +345,17 @@ export class YouTubeChannelBrandingSettingsApiDto {
 export class YouTubeChannelFullDto {
   @Expose()
   @IsString()
-  id: string;
+  id!: string;
 
   @Expose()
   @ValidateNested()
   @Type(() => YouTubeChannelSnippetApiDto)
-  snippet: YouTubeChannelSnippetApiDto;
+  snippet!: YouTubeChannelSnippetApiDto;
 
   @Expose()
   @ValidateNested()
   @Type(() => YouTubeChannelStatisticsApiDto)
-  statistics: YouTubeChannelStatisticsApiDto;
+  statistics!: YouTubeChannelStatisticsApiDto;
 
   @Expose()
   @IsOptional()
@@ -371,60 +367,48 @@ export class YouTubeChannelFullDto {
 export class YouTubeRelatedPlaylistsDto {
   @Expose()
   @IsString()
-  uploads: string;
+  uploads!: string;
 }
 
 export class YouTubeContentDetailsDto {
   @Expose()
   @ValidateNested()
   @Type(() => YouTubeRelatedPlaylistsDto)
-  relatedPlaylists: YouTubeRelatedPlaylistsDto;
+  relatedPlaylists!: YouTubeRelatedPlaylistsDto;
 }
 
 export class YouTubeChannelContentDto {
   @Expose()
   @IsString()
-  id: string;
+  id!: string;
 
   @Expose()
   @ValidateNested()
   @Type(() => YouTubeContentDetailsDto)
-  contentDetails: YouTubeContentDetailsDto;
+  contentDetails!: YouTubeContentDetailsDto;
 }
 
 export class YouTubeSearchIdDto {
   @Expose()
   @IsString()
-  videoId: string;
+  videoId!: string;
 }
 
-export interface YouTubeSearchSnippet {
-  title?: string;
-  description?: string;
-  channelId?: string;
-  channelTitle?: string;
-  publishedAt?: string;
-  thumbnails?: {
-    default?: { url: string };
-    medium?: { url: string };
-    high?: { url: string };
-  };
-}
 
 export class YouTubeSearchItemDto {
   @Expose()
   @ValidateNested()
   @Type(() => YouTubeSearchIdDto)
-  id: YouTubeSearchIdDto;
+  id!: YouTubeSearchIdDto;
 
   @Expose()
-  snippet: YouTubeSearchSnippet;
+  snippet!: YouTubeSearchSnippet;
 }
 
 export class YouTubePageInfoDto {
   @Expose()
   @IsNumber()
-  totalResults: number;
+  totalResults!: number;
 }
 
 export class YouTubeSearchApiResponseDto {
@@ -432,17 +416,17 @@ export class YouTubeSearchApiResponseDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => YouTubeSearchItemDto)
-  items: YouTubeSearchItemDto[];
+  items!: YouTubeSearchItemDto[];
 
   @Expose()
   @IsOptional()
   @IsString()
-  nextPageToken: string | undefined;
+  nextPageToken?: string | undefined;
 
   @Expose()
   @ValidateNested()
   @Type(() => YouTubePageInfoDto)
-  pageInfo: YouTubePageInfoDto;
+  pageInfo!: YouTubePageInfoDto;
 }
 
 export class YouTubeChannelsApiResponseDto {
@@ -450,7 +434,7 @@ export class YouTubeChannelsApiResponseDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => YouTubeChannelBasicDto)
-  items: YouTubeChannelBasicDto[];
+  items!: YouTubeChannelBasicDto[];
 }
 
 export class YouTubeChannelContentApiResponseDto {
@@ -458,7 +442,7 @@ export class YouTubeChannelContentApiResponseDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => YouTubeChannelContentDto)
-  items: YouTubeChannelContentDto[];
+  items!: YouTubeChannelContentDto[];
 }
 
 export class YouTubeChannelFullApiResponseDto {
