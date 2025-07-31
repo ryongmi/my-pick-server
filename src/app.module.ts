@@ -17,6 +17,7 @@ import {
   CreatorApplicationModule,
   ContentModule,
   UserInteractionModule,
+  ReportModule,
   AdminModule,
   ExternalApiModule,
   PlatformApplicationModule,
@@ -41,6 +42,8 @@ import {
     // Phase 2: Content Management System
     UserInteractionModule,
     ContentModule,
+    // Phase 4: Report System
+    ReportModule,
     // Phase 5: Admin System
     AdminModule,
     // Phase 6: External API Integration
