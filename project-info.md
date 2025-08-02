@@ -37,7 +37,7 @@ MyPick Server는 크리에이터/유튜버 팬들을 위한 통합 콘텐츠 허
 ### 데이터베이스 & 스토리지
 ```yaml
 주 데이터베이스:
-  - PostgreSQL 16: 관계형 데이터 저장소
+  - MySQL: 관계형 데이터 저장소
   - TypeORM/Prisma: ORM (Object-Relational Mapping)
   - 마이그레이션: 스키마 버전 관리
 

@@ -10,7 +10,7 @@ my-pick-server는 크리에이터/유튜버 팬들을 위한 통합 콘텐츠 �
 
 - **NestJS**: 백엔드 프레임워크
 - **TypeScript**: ES 모듈 지원과 함께 완전한 TypeScript 구현
-- **PostgreSQL**: 주 데이터베이스
+- **MySQL**: 주 데이터베이스
 - **Redis**: 캐싱 및 세션
 - **Docker**: 컨테이너화
 
@@ -66,9 +66,14 @@ my-pick-client의 mock API와 1:1 매칭되는 완전한 NestJS 백엔드 서버
 **Entity 구조:**
 ```typescript
 @Entity('creators')
+@Index(['category']) // 카테고리별 조회 최적화
+@Index(['isVerified', 'category']) // 인증된 크리에이터 조회 최적화
 export class CreatorEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ nullable: true })
+  userId?: string; // auth-server에서 관리하는 사용자 ID (선택적)
 
   @Column()
   name: string;
@@ -85,23 +90,11 @@ export class CreatorEntity {
   @Column({ default: false })
   isVerified: boolean;
 
-  @Column({ default: 0 })
-  followerCount: number;
-
-  @Column({ default: 0 })
-  contentCount: number;
-
-  @Column({ type: 'bigint', default: 0 })
-  totalViews: number;
-
   @Column()
   category: string;
 
   @Column('simple-array', { nullable: true })
   tags?: string[];
-
-  @OneToMany(() => CreatorPlatformEntity, platform => platform.creator)
-  platforms: CreatorPlatformEntity[];
 
   @CreateDateColumn()
   createdAt: Date;
@@ -111,11 +104,15 @@ export class CreatorEntity {
 }
 
 @Entity('creator_platforms')
+@Index(['creatorId']) // 크리에이터별 플랫폼 조회 최적화
+@Index(['creatorId', 'type']) // 크리에이터별 특정 플랫폼 조회 최적화
+@Index(['creatorId', 'isActive']) // 활성 플랫폼만 조회 최적화
+@Index(['type', 'isActive']) // 플랫폼별 활성 계정 조회 최적화
 export class CreatorPlatformEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'uuid' })
   creatorId: string;
 
   @Column({ type: 'enum', enum: ['youtube', 'twitter', 'instagram', 'tiktok'] })
@@ -127,8 +124,17 @@ export class CreatorPlatformEntity {
   @Column()
   url: string;
 
+  @Column({ nullable: true })
+  displayName?: string;
+
   @Column({ default: 0 })
   followerCount: number;
+
+  @Column({ default: 0 })
+  contentCount: number;
+
+  @Column({ type: 'bigint', default: 0 })
+  totalViews: number;
 
   @Column({ default: true })
   isActive: boolean;
@@ -136,11 +142,74 @@ export class CreatorPlatformEntity {
   @Column({ nullable: true })
   lastSyncAt?: Date;
 
-  @Column({ default: 'active' })
+  @Column({ type: 'enum', enum: ['active', 'error', 'disabled'], default: 'active' })
   syncStatus: 'active' | 'error' | 'disabled';
 
-  @ManyToOne(() => CreatorEntity, creator => creator.platforms)
-  creator: CreatorEntity;
+  // ==================== 영상 동기화 관리 ====================
+  
+  @Column({ type: 'enum', enum: ['never_synced', 'in_progress', 'completed', 'failed'], default: 'never_synced' })
+  videoSyncStatus: 'never_synced' | 'in_progress' | 'completed' | 'failed';
+
+  @Column({ nullable: true })
+  lastVideoSyncAt?: Date;
+
+  @Column({ nullable: true })
+  totalVideoCount?: number; // 채널 총 영상 수
+
+  @Column({ nullable: true })
+  syncedVideoCount?: number; // 동기화된 영상 수
+
+  @Column({ nullable: true })
+  failedVideoCount?: number; // 동기화 실패한 영상 수
+
+  @Column({ nullable: true })
+  lastSyncError?: string; // 마지막 동기화 에러 메시지
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}
+
+@Entity('creator_consents')
+@Index(['creatorId']) // 크리에이터별 동의 조회 최적화
+@Index(['creatorId', 'type']) // 크리에이터별 특정 동의 타입 조회 최적화
+@Index(['creatorId', 'isGranted']) // 크리에이터별 동의 상태 조회 최적화
+@Index(['expiresAt']) // 만료일 기준 조회 최적화
+export class CreatorConsentEntity {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ type: 'uuid' })
+  creatorId: string;
+
+  @Column({ type: 'enum', enum: ['data_collection', 'privacy_policy', 'marketing', 'analytics'] })
+  type: 'data_collection' | 'privacy_policy' | 'marketing' | 'analytics';
+
+  @Column({ default: false })
+  isGranted: boolean;
+
+  @Column()
+  grantedAt: Date;
+
+  @Column({ nullable: true })
+  revokedAt?: Date; // 동의 철회 시점
+
+  @Column({ nullable: true })
+  expiresAt?: Date; // 동의 만료 시점 (재확인 필요)
+
+  @Column({ type: 'text', nullable: true })
+  consentData?: string; // 동의 시점의 추가 정보 (IP, User-Agent 등)
+
+  @Column({ nullable: true })
+  version?: string; // 동의한 약관/정책 버전
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }
 ```
 
@@ -182,11 +251,11 @@ export class CreatorService {
 
 **주요 API 엔드포인트:**
 ```
-GET    /api/v1/creators              # 크리에이터 목록 (검색, 필터링)
-GET    /api/v1/creators/:id          # 크리에이터 상세
-POST   /api/v1/creators/:id/subscribe # 구독
-DELETE /api/v1/creators/:id/subscribe # 구독 해제
-GET    /api/v1/creators/:id/stats    # 통계
+GET    /api/creators              # 크리에이터 목록 (검색, 필터링)
+GET    /api/creators/:id          # 크리에이터 상세
+POST   /api/creators/:id/subscribe # 구독
+DELETE /api/creators/:id/subscribe # 구독 해제
+GET    /api/creators/:id/stats    # 통계
 ```
 
 #### 1.2 UserSubscription - 중간테이블 서비스 표준
@@ -206,9 +275,6 @@ export class UserSubscriptionEntity {
 
   @CreateDateColumn()
   subscribedAt: Date;
-
-  @ManyToOne(() => CreatorEntity)
-  creator: CreatorEntity;
 }
 ```
 
@@ -246,7 +312,120 @@ POST   /users/:userId/subscriptions/:creatorId   # 구독
 DELETE /users/:userId/subscriptions/:creatorId   # 구독 해제
 ```
 
-#### 1.3 크리에이터 신청 시스템
+#### 1.3 CreatorConsent - 중간테이블 서비스 표준
+
+**Service 구조 (중간테이블 표준):**
+```typescript
+@Injectable()
+export class CreatorConsentService {
+  private readonly logger = new Logger(CreatorConsentService.name);
+
+  constructor(private readonly creatorConsentRepo: CreatorConsentRepository) {}
+
+  // ==================== 조회 메서드 ====================
+  
+  async getActiveConsents(creatorId: string): Promise<string[]> {
+    // 현재 유효한 동의 타입 목록 반환
+    const consents = await this.creatorConsentRepo.find({
+      where: { 
+        creatorId, 
+        isGranted: true,
+        expiresAt: MoreThan(new Date()) // 만료되지 않은 것만
+      },
+      select: ['type']
+    });
+    return consents.map(c => c.type);
+  }
+  
+  async hasConsent(creatorId: string, type: string): Promise<boolean> {
+    const consent = await this.creatorConsentRepo.findOne({
+      where: { 
+        creatorId, 
+        type, 
+        isGranted: true,
+        expiresAt: MoreThan(new Date())
+      }
+    });
+    return !!consent;
+  }
+
+  async getConsentHistory(creatorId: string, type?: string): Promise<CreatorConsentEntity[]> {
+    const where: any = { creatorId };
+    if (type) where.type = type;
+    
+    return await this.creatorConsentRepo.find({
+      where,
+      order: { createdAt: 'DESC' }
+    });
+  }
+  
+  // ==================== 변경 메서드 ====================
+  
+  async grantConsent(dto: {
+    creatorId: string;
+    type: string;
+    expiresAt?: Date;
+    consentData?: string;
+    version?: string;
+  }): Promise<void> {
+    // 기존 동의 무효화
+    await this.creatorConsentRepo.update(
+      { creatorId: dto.creatorId, type: dto.type, isGranted: true },
+      { isGranted: false, revokedAt: new Date() }
+    );
+
+    // 새 동의 생성
+    const consent = this.creatorConsentRepo.create({
+      ...dto,
+      isGranted: true,
+      grantedAt: new Date()
+    });
+    
+    await this.creatorConsentRepo.save(consent);
+  }
+  
+  async revokeConsent(creatorId: string, type: string): Promise<void> {
+    await this.creatorConsentRepo.update(
+      { creatorId, type, isGranted: true },
+      { isGranted: false, revokedAt: new Date() }
+    );
+  }
+  
+  // ==================== 최적화 메서드 (필수) ====================
+  
+  async getExpiredConsents(): Promise<CreatorConsentEntity[]> {
+    return await this.creatorConsentRepo.find({
+      where: {
+        isGranted: true,
+        expiresAt: LessThan(new Date())
+      }
+    });
+  }
+
+  async hasAnyConsent(creatorId: string): Promise<boolean> {
+    const count = await this.creatorConsentRepo.count({
+      where: { 
+        creatorId, 
+        isGranted: true,
+        expiresAt: MoreThan(new Date())
+      }
+    });
+    return count > 0;
+  }
+}
+```
+
+**동의 관리 API 패턴:**
+```
+GET    /creators/:creatorId/consents                     # 크리에이터의 현재 동의 목록
+GET    /creators/:creatorId/consents/:type               # 특정 동의 타입 상태 확인
+GET    /creators/:creatorId/consents/:type/history       # 동의 이력 조회
+POST   /creators/:creatorId/consents/:type               # 동의 생성
+DELETE /creators/:creatorId/consents/:type               # 동의 철회
+GET    /admin/consents/expired                           # 만료된 동의 목록 (관리자)
+```
+
+#### 1.4 크리에이터 신청 시스템
 
 **Entity 구조:**
 ```typescript
@@ -298,8 +477,8 @@ export class CreatorApplicationEntity {
 
 **주요 API:**
 ```
-POST /api/v1/creator-application        # 크리에이터 신청
-GET  /api/v1/creator-application/status # 신청 상태 조회
+POST /api/creator-application        # 크리에이터 신청
+GET  /api/creator-application/status # 신청 상태 조회
 ```
 
 ### Phase 2: 콘텐츠 관리 시스템 (3-4일)
@@ -343,9 +522,6 @@ export class ContentEntity {
   @Column()
   creatorId: string;
 
-  @OneToOne(() => ContentStatisticsEntity, stats => stats.content)
-  statistics: ContentStatisticsEntity;
-
   @Column({ type: 'json' })
   metadata: {
     tags: string[];
@@ -385,20 +561,17 @@ export class ContentStatisticsEntity {
 
   @UpdateDateColumn()
   updatedAt: Date;
-
-  @OneToOne(() => ContentEntity, content => content.statistics)
-  content: ContentEntity;
 }
 ```
 
 **주요 API:**
 ```
-GET    /api/v1/content                 # 콘텐츠 피드 (페이지네이션, 필터링)
-GET    /api/v1/content/:id             # 콘텐츠 상세
-POST   /api/v1/content/:id/bookmark    # 북마크 추가
-DELETE /api/v1/content/:id/bookmark    # 북마크 제거
-POST   /api/v1/content/:id/like        # 좋아요
-GET    /api/v1/content/bookmarks       # 북마크 목록
+GET    /api/content                 # 콘텐츠 피드 (페이지네이션, 필터링)
+GET    /api/content/:id             # 콘텐츠 상세
+POST   /api/content/:id/bookmark    # 북마크 추가
+DELETE /api/content/:id/bookmark    # 북마크 제거
+POST   /api/content/:id/like        # 좋아요
+GET    /api/content/bookmarks       # 북마크 목록
 ```
 
 #### 2.2 UserInteraction - 중간테이블 서비스
@@ -539,11 +712,11 @@ export class NotificationsGateway {
 
 **주요 API:**
 ```
-GET /api/v1/notifications              # 알림 목록
-GET /api/v1/notifications/unread-count # 미읽음 수
-PUT /api/v1/notifications/:id/read     # 읽음 처리
-PUT /api/v1/notifications/read-all     # 전체 읽음
-PUT /api/v1/notifications/settings     # 설정 수정
+GET /api/notifications              # 알림 목록
+GET /api/notifications/unread-count # 미읽음 수
+PUT /api/notifications/:id/read     # 읽음 처리
+PUT /api/notifications/read-all     # 전체 읽음
+PUT /api/notifications/settings     # 설정 수정
 ```
 
 ### Phase 4: 기본 추천 시스템 (2일)
@@ -558,10 +731,10 @@ PUT /api/v1/notifications/settings     # 설정 수정
 
 **주요 API:**
 ```
-GET  /api/v1/recommendations/content   # 개인화 추천 콘텐츠
-GET  /api/v1/recommendations/creators  # 추천 크리에이터
-GET  /api/v1/recommendations/trending  # 트렌딩 콘텐츠
-POST /api/v1/recommendations/feedback  # 추천 피드백
+GET  /api/recommendations/content   # 개인화 추천 콘텐츠
+GET  /api/recommendations/creators  # 추천 크리에이터
+GET  /api/recommendations/trending  # 트렌딩 콘텐츠
+POST /api/recommendations/feedback  # 추천 피드백
 ```
 
 ### Phase 5: 관리자 시스템 (2-3일)
@@ -570,10 +743,10 @@ POST /api/v1/recommendations/feedback  # 추천 피드백
 
 **주요 API:**
 ```
-GET  /api/v1/admin/dashboard                    # 대시보드 통계
-GET  /api/v1/admin/creator-applications         # 크리에이터 신청 목록
-POST /api/v1/admin/creator-applications/:id/approve # 승인
-POST /api/v1/admin/creator-applications/:id/reject  # 거부
+GET  /api/admin/dashboard                    # 대시보드 통계
+GET  /api/admin/creator-applications         # 크리에이터 신청 목록
+POST /api/admin/creator-applications/:id/approve # 승인
+POST /api/admin/creator-applications/:id/reject  # 거부
 ```
 
 **Controller 예시:**
