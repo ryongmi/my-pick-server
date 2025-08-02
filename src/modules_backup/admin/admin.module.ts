@@ -9,7 +9,7 @@ import { CreatorApplicationModule } from '../creator-application/creator-applica
 import { PlatformApplicationModule } from '../platform-application/platform-application.module.js';
 import { ReportModule } from '../report/report.module.js';
 
-import { AdminDashboardService } from './services/index.js';
+import { AdminDashboardService, AdminCreatorService, AdminPlatformService } from './services/index.js';
 import { 
   AdminDashboardController,
   AdminContentController,
@@ -42,9 +42,13 @@ import {
   ],
   providers: [
     AdminDashboardService,
+    AdminCreatorService,
+    AdminPlatformService,
   ],
   exports: [
     AdminDashboardService,
+    AdminCreatorService,
+    AdminPlatformService,
   ],
 })
 export class AdminModule {}

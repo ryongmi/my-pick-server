@@ -23,16 +23,7 @@ export class CreatorApplicationRepository extends BaseRepository<CreatorApplicat
   constructor(private dataSource: DataSource) {
     super(CreatorApplicationEntity, dataSource);
   }
-
-  // 기본 조회 메서드들은 BaseRepository 직접 사용 (findOneById, findOne 등)
-
-  async findByUserId(userId: string): Promise<CreatorApplicationEntity | null> {
-    return this.findOne({
-      where: { userId },
-      order: { appliedAt: 'DESC' },
-    });
-  }
-
+  
   async searchApplications(
     options: ApplicationSearchOptions
   ): Promise<PaginatedResult<Partial<CreatorApplicationEntity>>> {

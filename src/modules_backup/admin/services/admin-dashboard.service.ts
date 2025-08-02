@@ -9,6 +9,7 @@ import { UserSubscriptionService } from '../../user-subscription/services/index.
 import { UserInteractionService } from '../../user-interaction/services/index.js';
 import { CreatorApplicationService } from '../../creator-application/services/index.js';
 import { ReportService } from '../../report/services/index.js';
+import { AdminCreatorService } from './admin-creator.service.js';
 import {
   AdminDashboardStatsDto,
   AdminDashboardMetricsDto,
@@ -23,6 +24,7 @@ export class AdminDashboardService {
 
   constructor(
     private readonly creatorService: CreatorService,
+    private readonly adminCreatorService: AdminCreatorService,
     private readonly contentService: ContentService,
     private readonly userSubscriptionService: UserSubscriptionService,
     private readonly userInteractionService: UserInteractionService,
@@ -228,7 +230,7 @@ export class AdminDashboardService {
 
   private async getTotalCreators(): Promise<number> {
     try {
-      return await this.creatorService.getTotalCount();
+      return await this.adminCreatorService.getTotalCount();
     } catch (error: unknown) {
       this.logger.warn('Failed to get total creators', {
         error: error instanceof Error ? error.message : 'Unknown error',

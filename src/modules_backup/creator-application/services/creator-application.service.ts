@@ -94,7 +94,7 @@ export class CreatorApplicationService {
 
   async getApplicationStatus(userId: string): Promise<ApplicationDetailDto | null> {
     try {
-      const application = await this.applicationRepo.findByUserId(userId);
+      const application = await this.findByUserId(userId);
 
       if (!application) {
         return null;

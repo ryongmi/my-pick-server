@@ -125,6 +125,41 @@ export class CreatorException {
     });
   }
 
+  static creatorPlatformNotFound(): HttpException {
+    return new NotFoundException({
+      code: 'CREATOR_508',
+      message: '크리에이터 플랫폼을 찾을 수 없습니다.',
+    });
+  }
+
+  static creatorPlatformAlreadyExists(): HttpException {
+    return new ConflictException({
+      code: 'CREATOR_509',
+      message: '이미 등록된 크리에이터 플랫폼입니다.',
+    });
+  }
+
+  static creatorPlatformCreateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_510',
+      message: '크리에이터 플랫폼 생성 중 오류가 발생했습니다.',
+    });
+  }
+
+  static creatorPlatformUpdateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_511',
+      message: '크리에이터 플랫폼 수정 중 오류가 발생했습니다.',
+    });
+  }
+
+  static creatorPlatformDeleteError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_512',
+      message: '크리에이터 플랫폼 삭제 중 오류가 발생했습니다.',
+    });
+  }
+
   static platformSyncError(): HttpException {
     return new InternalServerErrorException({
       code: 'CREATOR_506',
