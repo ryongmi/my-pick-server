@@ -11,6 +11,7 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 
 import { Serialize } from '@krgeobuk/core/decorators';
@@ -28,7 +29,7 @@ import { JwtPayload } from '@krgeobuk/jwt/interfaces';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
-import { CreatorService, CreatorPlatformService } from '../services/index.js';
+import { CreatorService, CreatorPlatformService, CreatorConsentService } from '../services/index.js';
 import {
   CreatorSearchQueryDto,
   CreatorSearchResultDto,
@@ -39,14 +40,19 @@ import {
   UpdateCreatorDto,
   AddPlatformDto,
   UpdatePlatformDto,
+  GrantConsentDto,
+  ConsentHistoryDto,
 } from '../dto/index.js';
 
 @SwaggerApiTags({ tags: ['creators'] })
 @Controller('creators')
 export class CreatorController {
+  private readonly logger = new Logger(CreatorController.name);
+
   constructor(
     private readonly creatorService: CreatorService,
-    private readonly creatorPlatformService: CreatorPlatformService
+    private readonly creatorPlatformService: CreatorPlatformService,
+    private readonly creatorConsentService: CreatorConsentService
   ) {}
 
   @Get()
@@ -55,27 +61,51 @@ export class CreatorController {
   async getCreators(
     @Query() query: CreatorSearchQueryDto
   ): Promise<PaginatedResult<CreatorSearchResultDto>> {
-    // 1. Creator 검색
-    const creators = await this.creatorService.searchCreators(query);
-    
-    if (creators.items.length === 0) {
-      return { 
-        items: [], 
-        pageInfo: creators.pageInfo 
+    this.logger.debug('Creator search request', {
+      hasNameFilter: !!query.name,
+      category: query.category,
+      page: query.page,
+      limit: query.limit,
+    });
+
+    try {
+      // 1. Creator 검색
+      const creators = await this.creatorService.searchCreators(query);
+      
+      if (creators.items.length === 0) {
+        this.logger.debug('No creators found for search query', {
+          category: query.category,
+          name: query.name,
+        });
+        return { 
+          items: [], 
+          pageInfo: creators.pageInfo 
+        };
+      }
+
+      // 2. 배치로 플랫폼 정보 조회 (N+1 문제 해결)
+      const creatorIds = creators.items.map((creator) => creator.id!);
+      const platforms = await this.creatorPlatformService.findByCreatorIds(creatorIds);
+
+      // 3. 메모리에서 조합하여 결과 구성
+      const items = this.buildCreatorSearchResults(creators.items, platforms);
+
+      this.logger.debug('Creator search completed', {
+        foundCount: items.length,
+        totalPlatforms: platforms.length,
+      });
+
+      return {
+        items,
+        pageInfo: creators.pageInfo,
       };
+    } catch (error: unknown) {
+      this.logger.error('Creator search failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        query: query,
+      });
+      throw error;
     }
-
-    // 2. 배치로 플랫폼 정보 조회 (N+1 문제 해결)
-    const creatorIds = creators.items.map((creator) => creator.id!);
-    const platforms = await this.creatorPlatformService.findByCreatorIds(creatorIds);
-
-    // 3. 메모리에서 조합하여 결과 구성
-    const items = this.buildCreatorSearchResults(creators.items, platforms);
-
-    return {
-      items,
-      pageInfo: creators.pageInfo,
-    };
   }
 
   @Get(':id')
@@ -301,6 +331,106 @@ export class CreatorController {
 
     await this.creatorPlatformService.removePlatformFromCreator(platformId);
     
+    return { success: true };
+  }
+
+  // ==================== CONSENT MANAGEMENT APIS ====================
+
+  @Get(':id/consents')
+  @SwaggerApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiOperation({ summary: '크리에이터 동의 목록 조회 (관리자 전용)' })
+  @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
+  @SwaggerApiOkResponse({ status: 200, description: '동의 목록 조회 성공', isArray: true })
+  async getCreatorConsents(
+    @Param('id', ParseUUIDPipe) creatorId: string,
+    @CurrentJwt() jwt: JwtPayload
+  ): Promise<string[]> {
+    return await this.creatorConsentService.getActiveConsents(creatorId);
+  }
+
+  @Get(':id/consents/:type')
+  @SwaggerApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiOperation({ summary: '특정 동의 타입 상태 확인 (관리자 전용)' })
+  @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
+  @SwaggerApiParam({ name: 'type', type: String, description: '동의 타입' })
+  @SwaggerApiOkResponse({ status: 200, description: '동의 상태 확인 성공' })
+  async checkConsentType(
+    @Param('id', ParseUUIDPipe) creatorId: string,
+    @Param('type') type: string,
+    @CurrentJwt() jwt: JwtPayload
+  ): Promise<{ hasConsent: boolean }> {
+    const hasConsent = await this.creatorConsentService.hasConsent(creatorId, type);
+    return { hasConsent };
+  }
+
+  @Get(':id/consents/:type/history')
+  @SwaggerApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiOperation({ summary: '동의 이력 조회 (관리자 전용)' })
+  @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
+  @SwaggerApiParam({ name: 'type', type: String, description: '동의 타입' })
+  @SwaggerApiOkResponse({ dto: ConsentHistoryDto, status: 200, description: '동의 이력 조회 성공', isArray: true })
+  @Serialize({ dto: ConsentHistoryDto })
+  async getConsentHistory(
+    @Param('id', ParseUUIDPipe) creatorId: string,
+    @Param('type') type: string,
+    @CurrentJwt() jwt: JwtPayload
+  ): Promise<ConsentHistoryDto[]> {
+    const history = await this.creatorConsentService.getConsentHistory(creatorId, type);
+    
+    return history.map(consent => ({
+      id: consent.id,
+      type: consent.type,
+      isGranted: consent.isGranted,
+      grantedAt: consent.grantedAt,
+      revokedAt: consent.revokedAt,
+      expiresAt: consent.expiresAt,
+      version: consent.version,
+      createdAt: consent.createdAt
+    }));
+  }
+
+  @Post(':id/consents/:type')
+  @SwaggerApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiOperation({ summary: '동의 생성 (관리자 전용)' })
+  @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
+  @SwaggerApiParam({ name: 'type', type: String, description: '동의 타입' })
+  @SwaggerApiBody({ type: GrantConsentDto })
+  @SwaggerApiOkResponse({ status: 201, description: '동의 생성 성공' })
+  @HttpCode(HttpStatus.CREATED)
+  async grantConsent(
+    @Param('id', ParseUUIDPipe) creatorId: string,
+    @Param('type') type: string,
+    @Body() dto: GrantConsentDto,
+    @CurrentJwt() jwt: JwtPayload
+  ): Promise<{ success: boolean }> {
+    await this.creatorConsentService.grantConsent({
+      creatorId,
+      type,
+      expiresAt: dto.expiresAt,
+      consentData: dto.consentData,
+      version: dto.version
+    });
+    
+    return { success: true };
+  }
+
+  @Delete(':id/consents/:type')
+  @SwaggerApiBearerAuth()
+  @UseGuards(AccessTokenGuard)
+  @SwaggerApiOperation({ summary: '동의 철회 (관리자 전용)' })
+  @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
+  @SwaggerApiParam({ name: 'type', type: String, description: '동의 타입' })
+  @SwaggerApiOkResponse({ status: 200, description: '동의 철회 성공' })
+  async revokeConsent(
+    @Param('id', ParseUUIDPipe) creatorId: string,
+    @Param('type') type: string,
+    @CurrentJwt() jwt: JwtPayload
+  ): Promise<{ success: boolean }> {
+    await this.creatorConsentService.revokeConsent(creatorId, type);
     return { success: true };
   }
 

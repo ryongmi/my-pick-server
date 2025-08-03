@@ -1,290 +1,276 @@
-import { Injectable, Logger, HttpException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { EntityManager, MoreThan } from 'typeorm';
 
-import { EntityManager } from 'typeorm';
+import { CreatorConsentEntity, ConsentType } from '../entities/creator-consent.entity.js';
+import { CreatorConsentRepository } from '../repositories/creator-consent.repository.js';
+import { CreatorException } from '../exceptions/creator.exception.js';
 
-import { VideoSyncStatus } from '@common/enums/index.js';
-
-import { CreatorRepository } from '../repositories/index.js';
-import { CreatorEntity } from '../entities/index.js';
-import { CreatorException } from '../exceptions/index.js';
-
-import { CreatorPlatformService } from './creator-platform.service.js';
+export interface GrantConsentDto {
+  creatorId: string;
+  type: ConsentType;
+  expiresAt?: Date;
+  consentData?: string;
+  version?: string;
+}
 
 @Injectable()
 export class CreatorConsentService {
   private readonly logger = new Logger(CreatorConsentService.name);
 
-  constructor(
-    private readonly creatorRepo: CreatorRepository,
-    private readonly creatorPlatformService: CreatorPlatformService,
-  ) {}
+  constructor(private readonly consentRepo: CreatorConsentRepository) {}
 
-  // ==================== PUBLIC METHODS ====================
-
-  /**
-   * 크리에이터 데이터 수집 동의 상태 변경
-   */
-  async updateDataConsent(
-    creatorId: string,
-    hasConsent: boolean,
-    transactionManager?: EntityManager
-  ): Promise<void> {
+  // ==================== 조회 메서드 (ID 목록 반환) ====================
+  
+  async getActiveConsents(creatorId: string): Promise<ConsentType[]> {
     try {
-      const creator = await this.findCreatorByIdOrFail(creatorId);
-      const now = new Date();
-
-      // 동의 상태가 변경되었는지 확인
-      const consentChanged = creator.hasDataConsent !== hasConsent;
-
-      if (!consentChanged) {
-        this.logger.debug('Data consent status unchanged', {
-          creatorId,
-          currentConsent: creator.hasDataConsent,
-          requestedConsent: hasConsent,
-        });
-        return;
-      }
-
-      // 크리에이터 동의 상태 업데이트
-      const updateData: Partial<CreatorEntity> = {
-        hasDataConsent: hasConsent,
-        lastConsentCheckAt: now,
-      };
-
-      if (hasConsent) {
-        // 동의 승인 시
-        updateData.consentGrantedAt = now;
-        updateData.consentExpiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // 1년 후
-      } else {
-        // 동의 철회 시 - null을 사용하여 데이터베이스에서 null로 설정
-        (updateData as any).consentGrantedAt = null;
-        (updateData as any).consentExpiresAt = null;
-      }
-
-      await this.creatorRepo.update(creatorId, updateData);
-
-      // 플랫폼별 동기화 상태 업데이트
-      await this.updatePlatformSyncStatusOnConsentChange(creatorId, hasConsent, transactionManager);
-
-      this.logger.log('Creator data consent updated successfully', {
-        creatorId,
-        hasConsent,
-        consentGrantedAt: updateData.consentGrantedAt,
-        consentExpiresAt: updateData.consentExpiresAt,
-        wasChanged: consentChanged,
-      });
+      const consents = await this.consentRepo.findActiveConsents(creatorId);
+      return consents.map(consent => consent.type);
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      this.logger.error('Creator data consent update failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
-        hasConsent,
-      });
-      throw CreatorException.creatorUpdateError();
-    }
-  }
-
-  /**
-   * 동의 상태 확인 및 만료 처리
-   */
-  async checkConsentExpiry(creatorId: string): Promise<{
-    isValid: boolean;
-    isExpiringSoon: boolean;
-    daysUntilExpiry?: number;
-  }> {
-    try {
-      const creator = await this.findCreatorByIdOrFail(creatorId);
-
-      if (!creator.hasDataConsent || !creator.consentExpiresAt) {
-        return { isValid: false, isExpiringSoon: false };
-      }
-
-      const now = new Date();
-      const expiryDate = creator.consentExpiresAt;
-      const daysUntilExpiry = Math.ceil(
-        (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      const isExpired = now > expiryDate;
-      const isExpiringSoon = daysUntilExpiry <= 30; // 30일 이내 만료 예정
-
-      if (isExpired) {
-        // 동의 만료 시 자동으로 철회 처리
-        await this.updateDataConsent(creatorId, false);
-
-        this.logger.warn('Creator consent expired and revoked', {
-          creatorId,
-          expiryDate: expiryDate.toISOString(),
-          daysOverdue: Math.abs(daysUntilExpiry),
-        });
-
-        return { isValid: false, isExpiringSoon: false };
-      }
-
-      // 마지막 확인 시점 업데이트
-      await this.creatorRepo.update(creatorId, {
-        lastConsentCheckAt: now,
-      });
-
-      this.logger.debug('Creator consent status checked', {
-        creatorId,
-        isValid: true,
-        isExpiringSoon,
-        daysUntilExpiry,
-      });
-
-      return {
-        isValid: true,
-        isExpiringSoon,
-        daysUntilExpiry,
-      };
-    } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      this.logger.error('Consent expiry check failed', {
+      this.logger.error('Failed to get active consents', {
         error: error instanceof Error ? error.message : 'Unknown error',
         creatorId,
       });
-      throw CreatorException.creatorFetchError();
+      throw CreatorException.consentFetchError();
     }
   }
-
-  /**
-   * 만료 예정인 크리에이터들 조회
-   */
-  async findCreatorsWithExpiringConsent(daysThreshold = 30): Promise<CreatorEntity[]> {
+  
+  async hasConsent(creatorId: string, type: ConsentType): Promise<boolean> {
     try {
-      const thresholdDate = new Date();
-      thresholdDate.setDate(thresholdDate.getDate() + daysThreshold);
-
-      const creators = await this.creatorRepo
-        .createQueryBuilder('creator')
-        .where('creator.hasDataConsent = :hasConsent', { hasConsent: true })
-        .andWhere('creator.consentExpiresAt <= :thresholdDate', { thresholdDate })
-        .orderBy('creator.consentExpiresAt', 'ASC')
-        .getMany();
-
-      this.logger.debug('Found creators with expiring consent', {
-        count: creators.length,
-        daysThreshold,
-        thresholdDate: thresholdDate.toISOString(),
-      });
-
-      return creators;
+      const consent = await this.consentRepo.findActiveConsentByType(creatorId, type);
+      return !!consent;
     } catch (error: unknown) {
-      this.logger.error('Failed to find creators with expiring consent', {
+      this.logger.error('Failed to check consent', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        daysThreshold,
+        creatorId,
+        type,
       });
-      throw CreatorException.creatorFetchError();
+      throw CreatorException.consentFetchError();
     }
   }
 
-  /**
-   * 동의 상태 일괄 갱신 (스케줄러에서 사용)
-   */
-  async batchUpdateConsentStatus(): Promise<{
-    expiredCount: number;
-    expiringSoonCount: number;
-    totalChecked: number;
-  }> {
+  async getConsentHistory(creatorId: string, type?: ConsentType): Promise<CreatorConsentEntity[]> {
     try {
-      // 동의한 크리에이터 모두 조회
-      const consentedCreators = await this.creatorRepo.find({
-        where: { hasDataConsent: true },
+      return await this.consentRepo.findConsentHistory(creatorId, type);
+    } catch (error: unknown) {
+      this.logger.error('Failed to get consent history', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+        type,
+      });
+      throw CreatorException.consentFetchError();
+    }
+  }
+
+  // 배치 조회 메서드
+  async getCreatorConsents(creatorIds: string[]): Promise<Record<string, ConsentType[]>> {
+    if (creatorIds.length === 0) return {};
+
+    try {
+      const consents = await this.consentRepo.find({
+        where: {
+          creatorId: creatorIds.length === 1 ? creatorIds[0] : undefined,
+          isGranted: true,
+          expiresAt: MoreThan(new Date()),
+        },
       });
 
-      let expiredCount = 0;
-      let expiringSoonCount = 0;
-      const totalChecked = consentedCreators.length;
+      const result: Record<string, ConsentType[]> = {};
+      creatorIds.forEach(id => {
+        result[id] = [];
+      });
 
-      for (const creator of consentedCreators) {
-        try {
-          const status = await this.checkConsentExpiry(creator.id);
-
-          if (!status.isValid) {
-            expiredCount++;
-          } else if (status.isExpiringSoon) {
-            expiringSoonCount++;
-          }
-        } catch (error: unknown) {
-          this.logger.warn('Individual consent check failed during batch update', {
-            error: error instanceof Error ? error.message : 'Unknown error',
-            creatorId: creator.id,
-          });
+      consents.forEach(consent => {
+        if (result[consent.creatorId]) {
+          result[consent.creatorId].push(consent.type);
         }
-      }
-
-      this.logger.log('Batch consent status update completed', {
-        totalChecked,
-        expiredCount,
-        expiringSoonCount,
       });
 
-      return { expiredCount, expiringSoonCount, totalChecked };
+      return result;
     } catch (error: unknown) {
-      this.logger.error('Batch consent status update failed', {
+      this.logger.error('Failed to get creator consents batch', {
         error: error instanceof Error ? error.message : 'Unknown error',
+        creatorIds,
       });
-      throw CreatorException.creatorFetchError();
+      throw CreatorException.consentFetchError();
     }
   }
-
-  // ==================== PRIVATE HELPER METHODS ====================
-
-  private async findCreatorByIdOrFail(creatorId: string): Promise<CreatorEntity> {
-    const creator = await this.creatorRepo.findOneById(creatorId);
-    if (!creator) {
-      this.logger.warn('Creator not found', { creatorId });
-      throw CreatorException.creatorNotFound();
-    }
-    return creator;
-  }
-
-  /**
-   * 동의 상태 변경 시 플랫폼 동기화 상태 업데이트
-   */
-  private async updatePlatformSyncStatusOnConsentChange(
-    creatorId: string,
-    hasConsent: boolean,
-    transactionManager?: EntityManager
-  ): Promise<void> {
+  
+  // ==================== 변경 메서드 ====================
+  
+  async grantConsent(dto: GrantConsentDto, transactionManager?: EntityManager): Promise<void> {
     try {
-      // 동의 상태에 따른 동기화 상태 결정
-      const updateData = hasConsent
-        ? {
-            // 동의 승인 시: 전체 재동기화 필요
-            videoSyncStatus: VideoSyncStatus.CONSENT_CHANGED,
-          }
-        : {
-            // 동의 철회 시: 증분 동기화로 전환 (데이터 수집 중단)
-            videoSyncStatus: VideoSyncStatus.INCREMENTAL,
-          };
+      const manager = transactionManager || this.consentRepo.manager;
 
-      // CreatorPlatformService를 통한 일괄 업데이트
-      await this.creatorPlatformService.updatePlatformSyncStatusByCreatorId(
-        creatorId,
-        updateData,
-        transactionManager
+      // 기존 동의 무효화 (같은 타입의 활성 동의가 있다면)
+      await manager.update(
+        CreatorConsentEntity,
+        { 
+          creatorId: dto.creatorId, 
+          type: dto.type, 
+          isGranted: true 
+        },
+        { 
+          isGranted: false, 
+          revokedAt: new Date() 
+        }
       );
 
-      this.logger.debug('Platform sync status updated for consent change', {
-        creatorId,
-        hasConsent,
-        newSyncStatus: updateData.videoSyncStatus,
+      // 새 동의 생성
+      const consent = this.consentRepo.create({
+        creatorId: dto.creatorId,
+        type: dto.type,
+        isGranted: true,
+        grantedAt: new Date(),
+        expiresAt: dto.expiresAt,
+        consentData: dto.consentData,
+        version: dto.version,
+      });
+      
+      await manager.save(consent);
+
+      this.logger.log('Consent granted successfully', {
+        creatorId: dto.creatorId,
+        type: dto.type,
+        expiresAt: dto.expiresAt,
       });
     } catch (error: unknown) {
-      this.logger.error('Failed to update platform sync status on consent change', {
+      this.logger.error('Failed to grant consent', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId: dto.creatorId,
+        type: dto.type,
+      });
+      throw CreatorException.consentCreateError();
+    }
+  }
+  
+  async revokeConsent(creatorId: string, type: ConsentType, transactionManager?: EntityManager): Promise<void> {
+    try {
+      const manager = transactionManager || this.consentRepo.manager;
+
+      const updateResult = await manager.update(
+        CreatorConsentEntity,
+        { 
+          creatorId, 
+          type, 
+          isGranted: true 
+        },
+        { 
+          isGranted: false, 
+          revokedAt: new Date() 
+        }
+      );
+
+      if (updateResult.affected === 0) {
+        this.logger.warn('No active consent found to revoke', {
+          creatorId,
+          type,
+        });
+        throw CreatorException.consentNotFound();
+      }
+
+      this.logger.log('Consent revoked successfully', {
+        creatorId,
+        type,
+      });
+    } catch (error: unknown) {
+      if (error instanceof CreatorException) {
+        throw error;
+      }
+
+      this.logger.error('Failed to revoke consent', {
         error: error instanceof Error ? error.message : 'Unknown error',
         creatorId,
-        hasConsent,
+        type,
       });
-      // 주요 동의 업데이트를 막지 않기 위해 예외를 던지지 않음
+      throw CreatorException.consentUpdateError();
+    }
+  }
+  
+  // ==================== 최적화 메서드 (필수) ====================
+  
+  async getExpiredConsents(): Promise<CreatorConsentEntity[]> {
+    try {
+      return await this.consentRepo.findExpiredConsents();
+    } catch (error: unknown) {
+      this.logger.error('Failed to get expired consents', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw CreatorException.consentFetchError();
+    }
+  }
+
+  async hasAnyConsent(creatorId: string): Promise<boolean> {
+    try {
+      const activeConsents = await this.getActiveConsents(creatorId);
+      return activeConsents.length > 0;
+    } catch (error: unknown) {
+      this.logger.error('Failed to check if creator has any consent', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      throw CreatorException.consentFetchError();
+    }
+  }
+
+  async getSoonToExpireConsents(creatorId: string): Promise<CreatorConsentEntity[]> {
+    try {
+      return await this.consentRepo.findSoonToExpireConsents(creatorId);
+    } catch (error: unknown) {
+      this.logger.error('Failed to get soon to expire consents', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      throw CreatorException.consentFetchError();
+    }
+  }
+
+  async getConsentStatistics(): Promise<Array<{
+    type: ConsentType;
+    totalCount: number;
+    activeCount: number;
+    expiredCount: number;
+  }>> {
+    try {
+      return await this.consentRepo.getConsentStatistics();
+    } catch (error: unknown) {
+      this.logger.error('Failed to get consent statistics', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw CreatorException.consentFetchError();
+    }
+  }
+
+  // ==================== HELPER METHODS ====================
+
+  /**
+   * 동의 만료 알림이 필요한 크리에이터 조회
+   */
+  async getCreatorsNeedingConsentRenewal(): Promise<string[]> {
+    try {
+      const soonToExpire = await this.consentRepo.find({
+        where: {
+          isGranted: true,
+          expiresAt: MoreThan(new Date()),
+        },
+      });
+
+      // 7일 이내 만료되는 동의가 있는 크리에이터 ID 추출
+      const sevenDaysFromNow = new Date();
+      sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+
+      const creatorIds = new Set<string>();
+      soonToExpire.forEach(consent => {
+        if (consent.expiresAt && consent.expiresAt <= sevenDaysFromNow) {
+          creatorIds.add(consent.creatorId);
+        }
+      });
+
+      return Array.from(creatorIds);
+    } catch (error: unknown) {
+      this.logger.error('Failed to get creators needing consent renewal', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw CreatorException.consentFetchError();
     }
   }
 }

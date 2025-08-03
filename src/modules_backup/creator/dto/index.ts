@@ -8,3 +8,5 @@ export * from './update-platform.dto.js';
 export * from './creator-platform.dto.js';
 export * from './creator-stats.dto.js';
 export * from './admin-creator-stats.dto.js';
+export * from './consent-history.dto.js';
+export * from './grant-consent.dto.js';

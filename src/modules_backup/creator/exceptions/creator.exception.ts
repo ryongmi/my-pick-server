@@ -224,4 +224,25 @@ export class CreatorException {
       message: '동의 상태 확인 중 오류가 발생했습니다.',
     });
   }
+
+  static consentNotFound(): HttpException {
+    return new NotFoundException({
+      code: 'CREATOR_605',
+      message: '동의를 찾을 수 없습니다.',
+    });
+  }
+
+  static consentFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_606',
+      message: '동의 조회 중 오류가 발생했습니다.',
+    });
+  }
+
+  static consentCreateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_607',
+      message: '동의 생성 중 오류가 발생했습니다.',
+    });
+  }
 }

@@ -11,17 +11,17 @@ import { AppConfigModule } from '@config/index.js';
 import { SharedClientsModule } from '@common/clients/index.js';
 import { AuthorizationGuardModule } from '@common/authorization/index.js';
 import { JwtModule } from '@common/jwt/index.js';
-// import {
-//   CreatorModule,
-//   UserSubscriptionModule,
-//   CreatorApplicationModule,
-//   ContentModule,
-//   UserInteractionModule,
-//   ReportModule,
-//   AdminModule,
-//   ExternalApiModule,
-//   PlatformApplicationModule,
-// } from '@modules/index.js';
+import {
+  CreatorModule,
+  // UserSubscriptionModule,
+  // CreatorApplicationModule,
+  // ContentModule,
+  // UserInteractionModule,
+  // ReportModule,
+  // AdminModule,
+  // ExternalApiModule,
+  // PlatformApplicationModule,
+} from '@modules/index.js';
 
 @Module({
   imports: [
@@ -36,8 +36,8 @@ import { JwtModule } from '@common/jwt/index.js';
     DatabaseModule,
     RedisModule,
     // Phase 1: Creator Management System
+    CreatorModule,
     // UserSubscriptionModule,
-    // CreatorModule,
     // CreatorApplicationModule,
     // // Phase 2: Content Management System
     // UserInteractionModule,
