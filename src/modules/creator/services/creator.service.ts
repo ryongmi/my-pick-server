@@ -5,7 +5,8 @@ import { EntityManager, In, UpdateResult, Not } from 'typeorm';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
 import { CreatorRepository } from '../repositories/index.js';
-import { CreatorEntity, CreatorPlatformEntity } from '../entities/index.js';
+import { CreatorEntity, CreatorPlatformEntity, ConsentType } from '../entities/index.js';
+import { CreatorException } from '../exceptions/index.js';
 import {
   CreatorSearchQueryDto,
   CreatorSearchResultDto,
@@ -13,8 +14,9 @@ import {
   CreateCreatorDto,
   UpdateCreatorDto,
 } from '../dto/index.js';
-import { CreatorException } from '../exceptions/index.js';
+
 import { CreatorPlatformService } from './creator-platform.service.js';
+import { CreatorConsentService } from './creator-consent.service.js';
 
 @Injectable()
 export class CreatorService {
@@ -22,7 +24,8 @@ export class CreatorService {
 
   constructor(
     private readonly creatorRepo: CreatorRepository,
-    private readonly creatorPlatformService: CreatorPlatformService
+    private readonly creatorPlatformService: CreatorPlatformService,
+    private readonly creatorConsentService: CreatorConsentService
   ) {}
 
   // ==================== PUBLIC METHODS ====================
@@ -260,6 +263,60 @@ export class CreatorService {
     }
   }
 
+  // ==================== 동의 관리 메서드 ====================
+
+  /**
+   * 크리에이터의 활성 동의 여부 확인
+   */
+  async hasValidConsents(creatorId: string): Promise<boolean> {
+    try {
+      return await this.creatorConsentService.hasAnyConsent(creatorId);
+    } catch (error: unknown) {
+      this.logger.warn('Failed to check creator consents', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      // 동의 확인 실패 시 false 반환 (보수적 접근)
+      return false;
+    }
+  }
+
+  /**
+   * 크리에이터의 활성 동의 타입 목록 조회
+   */
+  async getActiveConsents(creatorId: string): Promise<ConsentType[]> {
+    try {
+      return await this.creatorConsentService.getActiveConsents(creatorId);
+    } catch (error: unknown) {
+      this.logger.warn('Failed to fetch creator consents', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      return [];
+    }
+  }
+
+  /**
+   * 여러 크리에이터의 활성 동의 목록 조회 (배치 처리)
+   */
+  async getActiveConsentsBatch(creatorIds: string[]): Promise<Record<string, ConsentType[]>> {
+    try {
+      return await this.creatorConsentService.getActiveConsentsBatch(creatorIds);
+    } catch (error: unknown) {
+      this.logger.warn('Failed to fetch creators consents batch', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorCount: creatorIds.length,
+      });
+
+      // 실패 시 빈 배열로 초기화된 Record 반환
+      const result: Record<string, ConsentType[]> = {};
+      creatorIds.forEach((id) => {
+        result[id] = [];
+      });
+      return result;
+    }
+  }
+
   // ==================== 통계 메서드 ====================
 
   async getTotalCount(): Promise<number> {
@@ -275,25 +332,15 @@ export class CreatorService {
     platformCount: number;
   }> {
     try {
-      const platforms = await this.creatorPlatformService.findByCreatorId(creatorId);
-      
-      const stats = platforms.reduce(
-        (acc, platform) => ({
-          totalFollowers: acc.totalFollowers + (platform.followerCount || 0),
-          totalContent: acc.totalContent + (platform.contentCount || 0),
-          totalViews: acc.totalViews + Number(platform.totalViews || 0),
-          platformCount: acc.platformCount + 1,
-        }),
-        { totalFollowers: 0, totalContent: 0, totalViews: 0, platformCount: 0 }
-      );
-
+      // Repository의 집계 쿼리 사용 (DB에서 직접 계산)
+      const stats = await this.creatorPlatformService.getStatsByCreatorId(creatorId);
       return stats;
     } catch (error: unknown) {
       this.logger.warn('Failed to fetch platform stats, using default values', {
         error: error instanceof Error ? error.message : 'Unknown error',
         creatorId,
       });
-      
+
       // 플랫폼 데이터 조회 실패 시 기본값 반환
       return {
         totalFollowers: 0,
@@ -348,4 +395,3 @@ export class CreatorService {
     }));
   }
 }
-

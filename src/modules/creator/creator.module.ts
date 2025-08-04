@@ -5,6 +5,7 @@ import { CreatorEntity, CreatorPlatformEntity, CreatorPlatformSyncEntity, Creato
 import { CreatorRepository, CreatorPlatformRepository, CreatorPlatformSyncRepository, CreatorConsentRepository } from './repositories/index.js';
 import { CreatorService, CreatorPlatformService, CreatorPlatformSyncService, CreatorConsentService } from './services/index.js';
 import { CreatorController } from './controllers/index.js';
+import { UserSubscriptionModule } from '../user-subscription/user-subscription.module.js';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { CreatorController } from './controllers/index.js';
       CreatorPlatformSyncEntity,
       CreatorConsentEntity,
     ]),
+    UserSubscriptionModule,
   ],
   controllers: [CreatorController],
   providers: [

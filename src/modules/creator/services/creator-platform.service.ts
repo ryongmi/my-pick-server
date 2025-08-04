@@ -2,9 +2,11 @@ import { Injectable, Logger, HttpException } from '@nestjs/common';
 
 import { EntityManager, In } from 'typeorm';
 
-import { CreatorPlatformRepository } from '../repositories/index.js';
+import { PlatformType } from '@common/enums/index.js';
+
+import { CreatorPlatformRepository, type PlatformStats } from '../repositories/index.js';
 import { CreatorPlatformEntity } from '../entities/index.js';
-import { CreatePlatformDto, UpdatePlatformDto } from '../dto/index.js';
+import { CreatePlatformInternalDto, UpdatePlatformDto } from '../dto/index.js';
 import { CreatorException } from '../exceptions/index.js';
 
 @Injectable()
@@ -21,35 +23,156 @@ export class CreatorPlatformService {
 
   async findByIdOrFail(platformId: string): Promise<CreatorPlatformEntity> {
     const platform = await this.platformRepo.findOne({ where: { id: platformId } });
-    
+
     if (!platform) {
       this.logger.debug('Platform not found', { platformId });
       throw CreatorException.platformNotFound();
     }
-    
+
     return platform;
   }
 
+  /**
+   * 크리에이터별 플랫폼 목록 조회 (BaseRepository 직접 사용)
+   */
   async findByCreatorId(creatorId: string): Promise<CreatorPlatformEntity[]> {
-    return this.platformRepo.find({
-      where: { creatorId },
-    });
+    try {
+      return await this.platformRepo.find({
+        where: { creatorId },
+        order: { createdAt: 'DESC' },
+      });
+    } catch (error: unknown) {
+      this.logger.error('Platform fetch by creator failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      throw CreatorException.platformFetchError();
+    }
   }
 
-  async findByCreatorIds(creatorIds: string[]): Promise<CreatorPlatformEntity[]> {
-    if (creatorIds.length === 0) return [];
+  /**
+   * 크리에이터별 활성 플랫폼만 조회 (BaseRepository 직접 사용)
+   */
+  async findActiveByCreatorId(creatorId: string): Promise<CreatorPlatformEntity[]> {
+    try {
+      return await this.platformRepo.find({
+        where: { creatorId, isActive: true },
+        order: { createdAt: 'DESC' },
+      });
+    } catch (error: unknown) {
+      this.logger.error('Active platforms fetch by creator failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      throw CreatorException.platformFetchError();
+    }
+  }
 
-    return this.platformRepo.find({
-      where: { creatorId: In(creatorIds) },
-    });
+  /**
+   * 플랫폼 타입별 조회 (BaseRepository 직접 사용)
+   */
+  async findByPlatformType(type: PlatformType): Promise<CreatorPlatformEntity[]> {
+    try {
+      return await this.platformRepo.find({
+        where: { type, isActive: true },
+        order: { createdAt: 'DESC' },
+      });
+    } catch (error: unknown) {
+      this.logger.error('Platforms fetch by type failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        type,
+      });
+      throw CreatorException.platformFetchError();
+    }
+  }
+
+  /**
+   * 크리에이터의 플랫폼 존재 확인 (BaseRepository 직접 사용)
+   */
+  async hasActivePlatforms(creatorId: string): Promise<boolean> {
+    try {
+      const count = await this.platformRepo.count({
+        where: { creatorId, isActive: true },
+      });
+      return count > 0;
+    } catch (error: unknown) {
+      this.logger.error('Platform existence check failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      throw CreatorException.platformFetchError();
+    }
+  }
+
+  // ==================== 배치 처리 메서드 (Repository 사용) ====================
+
+  /**
+   * 여러 크리에이터의 플랫폼 목록 조회 (배치 처리)
+   */
+  async findByCreatorIds(creatorIds: string[]): Promise<Record<string, CreatorPlatformEntity[]>> {
+    try {
+      return await this.platformRepo.findByCreatorIds(creatorIds);
+    } catch (error: unknown) {
+      this.logger.error('Platforms batch fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorCount: creatorIds.length,
+      });
+      throw CreatorException.platformFetchError();
+    }
+  }
+
+  /**
+   * 여러 크리에이터의 활성 플랫폼 조회 (배치 처리)
+   */
+  async findActiveByCreatorIds(
+    creatorIds: string[]
+  ): Promise<Record<string, CreatorPlatformEntity[]>> {
+    try {
+      return await this.platformRepo.findActiveByCreatorIds(creatorIds);
+    } catch (error: unknown) {
+      this.logger.error('Active platforms batch fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorCount: creatorIds.length,
+      });
+      throw CreatorException.platformFetchError();
+    }
+  }
+
+  // ==================== 통계 집계 메서드 (Repository 사용) ====================
+
+  /**
+   * 크리에이터별 플랫폼 통계 집계 (복잡한 쿼리)
+   */
+  async getStatsByCreatorId(creatorId: string): Promise<PlatformStats> {
+    try {
+      return await this.platformRepo.getStatsByCreatorId(creatorId);
+    } catch (error: unknown) {
+      this.logger.error('Platform stats fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      throw CreatorException.platformFetchError();
+    }
+  }
+
+  /**
+   * 여러 크리에이터의 플랫폼 통계 집계 (배치 처리)
+   */
+  async getStatsByCreatorIds(creatorIds: string[]): Promise<Record<string, PlatformStats>> {
+    try {
+      return await this.platformRepo.getStatsByCreatorIds(creatorIds);
+    } catch (error: unknown) {
+      this.logger.error('Platform stats batch fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorCount: creatorIds.length,
+      });
+      throw CreatorException.platformFetchError();
+    }
   }
 
   // ==================== 변경 메서드 ====================
 
-  async createPlatform(
-    dto: CreatePlatformDto,
-    transactionManager?: EntityManager
-  ): Promise<void> {
+  async createPlatform(dto: CreatePlatformInternalDto, transactionManager?: EntityManager): Promise<void> {
     try {
       // 1. 사전 검증 (비즈니스 규칙)
       // 중복 체크 등의 로직 추가 가능

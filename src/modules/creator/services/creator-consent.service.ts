@@ -1,7 +1,7 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
 import { EntityManager, MoreThan, LessThan } from 'typeorm';
 
-import { CreatorConsentRepository } from '../repositories/index.js';
+import { CreatorConsentRepository, type ConsentStats } from '../repositories/index.js';
 import { CreatorConsentEntity, ConsentType } from '../entities/index.js';
 import { GrantConsentDto } from '../dto/index.js';
 import { CreatorException } from '../exceptions/index.js';
@@ -14,46 +14,199 @@ export class CreatorConsentService {
 
   // ==================== PUBLIC METHODS ====================
 
-  async getActiveConsents(creatorId: string): Promise<string[]> {
-    // 현재 유효한 동의 타입 목록 반환
-    const consents = await this.consentRepo.find({
-      where: {
+  // 기본 조회 메서드들 (BaseRepository 직접 사용)
+  
+  /**
+   * 크리에이터의 활성 동의 타입 목록 조회
+   */
+  async getActiveConsents(creatorId: string): Promise<ConsentType[]> {
+    try {
+      const consents = await this.consentRepo.find({
+        where: {
+          creatorId,
+          isGranted: true,
+          expiresAt: MoreThan(new Date()),
+        },
+        select: ['type'],
+      });
+      return consents.map(c => c.type);
+    } catch (error: unknown) {
+      this.logger.error('Active consents fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
         creatorId,
-        isGranted: true,
-        expiresAt: MoreThan(new Date()), // 만료되지 않은 것만
-      },
-      select: ['type'],
-    });
-    return consents.map(c => c.type);
+      });
+      throw CreatorException.consentFetchError();
+    }
   }
 
-  async hasConsent(creatorId: string, type: string): Promise<boolean> {
-    const consent = await this.consentRepo.findOne({
-      where: {
+  /**
+   * 특정 동의 타입 존재 확인
+   */
+  async hasConsent(creatorId: string, type: ConsentType): Promise<boolean> {
+    try {
+      const consent = await this.consentRepo.findOne({
+        where: {
+          creatorId,
+          type,
+          isGranted: true,
+          expiresAt: MoreThan(new Date()),
+        },
+      });
+      return !!consent;
+    } catch (error: unknown) {
+      this.logger.error('Consent existence check failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
         creatorId,
         type,
-        isGranted: true,
-        expiresAt: MoreThan(new Date()),
-      },
-    });
-    return !!consent;
+      });
+      throw CreatorException.consentFetchError();
+    }
   }
 
-  async getConsentHistory(creatorId: string, type?: string): Promise<CreatorConsentEntity[]> {
-    const where: any = { creatorId };
-    if (type) where.type = type;
+  /**
+   * 크리에이터의 활성 동의 존재 확인
+   */
+  async hasAnyConsent(creatorId: string): Promise<boolean> {
+    try {
+      const count = await this.consentRepo.count({
+        where: {
+          creatorId,
+          isGranted: true,
+          expiresAt: MoreThan(new Date()),
+        },
+      });
+      return count > 0;
+    } catch (error: unknown) {
+      this.logger.error('Any consent existence check failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      throw CreatorException.consentFetchError();
+    }
+  }
 
-    return this.consentRepo.find({
-      where,
-      order: { createdAt: 'DESC' },
-    });
+  /**
+   * 동의 이력 조회
+   */
+  async getConsentHistory(creatorId: string, type?: ConsentType): Promise<CreatorConsentEntity[]> {
+    try {
+      const where: any = { creatorId };
+      if (type) where.type = type;
+
+      return await this.consentRepo.find({
+        where,
+        order: { createdAt: 'DESC' },
+      });
+    } catch (error: unknown) {
+      this.logger.error('Consent history fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+        type,
+      });
+      throw CreatorException.consentFetchError();
+    }
+  }
+
+  // 복잡한 조회 메서드들 (Repository 사용)
+
+  /**
+   * 만료된 동의 조회
+   */
+  async getExpiredConsents(): Promise<CreatorConsentEntity[]> {
+    try {
+      return await this.consentRepo.findExpiredConsents();
+    } catch (error: unknown) {
+      this.logger.error('Expired consents fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw CreatorException.consentFetchError();
+    }
+  }
+
+  /**
+   * 곧 만료될 동의 조회
+   */
+  async getExpiringConsents(days: number = 7): Promise<CreatorConsentEntity[]> {
+    try {
+      return await this.consentRepo.findExpiringConsents(days);
+    } catch (error: unknown) {
+      this.logger.error('Expiring consents fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        days,
+      });
+      throw CreatorException.consentFetchError();
+    }
+  }
+
+  // 배치 처리 메서드들 (Repository 사용)
+
+  /**
+   * 여러 크리에이터의 활성 동의 조회 (배치 처리)
+   */
+  async getActiveConsentsBatch(creatorIds: string[]): Promise<Record<string, ConsentType[]>> {
+    try {
+      return await this.consentRepo.findActiveByCreatorIds(creatorIds);
+    } catch (error: unknown) {
+      this.logger.error('Active consents batch fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorCount: creatorIds.length,
+      });
+      throw CreatorException.consentFetchError();
+    }
+  }
+
+  /**
+   * 여러 크리에이터의 특정 타입 동의 여부 확인 (배치 처리)
+   */
+  async hasConsentBatch(creatorIds: string[], type: ConsentType): Promise<Record<string, boolean>> {
+    try {
+      return await this.consentRepo.hasConsentBatch(creatorIds, type);
+    } catch (error: unknown) {
+      this.logger.error('Consent batch check failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorCount: creatorIds.length,
+        type,
+      });
+      throw CreatorException.consentFetchError();
+    }
+  }
+
+  // 통계 메서드들 (Repository 사용)
+
+  /**
+   * 크리에이터별 동의 통계
+   */
+  async getStatsByCreatorId(creatorId: string): Promise<ConsentStats> {
+    try {
+      return await this.consentRepo.getStatsByCreatorId(creatorId);
+    } catch (error: unknown) {
+      this.logger.error('Consent stats fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      throw CreatorException.consentFetchError();
+    }
+  }
+
+  /**
+   * 동의 타입별 통계
+   */
+  async getStatsByConsentType(): Promise<Record<ConsentType, number>> {
+    try {
+      return await this.consentRepo.getStatsByConsentType();
+    } catch (error: unknown) {
+      this.logger.error('Consent type stats fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw CreatorException.consentFetchError();
+    }
   }
 
   // ==================== 변경 메서드 ====================
 
   async grantConsent(dto: {
     creatorId: string;
-    type: string;
+    type: ConsentType;
     expiresAt?: Date;
     consentData?: string;
     version?: string;
@@ -93,7 +246,7 @@ export class CreatorConsentService {
     }
   }
 
-  async revokeConsent(creatorId: string, type: string, transactionManager?: EntityManager): Promise<void> {
+  async revokeConsent(creatorId: string, type: ConsentType, transactionManager?: EntityManager): Promise<void> {
     try {
       const updateResult = await this.consentRepo.update(
         { creatorId, type, isGranted: true },
@@ -125,29 +278,6 @@ export class CreatorConsentService {
 
       throw CreatorException.consentUpdateError();
     }
-  }
-
-  // ==================== 최적화 메서드 (필수) ====================
-
-  async hasAnyConsent(creatorId: string): Promise<boolean> {
-    const count = await this.consentRepo.count({
-      where: {
-        creatorId,
-        isGranted: true,
-        expiresAt: MoreThan(new Date()),
-      },
-    });
-    return count > 0;
-  }
-
-  async getExpiredConsents(): Promise<CreatorConsentEntity[]> {
-    return this.consentRepo.find({
-      where: {
-        isGranted: true,
-        expiresAt: LessThan(new Date()),
-      },
-      order: { expiresAt: 'ASC' },
-    });
   }
 
   // ==================== PRIVATE HELPER METHODS ====================

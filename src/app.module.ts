@@ -13,7 +13,7 @@ import { AuthorizationGuardModule } from '@common/authorization/index.js';
 import { JwtModule } from '@common/jwt/index.js';
 import {
   CreatorModule,
-  // UserSubscriptionModule,
+  UserSubscriptionModule,
   // CreatorApplicationModule,
   // ContentModule,
   // UserInteractionModule,
@@ -37,7 +37,7 @@ import {
     RedisModule,
     // Phase 1: Creator Management System
     CreatorModule,
-    // UserSubscriptionModule,
+    UserSubscriptionModule,
     // CreatorApplicationModule,
     // // Phase 2: Content Management System
     // UserInteractionModule,
