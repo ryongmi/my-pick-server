@@ -23,6 +23,15 @@ export class CreatorPlatformSyncRepository extends BaseRepository<CreatorPlatfor
     super(CreatorPlatformSyncEntity, dataSource);
   }
 
+  // ==================== 기본 조회 메서드 ====================
+
+  /**
+   * 단일 플랫폼 ID로 동기화 정보 조회 (1:1 관계)
+   */
+  async findByPlatformId(platformId: string): Promise<CreatorPlatformSyncEntity | null> {
+    return this.findOneById(platformId);
+  }
+
   // ==================== 배치 처리 조회 메서드 ====================
 
   /**

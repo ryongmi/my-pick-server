@@ -14,13 +14,13 @@ import { JwtModule } from '@common/jwt/index.js';
 import {
   CreatorModule,
   UserSubscriptionModule,
+  ExternalApiModule,
+  PlatformApplicationModule,
   // CreatorApplicationModule,
   // ContentModule,
   // UserInteractionModule,
   // ReportModule,
   // AdminModule,
-  // ExternalApiModule,
-  // PlatformApplicationModule,
 } from '@modules/index.js';
 
 @Module({
@@ -46,10 +46,10 @@ import {
     // ReportModule,
     // // Phase 5: Admin System
     // AdminModule,
-    // // Phase 6: External API Integration
-    // ExternalApiModule,
-    // // Platform Application Management
-    // PlatformApplicationModule,
+    // Phase 6: External API Integration
+    ExternalApiModule,
+    // Platform Application Management
+    PlatformApplicationModule,
   ],
   providers: [
     {

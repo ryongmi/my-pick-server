@@ -1,17 +1,14 @@
-import { Entity, Column, Index } from 'typeorm';
-
-import { BaseEntityUUID } from '@krgeobuk/core/entities';
+import { Entity, PrimaryColumn, Column, Index, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 import { VideoSyncStatus } from '@common/enums/index.js';
 
 @Entity('creator_platform_syncs')
-@Index(['platformId']) // 플랫폼별 동기화 상태 조회 최적화
 @Index(['videoSyncStatus']) // 동기화 상태별 조회 최적화
 @Index(['lastVideoSyncAt']) // 마지막 동기화 시점 기준 조회 최적화
 @Index(['videoSyncStatus', 'lastVideoSyncAt']) // 복합 인덱스 (상태 + 시점)
-export class CreatorPlatformSyncEntity extends BaseEntityUUID {
-  @Column({ type: 'uuid' })
-  platformId!: string; // CreatorPlatformEntity의 ID (FK)
+export class CreatorPlatformSyncEntity {
+  @PrimaryColumn('uuid', { comment: '플랫폼 ID (1:1 관계 부모 PK 사용)' })
+  platformId!: string; // CreatorPlatformEntity의 ID와 동일
 
   // ==================== 영상 동기화 상태 ====================
 
@@ -45,6 +42,14 @@ export class CreatorPlatformSyncEntity extends BaseEntityUUID {
 
   @Column({ type: 'text', nullable: true })
   syncMetadata?: string; // JSON 형태의 추가 메타데이터 (외부 API 응답, 설정 등)
+
+  // ==================== 타임스탬프 ====================
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
 
   // ==================== 헬퍼 메서드 ====================
 

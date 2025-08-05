@@ -22,7 +22,7 @@ export class CreatorPlatformSyncService {
 
   async findByPlatformId(platformId: string): Promise<CreatorPlatformSyncEntity | null> {
     try {
-      return await this.platformSyncRepo.findOne({ where: { platformId } });
+      return await this.platformSyncRepo.findByPlatformId(platformId);
     } catch (error: unknown) {
       this.logger.error('Platform sync fetch failed', {
         error: error instanceof Error ? error.message : 'Unknown error',

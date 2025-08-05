@@ -8,10 +8,20 @@ import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
 import { PlatformType } from '@common/enums/index.js';
 
-import { CreatorApplicationRepository } from '../repositories/index.js';
+import { 
+  CreatorApplicationRepository,
+  CreatorApplicationChannelInfoRepository,
+  CreatorApplicationSampleVideoRepository,
+  CreatorApplicationReviewRepository
+} from '../repositories/index.js';
 import { CreatorApplicationEntity } from '../entities/index.js';
 import { ApplicationStatus } from '../enums/index.js';
-import { CreateApplicationDto, ReviewApplicationDto, ApplicationDetailDto } from '../dto/index.js';
+import { 
+  CreateApplicationDto, 
+  ReviewApplicationDto, 
+  ApplicationDetailDto,
+  NormalizedApplicationDetailDto 
+} from '../dto/index.js';
 import { CreatorApplicationException } from '../exceptions/index.js';
 import { CreatorService } from '../../creator/services/index.js';
 import { CreateCreatorDto } from '../../creator/dto/index.js';
@@ -22,6 +32,9 @@ export class CreatorApplicationService {
 
   constructor(
     private readonly applicationRepo: CreatorApplicationRepository,
+    private readonly channelInfoRepo: CreatorApplicationChannelInfoRepository,
+    private readonly sampleVideoRepo: CreatorApplicationSampleVideoRepository,
+    private readonly reviewRepo: CreatorApplicationReviewRepository,
     private readonly creatorService: CreatorService,
     @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy
   ) {}
@@ -120,6 +133,64 @@ export class CreatorApplicationService {
     }
   }
 
+  // 정규화된 데이터 조회 메서드
+  async getNormalizedApplicationById(
+    applicationId: string,
+    requestUserId?: string
+  ): Promise<NormalizedApplicationDetailDto> {
+    try {
+      const application = await this.findByIdOrFail(applicationId);
+
+      // 권한 확인 (신청자 본인만 조회 가능, 관리자는 별도 API)
+      if (requestUserId && application.userId !== requestUserId) {
+        this.logger.warn('Unauthorized application access attempt', {
+          applicationId,
+          requestUserId,
+          applicationUserId: application.userId,
+        });
+        throw CreatorApplicationException.notApplicationOwner();
+      }
+
+      // 정규화된 데이터 조회
+      const [channelInfo, sampleVideos, review] = await Promise.all([
+        this.channelInfoRepo.findByApplicationId(applicationId),
+        this.sampleVideoRepo.findByApplicationId(applicationId),
+        this.reviewRepo.findByApplicationId(applicationId),
+      ]);
+
+      const detailDto = plainToInstance(NormalizedApplicationDetailDto, {
+        ...application,
+        channelInfo,
+        sampleVideos,
+        review,
+      }, {
+        excludeExtraneousValues: true,
+      });
+
+      this.logger.debug('Normalized application detail fetched', {
+        applicationId,
+        requestUserId,
+        status: application.status,
+        hasChannelInfo: !!channelInfo,
+        sampleVideoCount: sampleVideos?.length || 0,
+        hasReview: !!review,
+      });
+
+      return detailDto;
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Normalized application detail fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        applicationId,
+        requestUserId,
+      });
+      throw CreatorApplicationException.applicationFetchError();
+    }
+  }
+
   // ==================== 변경 메서드 ====================
 
   async createApplication(dto: CreateApplicationDto): Promise<void> {
@@ -140,24 +211,20 @@ export class CreatorApplicationService {
         throw CreatorApplicationException.activeApplicationExists();
       }
 
-      // 2. 엔티티 생성
+      // 2. 메인 신청서 엔티티 생성 (JSON 컬럼 제거)
       const application = new CreatorApplicationEntity();
       Object.assign(application, {
         userId: dto.userId,
         status: ApplicationStatus.PENDING,
-        applicationData: {
-          channelInfo: dto.channelInfo,
-          subscriberCount: dto.subscriberCount,
-          contentCategory: dto.contentCategory,
-          sampleVideos: dto.sampleVideos,
-          description: dto.description,
-        },
       });
 
       // 3. 저장 (BaseRepository 직접 사용)
       const savedApplication = await this.applicationRepo.saveEntity(application);
 
-      // 4. 성공 로깅
+      // 4. 정규화된 데이터 저장
+      await this.saveNormalizedApplicationData(savedApplication.id, dto);
+
+      // 5. 성공 로깅
       this.logger.log('Creator application created successfully', {
         applicationId: savedApplication.id,
         userId: dto.userId,
@@ -204,19 +271,17 @@ export class CreatorApplicationService {
         throw CreatorApplicationException.cannotReviewOwnApplication();
       }
 
-      // 3. 검토 데이터 업데이트
+      // 3. 메인 신청서 상태 업데이트
       application.status = dto.status;
       application.reviewedAt = new Date();
       application.reviewerId = dto.reviewerId;
-      application.reviewData = {
-        reason: dto.reason,
-        comment: dto.comment,
-        requirements: dto.requirements,
-      };
 
       await this.applicationRepo.saveEntity(application);
 
-      // 4. 성공 로깅
+      // 4. 검토 데이터를 정규화된 테이블에 저장
+      await this.saveReviewData(applicationId, dto);
+
+      // 5. 성공 로깅
       this.logger.log('Application reviewed successfully', {
         applicationId,
         userId: application.userId,
@@ -225,9 +290,9 @@ export class CreatorApplicationService {
         hasReason: !!dto.reason,
       });
 
-      // TODO: 승인 시 Creator 엔티티 생성 로직 추가
+      // 6. 승인 시 Creator 엔티티 생성
       if (dto.status === ApplicationStatus.APPROVED) {
-        await this.createCreatorFromApplication(application);
+        await this.createCreatorFromApplication(applicationId);
       }
     } catch (error: unknown) {
       if (error instanceof HttpException) {
@@ -300,25 +365,74 @@ export class CreatorApplicationService {
 
   // ==================== PRIVATE HELPER METHODS ====================
 
-  private async createCreatorFromApplication(application: CreatorApplicationEntity): Promise<void> {
+  private async saveNormalizedApplicationData(
+    applicationId: string, 
+    dto: CreateApplicationDto
+  ): Promise<void> {
+    // 채널 정보 저장
+    const channelInfo = this.channelInfoRepo.create({
+      applicationId,
+      platform: dto.channelInfo.platform,
+      channelId: dto.channelInfo.channelId,
+      channelUrl: dto.channelInfo.channelUrl,
+      subscriberCount: dto.subscriberCount,
+      contentCategory: dto.contentCategory,
+      description: dto.description,
+    });
+    await this.channelInfoRepo.save(channelInfo);
+
+    // 샘플 영상 저장
+    if (dto.sampleVideos && dto.sampleVideos.length > 0) {
+      const sampleVideos = dto.sampleVideos.map((video, index) => 
+        this.sampleVideoRepo.create({
+          applicationId,
+          title: video.title,
+          url: video.url,
+          views: video.views,
+          sortOrder: index + 1,
+        })
+      );
+      await this.sampleVideoRepo.save(sampleVideos);
+    }
+  }
+
+  private async saveReviewData(
+    applicationId: string, 
+    dto: ReviewApplicationDto
+  ): Promise<void> {
+    const reviewData = this.reviewRepo.create({
+      applicationId,
+      reason: dto.reason,
+      comment: dto.comment,
+      requirements: dto.requirements,
+    });
+    await this.reviewRepo.save(reviewData);
+  }
+
+  private async createCreatorFromApplication(applicationId: string): Promise<void> {
     try {
-      const { applicationData } = application;
-      const { channelInfo } = applicationData;
+      // 정규화된 데이터 조회
+      const channelInfo = await this.channelInfoRepo.findByApplicationId(applicationId);
+      if (!channelInfo) {
+        throw new Error('Channel info not found');
+      }
+
+      const application = await this.findByIdOrFail(applicationId);
 
       // Creator 생성을 위한 DTO 구성
       const createCreatorDto: CreateCreatorDto = {
-        userId: application.userId, // 신청자 ID를 크리에이터 소유자로 설정
-        name: channelInfo.channelId, // 채널 ID를 name으로 사용
-        displayName: `${channelInfo.platform} Creator`, // 기본 표시명
-        description: applicationData.description,
-        category: applicationData.contentCategory,
-        tags: [], // 초기에는 빈 배열
+        userId: application.userId,
+        name: channelInfo.channelId,
+        displayName: `${channelInfo.platform} Creator`,
+        description: channelInfo.description,
+        category: channelInfo.contentCategory,
+        tags: [],
         platforms: [
           {
-            type: channelInfo.platform as PlatformType, // PlatformType enum으로 캐스팅
+            type: channelInfo.platform as PlatformType,
             platformId: channelInfo.channelId,
             url: channelInfo.channelUrl,
-            followerCount: applicationData.subscriberCount,
+            followerCount: channelInfo.subscriberCount,
           },
         ],
       };
@@ -327,19 +441,17 @@ export class CreatorApplicationService {
       await this.creatorService.createCreator(createCreatorDto);
 
       this.logger.log('Creator created successfully from approved application', {
-        applicationId: application.id,
+        applicationId,
         userId: application.userId,
         creatorName: createCreatorDto.name,
         platform: channelInfo.platform,
-        category: applicationData.contentCategory,
-        subscriberCount: applicationData.subscriberCount,
+        category: channelInfo.contentCategory,
+        subscriberCount: channelInfo.subscriberCount,
       });
     } catch (error: unknown) {
       this.logger.error('Create creator from application failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        applicationId: application.id,
-        userId: application.userId,
-        platform: application.applicationData.channelInfo.platform,
+        applicationId,
       });
 
       // Creator 생성 실패는 심각한 문제이므로 별도 알림 필요
