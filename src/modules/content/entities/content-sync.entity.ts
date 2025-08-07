@@ -35,12 +35,6 @@ export class ContentSyncEntity {
   })
   syncStatus!: 'pending' | 'syncing' | 'completed' | 'failed';
 
-  @Column({ nullable: true })
-  platform?: string; // 동기화 대상 플랫폼 (YouTube, Twitter 등)
-
-  @Column({ nullable: true })
-  platformId?: string; // 플랫폼별 고유 ID
-
 
   @CreateDateColumn()
   createdAt!: Date;

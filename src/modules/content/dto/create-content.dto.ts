@@ -1,27 +1,42 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, ValidateNested, Min } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, ValidateNested, Min, IsBoolean, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
 
 import { ContentType } from '../enums/index.js';
-import { ContentMetadata } from '../interfaces/index.js';
 
-class CreateContentMetadataDto {
-  @IsString({ each: true })
-  tags!: string[];
-
+class CreateContentCategoryDto {
   @IsString()
   category!: string;
 
+  @IsOptional()
+  @IsBoolean()
+  isPrimary?: boolean;
+
+  @IsOptional()
   @IsString()
-  language!: string;
+  subcategory?: string;
 
   @IsOptional()
-  isLive?: boolean = false;
-
-  @IsEnum(['sd', 'hd', '4k'])
-  quality!: 'sd' | 'hd' | '4k';
+  @IsEnum(['manual', 'ai', 'platform'])
+  source?: 'manual' | 'ai' | 'platform';
 
   @IsOptional()
-  ageRestriction?: boolean;
+  @IsNumber()
+  @Min(0)
+  confidence?: number;
+}
+
+class CreateContentTagDto {
+  @IsString()
+  tag!: string;
+
+  @IsOptional()
+  @IsEnum(['manual', 'ai', 'platform'])
+  source?: 'manual' | 'ai' | 'platform';
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  relevanceScore?: number;
 }
 
 export class CreateContentDto {
@@ -58,9 +73,37 @@ export class CreateContentDto {
   @IsString()
   creatorId!: string;
 
-  @ValidateNested()
-  @Type(() => CreateContentMetadataDto)
-  metadata!: CreateContentMetadataDto;
+  // ==================== 메타데이터 필드 (JSON에서 개별 필드로 분리) ====================
+  
+  @IsOptional()
+  @IsString()
+  language?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isLive?: boolean;
+
+  @IsOptional()
+  @IsEnum(['sd', 'hd', '4k'])
+  quality?: 'sd' | 'hd' | '4k';
+
+  @IsOptional()
+  @IsBoolean()
+  ageRestriction?: boolean;
+
+  // ==================== 분리된 엔티티 데이터 ====================
+  
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateContentCategoryDto)
+  categories?: CreateContentCategoryDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateContentTagDto)
+  tags?: CreateContentTagDto[];
 
   // 초기 통계 정보 (외부 API에서 가져온 경우)
   @IsOptional()

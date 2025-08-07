@@ -6,3 +6,5 @@ export * from './reject-application.dto.js';
 export * from './platform-application-search-query.dto.js';
 export * from './application-stats.dto.js';
 export * from './rejection-reason-item.dto.js';
+export * from './platform-data.dto.js';
+export * from './review-data.dto.js';

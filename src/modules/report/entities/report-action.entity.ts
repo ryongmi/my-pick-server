@@ -1,0 +1,64 @@
+import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+
+export enum ReportActionType {
+  WARNING = 'warning',
+  SUSPENSION = 'suspension',
+  BAN = 'ban',
+  CONTENT_REMOVAL = 'content_removal',
+  NONE = 'none',
+}
+
+@Entity('report_actions')
+@Index(['actionType']) // 조치 타입별 조회 최적화
+@Index(['executedAt']) // 실행일 기준 정렬 최적화
+export class ReportActionEntity {
+  @PrimaryColumn({ comment: '외래키(reports.id)이자 기본키 - 1:1 관계 최적화' })
+  reportId!: string;
+
+  @Column({ 
+    type: 'enum', 
+    enum: ReportActionType, 
+    default: ReportActionType.NONE,
+    comment: '조치 타입'
+  })
+  actionType!: ReportActionType;
+
+  @Column({ 
+    nullable: true,
+    comment: '정지 기간 (일 단위)'
+  })
+  duration?: number;
+
+  @Column({ 
+    type: 'text', 
+    nullable: true,
+    comment: '조치 사유'
+  })
+  reason?: string;
+
+  @Column({ 
+    nullable: true,
+    comment: '조치 실행 시간'
+  })
+  executedAt?: Date;
+
+  @Column({ 
+    nullable: true,
+    comment: '조치 실행자 ID'
+  })
+  executedBy?: string;
+
+  @Column({ 
+    type: 'enum',
+    enum: ['pending', 'executed', 'failed'],
+    default: 'pending',
+    comment: '조치 실행 상태'
+  })
+  executionStatus!: 'pending' | 'executed' | 'failed';
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}

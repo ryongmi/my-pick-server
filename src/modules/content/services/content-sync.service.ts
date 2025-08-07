@@ -44,8 +44,6 @@ export class ContentSyncService {
   async createSyncRecord(
     contentId: string,
     options: {
-      platform?: string;
-      platformId?: string;
       isAuthorizedData?: boolean;
       expiresAt?: Date;
     },
@@ -61,8 +59,6 @@ export class ContentSyncService {
 
       const sync = new ContentSyncEntity();
       sync.contentId = contentId;
-      sync.platform = options.platform;
-      sync.platformId = options.platformId;
       sync.isAuthorizedData = options.isAuthorizedData || false;
       sync.expiresAt = options.expiresAt;
       sync.syncStatus = 'completed';
@@ -76,7 +72,6 @@ export class ContentSyncService {
 
       this.logger.log('Content sync record created', {
         contentId,
-        platform: options.platform,
         isAuthorizedData: options.isAuthorizedData,
       });
     } catch (error: unknown) {

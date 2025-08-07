@@ -68,7 +68,10 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
         `${contentAlias}.duration AS duration`,
         `${contentAlias}.publishedAt AS publishedAt`,
         `${contentAlias}.creatorId AS creatorId`,
-        `${contentAlias}.metadata AS metadata`,
+        `${contentAlias}.language AS language`,
+        `${contentAlias}.isLive AS isLive`,
+        `${contentAlias}.quality AS quality`,
+        `${contentAlias}.ageRestriction AS ageRestriction`,
         `${statsAlias}.views AS views`,
         `${statsAlias}.likes AS likes`,
         `${statsAlias}.comments AS comments`,
@@ -101,14 +104,14 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
       qb.andWhere(`${contentAlias}.publishedAt <= :endDate`, { endDate });
     }
 
+    // category와 tags는 이제 별도 엔티티로 관리됨
+    // 필요시 ContentCategoryEntity, ContentTagEntity와 조인하여 검색
     if (category) {
-      qb.andWhere(`${contentAlias}.metadata ->> 'category' = :category`, { category });
+      qb.innerJoin('content_categories', 'cc', 'cc.contentId = content.id AND cc.category = :category', { category });
     }
 
     if (tags && tags.length > 0) {
-      qb.andWhere(`${contentAlias}.metadata ->> 'tags' @> :tags`, {
-        tags: JSON.stringify(tags),
-      });
+      qb.innerJoin('content_tags', 'ct', 'ct.contentId = content.id AND ct.tag IN (:...tags)', { tags });
     }
 
     // 정렬 조건 - statistics 필드인 경우 JOIN된 테이블 사용
@@ -136,7 +139,10 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
       duration: row.duration,
       publishedAt: row.publishedAt,
       creatorId: row.creatorId,
-      metadata: row.metadata,
+      language: row.language,
+      isLive: row.isLive,
+      quality: row.quality,
+      ageRestriction: row.ageRestriction,
       statistics: {
         views: row.views,
         likes: row.likes,
@@ -184,5 +190,177 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
 
   async getTotalCount(): Promise<number> {
     return this.count();
+  }
+
+  // ==================== 고급 검색 및 필터링 메서드 ====================
+
+  async findByCreatorIds(creatorIds: string[], limit = 50): Promise<ContentEntity[]> {
+    if (creatorIds.length === 0) return [];
+
+    return await this.find({
+      where: { creatorId: In(creatorIds) },
+      order: { publishedAt: 'DESC' },
+      take: limit,
+    });
+  }
+
+  async findByPlatformAndStatus(
+    platform: string
+  ): Promise<ContentEntity[]> {
+    return await this.find({
+      where: { platform },
+      order: { publishedAt: 'DESC' },
+    });
+  }
+
+  async findExpiredContent(): Promise<ContentEntity[]> {
+    // No expiration logic needed since expiresAt field was removed
+    return [];
+  }
+
+  // ==================== 배치 처리 메서드 ====================
+
+  async batchUpdateContent(
+    contentIds: string[],
+    updateData: Partial<ContentEntity>
+  ): Promise<void> {
+    if (contentIds.length === 0) return;
+
+    const finalUpdateData = {
+      ...updateData,
+      updatedAt: new Date(),
+    };
+
+    await this.createQueryBuilder()
+      .update(ContentEntity)
+      .set(finalUpdateData)
+      .where('id IN (:...contentIds)', { contentIds })
+      .execute();
+  }
+
+  async batchUpdateContentById(
+    updates: Array<{ id: string; updateData: Partial<ContentEntity> }>
+  ): Promise<void> {
+    if (updates.length === 0) return;
+
+    for (const update of updates) {
+      await this.createQueryBuilder()
+        .update(ContentEntity)
+        .set({
+          ...update.updateData,
+          updatedAt: new Date(),
+        })
+        .where('id = :id', { id: update.id })
+        .execute();
+    }
+  }
+
+  // ==================== 통계 및 집계 메서드 ====================
+
+  async getContentStatsByCreator(creatorId: string): Promise<{
+    totalContent: number;
+    byPlatform: Array<{ platform: string; count: number }>;
+    byType: Array<{ type: string; count: number }>;
+  }> {
+    const [totalContent, byPlatform, byType] = await Promise.all([
+      this.count({ where: { creatorId } }),
+      
+      this.createQueryBuilder('content')
+        .select('content.platform', 'platform')
+        .addSelect('COUNT(*)', 'count')
+        .where('content.creatorId = :creatorId', { creatorId })
+        .groupBy('content.platform')
+        .getRawMany(),
+        
+      this.createQueryBuilder('content')
+        .select('content.type', 'type')
+        .addSelect('COUNT(*)', 'count')
+        .where('content.creatorId = :creatorId', { creatorId })
+        .groupBy('content.type')
+        .getRawMany(),
+    ]);
+
+    return {
+      totalContent,
+      byPlatform: byPlatform.map(item => ({
+        platform: item.platform,
+        count: parseInt(item.count),
+      })),
+      byType: byType.map(item => ({
+        type: item.type,
+        count: parseInt(item.count),
+      })),
+    };
+  }
+
+  async getPlatformDistribution(): Promise<Array<{ platform: string; count: number; percentage: number }>> {
+    const totalCount = await this.count();
+    if (totalCount === 0) return [];
+
+    const results = await this.createQueryBuilder('content')
+      .select('content.platform', 'platform')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('content.platform')
+      .orderBy('count', 'DESC')
+      .getRawMany();
+
+    return results.map(result => ({
+      platform: result.platform,
+      count: parseInt(result.count),
+      percentage: Math.round((parseInt(result.count) / totalCount) * 100 * 100) / 100,
+    }));
+  }
+
+  async getContentGrowthStats(days = 30): Promise<Array<{ date: string; count: number }>> {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    return await this.createQueryBuilder('content')
+      .select("DATE(content.createdAt) as date")
+      .addSelect("COUNT(*) as count")
+      .where('content.createdAt >= :startDate', { startDate })
+      .groupBy("DATE(content.createdAt)")
+      .orderBy("date", "ASC")
+      .getRawMany();
+  }
+
+  // ==================== 콘텐츠 품질 관리 메서드 ====================
+
+  async findLowQualityContent(criteria: {
+    minDuration?: number;
+    maxViews?: number;
+    maxEngagement?: number;
+  }): Promise<ContentEntity[]> {
+    const queryBuilder = this.createQueryBuilder('content')
+      .leftJoin('content.statistics', 'stats');
+
+    if (criteria.minDuration) {
+      queryBuilder.andWhere('(content.duration IS NULL OR content.duration < :minDuration)', {
+        minDuration: criteria.minDuration,
+      });
+    }
+
+    if (criteria.maxViews) {
+      queryBuilder.andWhere('(stats.views IS NULL OR stats.views < :maxViews)', {
+        maxViews: criteria.maxViews,
+      });
+    }
+
+    if (criteria.maxEngagement) {
+      queryBuilder.andWhere('(stats.engagementRate IS NULL OR stats.engagementRate < :maxEngagement)', {
+        maxEngagement: criteria.maxEngagement,
+      });
+    }
+
+    return await queryBuilder
+      .orderBy('content.createdAt', 'DESC')
+      .getMany();
+  }
+
+  async findDuplicateContent(platformId: string, platform: string): Promise<ContentEntity[]> {
+    return await this.find({
+      where: { platformId, platform },
+      order: { createdAt: 'ASC' },
+    });
   }
 }

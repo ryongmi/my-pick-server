@@ -16,11 +16,11 @@ import {
   UserSubscriptionModule,
   ExternalApiModule,
   PlatformApplicationModule,
-  // CreatorApplicationModule,
-  // ContentModule,
-  // UserInteractionModule,
-  // ReportModule,
-  // AdminModule,
+  AdminModule,
+  ContentModule,
+  ReportModule,
+  CreatorApplicationModule,
+  UserInteractionModule,
 } from '@modules/index.js';
 
 @Module({
@@ -38,14 +38,14 @@ import {
     // Phase 1: Creator Management System
     CreatorModule,
     UserSubscriptionModule,
-    // CreatorApplicationModule,
-    // // Phase 2: Content Management System
-    // UserInteractionModule,
-    // ContentModule,
-    // // Phase 4: Report System
-    // ReportModule,
-    // // Phase 5: Admin System
-    // AdminModule,
+    CreatorApplicationModule,
+    // Phase 2: Content Management System
+    ContentModule,
+    UserInteractionModule,
+    // Phase 4: Report System
+    ReportModule,
+    // Phase 5: Admin System
+    AdminModule,
     // Phase 6: External API Integration
     ExternalApiModule,
     // Platform Application Management

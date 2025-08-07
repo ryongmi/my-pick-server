@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { CreatorEntity, CreatorPlatformEntity, CreatorPlatformSyncEntity, CreatorConsentEntity } from './entities/index.js';
-import { CreatorRepository, CreatorPlatformRepository, CreatorPlatformSyncRepository, CreatorConsentRepository } from './repositories/index.js';
-import { CreatorService, CreatorPlatformService, CreatorPlatformSyncService, CreatorConsentService } from './services/index.js';
+import { CreatorEntity, CreatorPlatformEntity, CreatorPlatformSyncEntity, CreatorConsentEntity, CreatorStatisticsEntity } from './entities/index.js';
+import { CreatorRepository, CreatorPlatformRepository, CreatorPlatformSyncRepository, CreatorConsentRepository, CreatorStatisticsRepository } from './repositories/index.js';
+import { CreatorService, CreatorPlatformService, CreatorPlatformSyncService, CreatorConsentService, CreatorStatisticsService } from './services/index.js';
 import { CreatorController } from './controllers/index.js';
 import { UserSubscriptionModule } from '../user-subscription/user-subscription.module.js';
 
@@ -14,6 +14,7 @@ import { UserSubscriptionModule } from '../user-subscription/user-subscription.m
       CreatorPlatformEntity,
       CreatorPlatformSyncEntity,
       CreatorConsentEntity,
+      CreatorStatisticsEntity,
     ]),
     UserSubscriptionModule,
   ],
@@ -24,12 +25,14 @@ import { UserSubscriptionModule } from '../user-subscription/user-subscription.m
     CreatorPlatformRepository,
     CreatorPlatformSyncRepository,
     CreatorConsentRepository,
+    CreatorStatisticsRepository,
     
     // Services
     CreatorService,
     CreatorPlatformService,
     CreatorPlatformSyncService,
     CreatorConsentService,
+    CreatorStatisticsService,
   ],
   exports: [
     // 다른 모듈에서 사용할 수 있도록 서비스 export
@@ -37,6 +40,7 @@ import { UserSubscriptionModule } from '../user-subscription/user-subscription.m
     CreatorPlatformService,
     CreatorPlatformSyncService,
     CreatorConsentService,
+    CreatorStatisticsService,
   ],
 })
 export class CreatorModule {}

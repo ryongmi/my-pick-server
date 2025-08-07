@@ -12,17 +12,13 @@ import {
   PlatformApplicationDataRepository,
   PlatformApplicationReviewRepository 
 } from '../repositories/index.js';
-import { CreatorPlatformService } from '../../creator/services/creator-platform.service.js';
 import { CreatorService } from '../../creator/services/creator.service.js';
 import { 
   PlatformApplicationDataService,
   PlatformApplicationReviewService 
 } from './index.js';
-import { 
-  PlatformApplicationEntity, 
-  ApplicationStatus,
-  VerificationProofType 
-} from '../entities/index.js';
+import { PlatformApplicationEntity } from '../entities/index.js';
+import { ApplicationStatus, VerificationProofType } from '../enums/index.js';
 import { 
   CreatePlatformApplicationDto, 
   UpdatePlatformApplicationDto,
@@ -43,7 +39,6 @@ export class PlatformApplicationService {
     private readonly platformApplyRepo: PlatformApplicationRepository,
     private readonly platformAppDataService: PlatformApplicationDataService,
     private readonly platformAppReviewService: PlatformApplicationReviewService,
-    private readonly creatorPlatformService: CreatorPlatformService,
     private readonly creatorService: CreatorService,
   ) {}
 

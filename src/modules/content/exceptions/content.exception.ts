@@ -122,4 +122,68 @@ export class ContentException {
       message: '잘못된 평점입니다. (1-5 사이의 값)',
     });
   }
+
+  // ==================== 통계 관련 (500-599) ====================
+
+  static contentStatisticsFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CONTENT_501',
+      message: '콘텐츠 통계 조회 중 오류가 발생했습니다.',
+    });
+  }
+
+  // ==================== 카테고리 관련 (600-699) ====================
+
+  static contentCategoryUpdateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CONTENT_601',
+      message: '콘텐츠 카테고리 업데이트 중 오류가 발생했습니다.',
+    });
+  }
+
+  static contentCategoryDeleteError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CONTENT_602',
+      message: '콘텐츠 카테고리 삭제 중 오류가 발생했습니다.',
+    });
+  }
+
+  // ==================== 태그 관련 (700-799) ====================
+
+  static contentTagUpdateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CONTENT_701',
+      message: '콘텐츠 태그 업데이트 중 오류가 발생했습니다.',
+    });
+  }
+
+  static contentTagDeleteError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CONTENT_702',
+      message: '콘텐츠 태그 삭제 중 오류가 발생했습니다.',
+    });
+  }
+
+  // ==================== 상호작용 관련 (800-899) ====================
+
+  static contentInteractionCreateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CONTENT_801',
+      message: '콘텐츠 상호작용 생성 중 오류가 발생했습니다.',
+    });
+  }
+
+  static contentInteractionUpdateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CONTENT_802',
+      message: '콘텐츠 상호작용 업데이트 중 오류가 발생했습니다.',
+    });
+  }
+
+  static contentInteractionDeleteError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CONTENT_803',
+      message: '콘텐츠 상호작용 삭제 중 오류가 발생했습니다.',
+    });
+  }
 }

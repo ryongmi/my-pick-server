@@ -1,7 +1,8 @@
 import { Exclude, Expose, Type } from 'class-transformer';
 
 import { ContentType } from '../enums/index.js';
-import { ContentMetadata } from '../interfaces/index.js';
+import { ContentCategoryDto } from './content-category.dto.js';
+import { ContentTagDto } from './content-tag.dto.js';
 
 class CreatorInfoDto {
   @Expose()
@@ -82,8 +83,29 @@ export class ContentSearchResultDto {
   @Type(() => ContentStatisticsDto)
   statistics!: ContentStatisticsDto;
 
+  // ==================== 메타데이터 필드 (JSON에서 개별 컬럼으로 분리) ====================
+  
   @Expose()
-  metadata!: ContentMetadata;
+  language?: string;
+
+  @Expose()
+  isLive!: boolean;
+
+  @Expose()
+  quality?: 'sd' | 'hd' | '4k';
+
+  @Expose()
+  ageRestriction!: boolean;
+
+  // ==================== 분리된 엔티티 데이터 (옵셔널) ====================
+  
+  @Expose()
+  @Type(() => ContentCategoryDto)
+  categories?: ContentCategoryDto[];
+
+  @Expose()
+  @Type(() => ContentTagDto)
+  tags?: ContentTagDto[];
 
   @Expose()
   createdAt!: Date;

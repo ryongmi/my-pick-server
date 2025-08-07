@@ -7,6 +7,7 @@ export { CreateCreatorDto } from './create-creator.dto.js';
 export { UpdateCreatorDto } from './update-creator.dto.js';
 
 // Platform 관련 DTO
+export { CreatorPlatformDto } from './creator-platform.dto.js';
 export { CreatePlatformDto } from './create-platform.dto.js';
 export { CreatePlatformInternalDto } from './create-platform-internal.dto.js';
 export { UpdatePlatformDto } from './update-platform.dto.js';
@@ -16,5 +17,10 @@ export { UpdatePlatformSyncDto } from './update-platform-sync.dto.js';
 export { PlatformSyncDetailDto } from './platform-sync-detail.dto.js';
 export { PlatformSyncStatsDto, PlatformSyncStatusCountsDto } from './platform-sync-stats.dto.js';
 
+// Statistics 관련 DTO (신규)
+export { CreatorPlatformStatsDto } from './creator-platform-stats.dto.js';
+export { CreatorCategoryStatsDto } from './creator-category-stats.dto.js';
+
 // Consent 관련 DTO
+export { CreatorConsentDto } from './creator-consent.dto.js';
 export { GrantConsentDto } from './grant-consent.dto.js';

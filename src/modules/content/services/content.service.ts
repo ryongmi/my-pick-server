@@ -1,16 +1,7 @@
 import { Injectable, Logger, Inject, HttpException } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 
-import {
-  EntityManager,
-  UpdateResult,
-  In,
-  FindOptionsWhere,
-  LessThan,
-  MoreThan,
-  And,
-  DataSource,
-} from 'typeorm';
+import { EntityManager, UpdateResult, In, FindOptionsWhere, LessThan, MoreThan, And, DataSource } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
 
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
@@ -19,11 +10,7 @@ import { PlatformType } from '@common/enums/index.js';
 import { UserInteractionService } from '@modules/user-interaction/index.js';
 
 import { ContentRepository } from '../repositories/index.js';
-import { ContentModerationService } from './content-moderation.service.js';
-import { ContentMetadataService } from './content-metadata.service.js';
-import { ContentStatisticsService } from './content-statistics.service.js';
-import { ContentSyncService } from './content-sync.service.js';
-import { ContentEntity, ContentStatisticsEntity, ContentModerationEntity, ContentMetadataEntity } from '../entities/index.js';
+import { ContentEntity, ContentStatisticsEntity } from '../entities/index.js';
 import {
   ContentSearchQueryDto,
   ContentSearchResultDto,
@@ -31,8 +18,12 @@ import {
   CreateContentDto,
   UpdateContentDto,
   UpdateContentStatisticsDto,
+  ContentCategoryDto,
+  ContentTagDto,
 } from '../dto/index.js';
 import { ContentException } from '../exceptions/index.js';
+import { ContentCategoryService } from './content-category.service.js';
+import { ContentTagService } from './content-tag.service.js';
 
 @Injectable()
 export class ContentService {
@@ -42,11 +33,9 @@ export class ContentService {
     private readonly contentRepo: ContentRepository,
     private readonly dataSource: DataSource,
     private readonly userInteractionService: UserInteractionService,
-    private readonly contentModerationService: ContentModerationService,
-    private readonly contentMetadataService: ContentMetadataService,
-    private readonly contentStatisticsService: ContentStatisticsService,
-    private readonly contentSyncService: ContentSyncService,
-    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy
+    private readonly contentCategoryService: ContentCategoryService,
+    private readonly contentTagService: ContentTagService,
+    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
   ) {}
 
   // ==================== PUBLIC METHODS ====================
@@ -74,7 +63,7 @@ export class ContentService {
 
   async findByCreatorIds(creatorIds: string[]): Promise<ContentEntity[]> {
     if (creatorIds.length === 0) return [];
-
+    
     return this.contentRepo.find({
       where: { creatorId: In(creatorIds) },
       order: { publishedAt: 'DESC' },
@@ -101,13 +90,13 @@ export class ContentService {
   // 복합 조회 메서드들
   async searchContent(
     query: ContentSearchQueryDto,
-    userId?: string
+    userId?: string,
   ): Promise<PaginatedResult<ContentSearchResultDto>> {
     // Create clean search options with proper types
     const cleanedOptions: Record<string, unknown> = {};
-
+    
     // Copy defined properties from query
-    Object.keys(query).forEach((key) => {
+    Object.keys(query).forEach(key => {
       const value = (query as Record<string, unknown>)[key];
       if (value !== undefined) {
         cleanedOptions[key] = value;
@@ -122,10 +111,8 @@ export class ContentService {
       cleanedOptions.endDate = new Date(query.endDate);
     }
 
-    const { items, pageInfo } = await this.contentRepo.searchContent(
-      cleanedOptions as Parameters<typeof this.contentRepo.searchContent>[0]
-    );
-
+    const { items, pageInfo } = await this.contentRepo.searchContent(cleanedOptions as Parameters<typeof this.contentRepo.searchContent>[0]);
+    
     if (items.length === 0) {
       return { items: [], pageInfo };
     }
@@ -136,19 +123,18 @@ export class ContentService {
     try {
       // 🔥 콘텐츠 통계 정보 조회
       const contentStatistics = await this.getContentStatisticsByIds(contentIds);
-
+      
       // 🔥 사용자 상호작용 정보 조회 (크리에이터 정보는 실시간 집계로 대체)
-      const userInteractions = userId
-        ? await this.getUserInteractionsByContentIds(userId, contentIds)
-        : ({} as Record<string, { isBookmarked?: boolean; isLiked?: boolean; rating?: number }>);
+      const userInteractions = userId ? await this.getUserInteractionsByContentIds(userId, contentIds) : {} as Record<string, { isBookmarked?: boolean; isLiked?: boolean; rating?: number; }>;
 
-      const enrichedItems = this.buildContentSearchResults(
-        items,
-        userInteractions,
-        contentStatistics,
-        userId
-      );
+      // 🔥 분리된 엔티티 데이터 조회 (카테고리/태그)
+      const [contentCategories, contentTags] = await Promise.all([
+        this.getContentCategoriesByContentIds(contentIds),
+        this.getContentTagsByContentIds(contentIds),
+      ]);
 
+      const enrichedItems = this.buildContentSearchResults(items, userInteractions, contentStatistics, contentCategories, contentTags, userId);
+      
       this.logger.debug('Content search completed with enriched data', {
         totalFound: pageInfo.totalItems,
         page: query.page,
@@ -172,7 +158,10 @@ export class ContentService {
     }
   }
 
-  async getContentById(contentId: string, userId?: string): Promise<ContentDetailDto> {
+  async getContentById(
+    contentId: string,
+    userId?: string,
+  ): Promise<ContentDetailDto> {
     try {
       const content = await this.findByIdOrFail(contentId);
 
@@ -183,15 +172,9 @@ export class ContentService {
       // UserInteractionService 연동하여 사용자별 상호작용 정보 추가
       if (userId) {
         try {
-          detailDto.isBookmarked = await this.userInteractionService.isBookmarked(
-            userId,
-            contentId
-          );
+          detailDto.isBookmarked = await this.userInteractionService.isBookmarked(userId, contentId);
           detailDto.isLiked = await this.userInteractionService.isLiked(userId, contentId);
-          const interaction = await this.userInteractionService.getInteractionDetail(
-            userId,
-            contentId
-          );
+          const interaction = await this.userInteractionService.getInteractionDetail(userId, contentId);
           if (interaction) {
             if (interaction.watchedAt) detailDto.watchedAt = interaction.watchedAt;
             if (interaction.watchDuration) detailDto.watchDuration = interaction.watchDuration;
@@ -231,7 +214,7 @@ export class ContentService {
 
   async getTrendingContent(
     hours: number = 24,
-    limit: number = 50
+    limit: number = 50,
   ): Promise<ContentSearchResultDto[]> {
     try {
       const contents = await this.contentRepo.getTrendingContent(hours, limit);
@@ -239,7 +222,7 @@ export class ContentService {
       const trendingResults = contents.map((content) =>
         plainToInstance(ContentSearchResultDto, content, {
           excludeExtraneousValues: true,
-        })
+        }),
       );
 
       this.logger.debug('Trending content fetched', {
@@ -261,7 +244,7 @@ export class ContentService {
 
   async getRecentContent(
     creatorIds: string[],
-    limit: number = 20
+    limit: number = 20,
   ): Promise<ContentSearchResultDto[]> {
     try {
       const contents = await this.contentRepo.getRecentContent(creatorIds, limit);
@@ -269,7 +252,7 @@ export class ContentService {
       const recentResults = contents.map((content) =>
         plainToInstance(ContentSearchResultDto, content, {
           excludeExtraneousValues: true,
-        })
+        }),
       );
 
       this.logger.debug('Recent content fetched', {
@@ -291,10 +274,13 @@ export class ContentService {
 
   // ==================== 변경 메서드 ====================
 
-  async createContent(dto: CreateContentDto, transactionManager?: EntityManager): Promise<void> {
+  async createContent(
+    dto: CreateContentDto,
+    transactionManager?: EntityManager,
+  ): Promise<void> {
     // 1. 사전 검증 (중복 확인)
     const existing = await this.contentRepo.findOne({
-      where: { platformId: dto.platformId, platform: dto.platform as PlatformType },
+      where: { platformId: dto.platformId, platform: dto.platform as PlatformType }
     });
     if (existing) {
       this.logger.warn('Content creation failed: duplicate platform content', {
@@ -317,7 +303,10 @@ export class ContentService {
       duration: dto.duration,
       publishedAt: new Date(dto.publishedAt),
       creatorId: dto.creatorId,
-      metadata: dto.metadata,
+      language: dto.language,
+      isLive: dto.isLive || false,
+      quality: dto.quality,
+      ageRestriction: dto.ageRestriction || false,
     });
 
     // 통계 정보 생성
@@ -332,7 +321,7 @@ export class ContentService {
     const repository = transactionManager
       ? transactionManager.getRepository(ContentEntity)
       : this.contentRepo;
-
+    
     const statisticsRepository = transactionManager
       ? transactionManager.getRepository(ContentStatisticsEntity)
       : this.dataSource.getRepository(ContentStatisticsEntity);
@@ -358,7 +347,7 @@ export class ContentService {
   async updateContent(
     contentId: string,
     dto: UpdateContentDto,
-    transactionManager?: EntityManager
+    transactionManager?: EntityManager,
   ): Promise<void> {
     const content = await this.findByIdOrFail(contentId);
 
@@ -379,7 +368,10 @@ export class ContentService {
     });
   }
 
-  async updateContentStatistics(contentId: string, dto: UpdateContentStatisticsDto): Promise<void> {
+  async updateContentStatistics(
+    contentId: string,
+    dto: UpdateContentStatisticsDto,
+  ): Promise<void> {
     // 1. 콘텐츠 존재 확인
     await this.findByIdOrFail(contentId);
 
@@ -446,116 +438,82 @@ export class ContentService {
   // ==================== YouTube API 정책 준수 메서드 ====================
   // Rolling Window: 비동의 크리에이터의 30일 데이터 보존 정책
 
-  async cleanupExpiredContent(): Promise<{
-    deletedCount: number;
-    authorizedDataCount: number;
-    nonAuthorizedDataCount: number;
+  async cleanupOldContent(daysOld: number = 30): Promise<{ 
+    deletedCount: number; 
   }> {
     try {
-      this.logger.log('Starting expired content cleanup with authorization-based logic');
+      this.logger.log('Starting old content cleanup');
 
-      const now = new Date();
-
-      // 만료된 콘텐츠 조회 (비인증 데이터만 삭제 대상)
-      const expiredContents = await this.contentRepo.find({
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+      
+      // 오래된 콘텐츠 조회
+      const oldContents = await this.contentRepo.find({
         where: {
-          expiresAt: LessThan(now),
-          isAuthorizedData: false, // 비인증 데이터만 삭제
+          createdAt: LessThan(cutoffDate)
         },
-        select: ['id', 'title', 'platform', 'platformId', 'expiresAt', 'isAuthorizedData'],
+        select: ['id', 'title', 'platform', 'platformId', 'createdAt']
       });
 
-      // 만료되었지만 인증 데이터인 콘텐츠 (삭제하지 않음)
-      const authorizedExpiredContents = await this.contentRepo.find({
-        where: {
-          expiresAt: LessThan(now),
-          isAuthorizedData: true, // 인증 데이터는 보존
-        },
-        select: ['id', 'title', 'platform', 'platformId', 'expiresAt', 'isAuthorizedData'],
-      });
-
-      if (expiredContents.length === 0 && authorizedExpiredContents.length === 0) {
-        this.logger.debug('No expired content found');
-        return {
-          deletedCount: 0,
-          authorizedDataCount: 0,
-          nonAuthorizedDataCount: 0,
+      if (oldContents.length === 0) {
+        this.logger.debug('No old content found for cleanup');
+        return { 
+          deletedCount: 0 
         };
       }
 
       let deletedCount = 0;
 
-      // 비인증 데이터만 배치 삭제
-      if (expiredContents.length > 0) {
-        const contentIds = expiredContents.map((content) => content.id);
+      // 오래된 콘텐츠 배치 삭제
+      if (oldContents.length > 0) {
+        const contentIds = oldContents.map(content => content.id);
         const deleteResult = await this.contentRepo.delete(contentIds);
         deletedCount = deleteResult.affected || 0;
       }
 
-      this.logger.log('Expired content cleanup completed with authorization-based logic', {
+      this.logger.log('Old content cleanup completed', {
         deletedCount,
-        totalExpiredNonAuthorized: expiredContents.length,
-        totalExpiredAuthorized: authorizedExpiredContents.length,
-        nonAuthorizedPlatforms: expiredContents.reduce(
-          (acc, content) => {
-            acc[content.platform] = (acc[content.platform] || 0) + 1;
-            return acc;
-          },
-          {} as Record<string, number>
-        ),
-        authorizedPlatforms: authorizedExpiredContents.reduce(
-          (acc, content) => {
-            acc[content.platform] = (acc[content.platform] || 0) + 1;
-            return acc;
-          },
-          {} as Record<string, number>
-        ),
+        totalOldContent: oldContents.length,
+        cutoffDate,
+        daysOld,
+        platformBreakdown: oldContents.reduce((acc, content) => {
+          acc[content.platform] = (acc[content.platform] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
       });
 
-      // 인증 데이터의 경우 만료 시간 연장 (YouTube API 정책: 30일마다 재확인)
-      if (authorizedExpiredContents.length > 0) {
-        await this.extendAuthorizedDataExpiration(authorizedExpiredContents.map((c) => c.id));
-      }
-
-      return {
-        deletedCount,
-        authorizedDataCount: authorizedExpiredContents.length,
-        nonAuthorizedDataCount: expiredContents.length,
+      return { 
+        deletedCount
       };
     } catch (error: unknown) {
-      this.logger.error('Expired content cleanup failed', {
+      this.logger.error('Old content cleanup failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       throw ContentException.contentCleanupError();
     }
   }
 
-  async refreshContentData(contentId: string): Promise<void> {
+  async refreshContentMetadata(contentId: string): Promise<void> {
     try {
       const content = await this.findByIdOrFail(contentId);
-
-      // 현재 시점으로 동기화 시간 업데이트
-      const now = new Date();
-      const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30일 후
-
+      
+      // 메타데이터 갱신 시간 업데이트
       await this.contentRepo.update(contentId, {
-        lastSyncedAt: now,
-        expiresAt,
+        updatedAt: new Date()
       });
 
-      this.logger.debug('Content data refreshed', {
+      this.logger.debug('Content metadata refreshed', {
         contentId,
         platform: content.platform,
         platformId: content.platformId,
-        lastSyncedAt: now,
-        expiresAt,
+        updatedAt: new Date()
       });
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
       }
 
-      this.logger.error('Content data refresh failed', {
+      this.logger.error('Content metadata refresh failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
         contentId,
       });
@@ -563,31 +521,24 @@ export class ContentService {
     }
   }
 
-  async extendAuthorizedDataExpiration(contentIds: string[]): Promise<void> {
+  async updateContentBatch(contentIds: string[], updateData: Partial<ContentEntity>): Promise<void> {
     try {
       if (contentIds.length === 0) return;
 
-      // 인증 데이터의 만료 시간을 30일 연장 (YouTube API 정책: 30일마다 재확인)
-      const now = new Date();
-      const newExpiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30일 후
+      await this.contentRepo.batchUpdateContent(contentIds, updateData);
 
-      await this.contentRepo.update(contentIds, {
-        expiresAt: newExpiresAt,
-        lastSyncedAt: now,
-      });
-
-      this.logger.log('Extended expiration for authorized content data', {
+      this.logger.log('Batch content update completed', {
         contentCount: contentIds.length,
-        newExpiresAt,
-        lastSyncedAt: now,
+        updateFields: Object.keys(updateData),
+        updatedAt: new Date()
       });
     } catch (error: unknown) {
-      this.logger.error('Failed to extend authorized data expiration', {
+      this.logger.error('Failed to batch update content', {
         error: error instanceof Error ? error.message : 'Unknown error',
         contentIds: contentIds.slice(0, 5), // 처음 5개만 로깅
-        contentCount: contentIds.length,
+        contentCount: contentIds.length
       });
-      // 에러가 발생해도 전체 프로세스를 중단하지 않음
+      throw ContentException.contentUpdateError();
     }
   }
 
@@ -601,14 +552,14 @@ export class ContentService {
 
       this.logger.log('Creator data consent revoked - content deleted', {
         creatorId,
-        deletedCount,
+        deletedCount
       });
 
       return { deletedCount };
     } catch (error: unknown) {
       this.logger.error('Failed to revoke creator data consent', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
+        creatorId
       });
       throw ContentException.contentDeleteError();
     }
@@ -618,157 +569,145 @@ export class ContentService {
    * Rolling Window: 비동의 크리에이터의 오래된 데이터 정리
    * 30일 이상 된 데이터를 삭제하고 최신 30일만 유지
    */
-  async cleanupNonConsentedCreatorData(creatorId: string): Promise<{
+  async cleanupOldCreatorContent(creatorId: string, daysOld: number = 30): Promise<{
     deletedCount: number;
     retainedCount: number;
     oldestRetainedDate: Date | null;
   }> {
     try {
-      this.logger.log('Starting rolling window cleanup for non-consented creator', { creatorId });
-
+      this.logger.log('Starting old content cleanup for creator', { creatorId, daysOld });
+      
       const now = new Date();
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-      // 30일 이상 된 비인증 데이터 조회
+      const cutoffDate = new Date(now.getTime() - (daysOld * 24 * 60 * 60 * 1000));
+      
+      // 오래된 데이터 조회
       const oldContents = await this.contentRepo.find({
         where: {
           creatorId,
-          isAuthorizedData: false,
-          publishedAt: LessThan(thirtyDaysAgo),
+          publishedAt: LessThan(cutoffDate)
         },
-        select: ['id', 'title', 'platform', 'platformId', 'publishedAt'],
+        select: ['id', 'title', 'platform', 'platformId', 'publishedAt']
       });
-
-      // 최신 30일 데이터 조회 (보존할 데이터)
+      
+      // 최신 데이터 조회 (보존할 데이터)
       const recentContents = await this.contentRepo.find({
         where: {
           creatorId,
-          isAuthorizedData: false,
-          publishedAt: MoreThan(thirtyDaysAgo),
+          publishedAt: MoreThan(cutoffDate)
         },
         order: { publishedAt: 'ASC' },
-        select: ['id', 'publishedAt'],
+        select: ['id', 'publishedAt']
       });
-
+      
       let deletedCount = 0;
-
+      
       // 오래된 데이터 대량 삭제
       if (oldContents.length > 0) {
-        const contentIds = oldContents.map((content) => content.id);
+        const contentIds = oldContents.map(content => content.id);
         const deleteResult = await this.contentRepo.delete(contentIds);
         deletedCount = deleteResult.affected || 0;
       }
-
-      const oldestRetainedDate =
-        recentContents.length > 0 ? recentContents[0]?.publishedAt || null : null;
-
-      this.logger.log('Rolling window cleanup completed for non-consented creator', {
+      
+      const oldestRetainedDate = recentContents.length > 0 
+        ? (recentContents[0]?.publishedAt || null)
+        : null;
+      
+      this.logger.log('Old content cleanup completed for creator', {
         creatorId,
         deletedCount,
         retainedCount: recentContents.length,
         oldestRetainedDate,
-        cutoffDate: thirtyDaysAgo,
-        platformBreakdown: oldContents.reduce(
-          (acc, content) => {
-            acc[content.platform] = (acc[content.platform] || 0) + 1;
-            return acc;
-          },
-          {} as Record<string, number>
-        ),
+        cutoffDate,
+        daysOld,
+        platformBreakdown: oldContents.reduce((acc, content) => {
+          acc[content.platform] = (acc[content.platform] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
       });
-
+      
       return {
         deletedCount,
         retainedCount: recentContents.length,
-        oldestRetainedDate,
+        oldestRetainedDate
       };
     } catch (error: unknown) {
-      this.logger.error('Rolling window cleanup failed for non-consented creator', {
+      this.logger.error('Old content cleanup failed for creator', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
+        creatorId
       });
       throw ContentException.contentCleanupError();
     }
   }
-
+  
   /**
-   * 비동의 크리에이터들의 Rolling Window 일괄 정리
+   * 여러 크리에이터의 오래된 콘텐츠 일괄 정리
    */
-  async batchCleanupNonConsentedData(): Promise<{
+  async batchCleanupOldContent(creatorIds: string[], daysOld: number = 30): Promise<{
     processedCreators: number;
     totalDeleted: number;
     totalRetained: number;
     errors: number;
   }> {
     try {
-      this.logger.log('Starting batch rolling window cleanup for non-consented creators');
-
-      // 비동의 크리에이터들의 콘텐츠 조회
-      const nonConsentedContents = await this.contentRepo
-        .createQueryBuilder('content')
-        .leftJoin('creators', 'creator', 'creator.id = content.creatorId')
-        .where('creator.hasDataConsent = :hasConsent', { hasConsent: false })
-        .andWhere('content.isAuthorizedData = :isAuthorized', { isAuthorized: false })
-        .select(['content.creatorId'])
-        .distinct(true)
-        .getRawMany();
-
-      const creatorIds = nonConsentedContents.map((item) => item.content_creatorId);
-
+      this.logger.log('Starting batch old content cleanup for creators', { 
+        creatorCount: creatorIds.length,
+        daysOld
+      });
+      
       if (creatorIds.length === 0) {
-        this.logger.debug('No non-consented creators found for rolling window cleanup');
+        this.logger.debug('No creators provided for old content cleanup');
         return {
           processedCreators: 0,
           totalDeleted: 0,
           totalRetained: 0,
-          errors: 0,
+          errors: 0
         };
       }
-
+      
       let totalDeleted = 0;
       let totalRetained = 0;
       let errors = 0;
-
-      // 각 크리에이터별로 Rolling Window 적용
+      
+      // 각 크리에이터별로 오래된 콘텐츠 정리
       for (const creatorId of creatorIds) {
         try {
-          const result = await this.cleanupNonConsentedCreatorData(creatorId);
+          const result = await this.cleanupOldCreatorContent(creatorId, daysOld);
           totalDeleted += result.deletedCount;
           totalRetained += result.retainedCount;
         } catch (error: unknown) {
           errors++;
-          this.logger.warn('Individual creator rolling window cleanup failed', {
+          this.logger.warn('Individual creator old content cleanup failed', {
             error: error instanceof Error ? error.message : 'Unknown error',
-            creatorId,
+            creatorId
           });
         }
-
+        
         // API 레이트 리미팅을 위한 지연
         await this.delay(100);
       }
-
+      
       this.logger.log('Batch rolling window cleanup completed', {
         processedCreators: creatorIds.length,
         totalDeleted,
         totalRetained,
         errors,
-        successRate: (((creatorIds.length - errors) / creatorIds.length) * 100).toFixed(1) + '%',
+        successRate: ((creatorIds.length - errors) / creatorIds.length * 100).toFixed(1) + '%'
       });
-
+      
       return {
         processedCreators: creatorIds.length,
         totalDeleted,
         totalRetained,
-        errors,
+        errors
       };
     } catch (error: unknown) {
       this.logger.error('Batch rolling window cleanup failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
       throw ContentException.contentCleanupError();
     }
   }
-
+  
   /**
    * 특정 크리에이터의 비동의 데이터 전체 삭제
    * (동의 철회 시 사용)
@@ -776,127 +715,125 @@ export class ContentService {
   async deleteAllNonConsentedData(creatorId: string): Promise<{ deletedCount: number }> {
     try {
       this.logger.log('Deleting all non-consented data for creator', { creatorId });
-
+      
       // 비인증 데이터만 삭제 (인증 데이터는 보존)
       const deleteResult = await this.contentRepo.delete({
         creatorId,
-        isAuthorizedData: false,
+        isAuthorizedData: false
       });
-
+      
       const deletedCount = deleteResult.affected || 0;
-
+      
       this.logger.log('All non-consented data deleted for creator', {
         creatorId,
-        deletedCount,
+        deletedCount
       });
-
+      
       return { deletedCount };
     } catch (error: unknown) {
       this.logger.error('Failed to delete all non-consented data', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
+        creatorId
       });
       throw ContentException.contentDeleteError();
     }
   }
-
+  
   /**
-   * 크리에이터의 데이터 보존 상태 통계
+   * 크리에이터의 콘텐츠 통계
    */
-  async getCreatorDataRetentionStats(creatorId: string): Promise<{
+  async getCreatorContentStats(creatorId: string): Promise<{
     total: number;
-    authorized: number;
-    nonAuthorized: number;
     within30Days: number;
     older30Days: number;
-    platformBreakdown: Record<string, { authorized: number; nonAuthorized: number }>;
+    platformBreakdown: Record<string, number>;
+    typeBreakdown: Record<string, number>;
   }> {
     try {
       const now = new Date();
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
+      const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+      
       const contents = await this.contentRepo.find({
         where: { creatorId },
-        select: ['id', 'platform', 'isAuthorizedData', 'publishedAt'],
+        select: ['id', 'platform', 'type', 'publishedAt']
       });
-
+      
       const stats = {
         total: contents.length,
-        authorized: contents.filter((c) => c.isAuthorizedData).length,
-        nonAuthorized: contents.filter((c) => !c.isAuthorizedData).length,
-        within30Days: contents.filter((c) => c.publishedAt > thirtyDaysAgo).length,
-        older30Days: contents.filter((c) => c.publishedAt <= thirtyDaysAgo).length,
-        platformBreakdown: {} as Record<string, { authorized: number; nonAuthorized: number }>,
+        within30Days: contents.filter(c => c.publishedAt > thirtyDaysAgo).length,
+        older30Days: contents.filter(c => c.publishedAt <= thirtyDaysAgo).length,
+        platformBreakdown: {} as Record<string, number>,
+        typeBreakdown: {} as Record<string, number>
       };
-
+      
       // 플랫폼별 통계
-      contents.forEach((content) => {
+      contents.forEach(content => {
         if (content.platform) {
-          if (!stats.platformBreakdown[content.platform]) {
-            stats.platformBreakdown[content.platform] = { authorized: 0, nonAuthorized: 0 };
-          }
-
-          const platformStats = stats.platformBreakdown[content.platform]!;
-          if (content.isAuthorizedData) {
-            platformStats.authorized++;
-          } else {
-            platformStats.nonAuthorized++;
-          }
+          stats.platformBreakdown[content.platform] = (stats.platformBreakdown[content.platform] || 0) + 1;
+        }
+        if (content.type) {
+          stats.typeBreakdown[content.type] = (stats.typeBreakdown[content.type] || 0) + 1;
         }
       });
-
-      this.logger.debug('Creator data retention stats calculated', {
+      
+      this.logger.debug('Creator content stats calculated', {
         creatorId,
-        ...stats,
+        ...stats
       });
-
+      
       return stats;
     } catch (error: unknown) {
-      this.logger.error('Failed to get creator data retention stats', {
+      this.logger.error('Failed to get creator content stats', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
+        creatorId
       });
       throw ContentException.contentFetchError();
     }
   }
 
-  async getExpiredContentStats(): Promise<{
-    totalExpired: number;
-    expiringSoon: number; // 7일 이내 만료 예정
-    platformBreakdown: Record<string, number>;
+  async getContentAgeStats(): Promise<{
+    totalOld: number; // 30일 이상된 콘텐츠
+    totalRecent: number; // 30일 이내 콘텐츠
+    platformBreakdown: Record<string, { old: number; recent: number }>;
   }> {
     try {
       const now = new Date();
-      const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
 
-      const [expiredContents, expiringSoonContents] = await Promise.all([
+      const [oldContents, recentContents] = await Promise.all([
         this.contentRepo.find({
-          where: { expiresAt: LessThan(now) },
-          select: ['id', 'platform'],
+          where: { publishedAt: LessThan(thirtyDaysAgo) },
+          select: ['id', 'platform']
         }),
         this.contentRepo.find({
-          where: {
-            expiresAt: And(MoreThan(now), LessThan(sevenDaysFromNow)),
-          },
-          select: ['id', 'platform'],
-        }),
+          where: { publishedAt: MoreThan(thirtyDaysAgo) },
+          select: ['id', 'platform']
+        })
       ]);
 
-      const platformBreakdown = expiredContents.reduce(
-        (acc, content) => {
-          acc[content.platform] = (acc[content.platform] || 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>
-      );
+      const platformBreakdown: Record<string, { old: number; recent: number }> = {};
+
+      oldContents.forEach(content => {
+        if (!platformBreakdown[content.platform]) {
+          platformBreakdown[content.platform] = { old: 0, recent: 0 };
+        }
+        platformBreakdown[content.platform].old++;
+      });
+
+      recentContents.forEach(content => {
+        if (!platformBreakdown[content.platform]) {
+          platformBreakdown[content.platform] = { old: 0, recent: 0 };
+        }
+        platformBreakdown[content.platform].recent++;
+      });
 
       return {
-        totalExpired: expiredContents.length,
-        expiringSoon: expiringSoonContents.length,
-        platformBreakdown,
+        totalOld: oldContents.length,
+        totalRecent: recentContents.length,
+        platformBreakdown
       };
     } catch (error: unknown) {
-      this.logger.error('Failed to get expired content stats', {
+      this.logger.error('Failed to get content age stats', {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       throw ContentException.contentFetchError();
@@ -904,10 +841,10 @@ export class ContentService {
   }
 
   /**
-   * 비동의 크리에이터의 Rolling Window 상태 검사
-   * 30일 이상 된 데이터가 있는지 확인
+   * 크리에이터의 오래된 콘텐츠 상태 검사
+   * 지정된 기간 이상 된 데이터가 있는지 확인
    */
-  async checkRollingWindowStatus(creatorId: string): Promise<{
+  async checkOldContentStatus(creatorId: string, daysOld: number = 30): Promise<{
     needsCleanup: boolean;
     oldDataCount: number;
     oldestDataDate: Date | null;
@@ -915,80 +852,136 @@ export class ContentService {
   }> {
     try {
       const now = new Date();
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
+      const cutoffDate = new Date(now.getTime() - (daysOld * 24 * 60 * 60 * 1000));
+      
       const [oldData, recentData] = await Promise.all([
         this.contentRepo.find({
           where: {
             creatorId,
-            isAuthorizedData: false,
-            publishedAt: LessThan(thirtyDaysAgo),
+            publishedAt: LessThan(cutoffDate)
           },
           order: { publishedAt: 'ASC' },
-          select: ['id', 'publishedAt'],
+          select: ['id', 'publishedAt']
         }),
         this.contentRepo.find({
           where: {
             creatorId,
-            isAuthorizedData: false,
-            publishedAt: MoreThan(thirtyDaysAgo),
+            publishedAt: MoreThan(cutoffDate)
           },
-          select: ['id'],
-        }),
+          select: ['id']
+        })
       ]);
-
+      
       const needsCleanup = oldData.length > 0;
-      const oldestDataDate = oldData.length > 0 ? oldData[0]?.publishedAt || null : null;
-
-      this.logger.debug('Rolling window status checked', {
+      const oldestDataDate = oldData.length > 0 ? (oldData[0]?.publishedAt || null) : null;
+      
+      this.logger.debug('Old content status checked', {
         creatorId,
         needsCleanup,
         oldDataCount: oldData.length,
         oldestDataDate,
         recentDataCount: recentData.length,
-        cutoffDate: thirtyDaysAgo,
+        cutoffDate,
+        daysOld
       });
-
+      
       return {
         needsCleanup,
         oldDataCount: oldData.length,
         oldestDataDate,
-        recentDataCount: recentData.length,
+        recentDataCount: recentData.length
       };
     } catch (error: unknown) {
       this.logger.error('Failed to check rolling window status', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
+        creatorId
       });
       throw ContentException.contentFetchError();
     }
   }
-
+  
   /**
    * 지연 함수 (API 레이트 리미팅용)
    */
   private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // ==================== 분리된 엔티티 데이터 배치 조회 ====================
+
+  private async getContentCategoriesByContentIds(contentIds: string[]): Promise<Record<string, ContentCategoryDto[]>> {
+    if (contentIds.length === 0) return {};
+
+    try {
+      const categories = await this.contentCategoryService.findByContentIds(contentIds);
+      
+      // contentId별로 그룹화
+      const groupedCategories: Record<string, ContentCategoryDto[]> = {};
+      categories.forEach(category => {
+        if (!groupedCategories[category.contentId]) {
+          groupedCategories[category.contentId] = [];
+        }
+        groupedCategories[category.contentId].push({
+          category: category.category,
+          isPrimary: category.isPrimary,
+          subcategory: category.subcategory,
+          confidence: category.confidence,
+          source: category.source,
+          classifiedBy: category.classifiedBy,
+          createdAt: category.createdAt,
+          updatedAt: category.updatedAt,
+        });
+      });
+
+      return groupedCategories;
+    } catch (error: unknown) {
+      this.logger.warn('Failed to fetch content categories', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        contentCount: contentIds.length,
+      });
+      return {};
+    }
+  }
+
+  private async getContentTagsByContentIds(contentIds: string[]): Promise<Record<string, ContentTagDto[]>> {
+    if (contentIds.length === 0) return {};
+
+    try {
+      const tags = await this.contentTagService.findByContentIds(contentIds);
+      
+      // contentId별로 그룹화
+      const groupedTags: Record<string, ContentTagDto[]> = {};
+      tags.forEach(tag => {
+        if (!groupedTags[tag.contentId]) {
+          groupedTags[tag.contentId] = [];
+        }
+        groupedTags[tag.contentId].push({
+          tag: tag.tag,
+          source: tag.source,
+          relevanceScore: tag.relevanceScore,
+          addedBy: tag.addedBy,
+          usageCount: tag.usageCount,
+          createdAt: tag.createdAt,
+        });
+      });
+
+      return groupedTags;
+    } catch (error: unknown) {
+      this.logger.warn('Failed to fetch content tags', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        contentCount: contentIds.length,
+      });
+      return {};
+    }
   }
 
   // ==================== PRIVATE HELPER METHODS ====================
 
+
   // 콘텐츠 통계 정보 조회 (ContentStatistics 연동)
   private async getContentStatisticsByIds(
     contentIds: string[]
-  ): Promise<
-    Record<
-      string,
-      {
-        views: number;
-        likes: number;
-        comments: number;
-        shares: number;
-        engagementRate: number;
-        updatedAt: Date;
-      }
-    >
-  > {
+  ): Promise<Record<string, { views: number; likes: number; comments: number; shares: number; engagementRate: number; updatedAt: Date; }>> {
     try {
       if (contentIds.length === 0) return {};
 
@@ -997,18 +990,8 @@ export class ContentService {
         where: { contentId: In(contentIds) },
       });
 
-      const result: Record<
-        string,
-        {
-          views: number;
-          likes: number;
-          comments: number;
-          shares: number;
-          engagementRate: number;
-          updatedAt: Date;
-        }
-      > = {};
-
+      const result: Record<string, { views: number; likes: number; comments: number; shares: number; engagementRate: number; updatedAt: Date; }> = {};
+      
       statistics.forEach((stat) => {
         result[stat.contentId] = {
           views: Number(stat.views) || 0,
@@ -1032,43 +1015,33 @@ export class ContentService {
 
   // 사용자 상호작용 정보 조회 (UserInteractionService 연동)
   private async getUserInteractionsByContentIds(
-    userId: string,
+    userId: string, 
     contentIds: string[]
-  ): Promise<
-    Record<string, { isBookmarked?: boolean; isLiked?: boolean; rating?: number; watchedAt?: Date }>
-  > {
+  ): Promise<Record<string, { isBookmarked?: boolean; isLiked?: boolean; rating?: number; watchedAt?: Date; }>> {
     try {
       const interactions = await this.userInteractionService.getContentInteractionsBatch(
-        contentIds,
+        contentIds, 
         userId
       );
-
-      const result: Record<
-        string,
-        { isBookmarked?: boolean; isLiked?: boolean; rating?: number; watchedAt?: Date }
-      > = {};
-
+      
+      const result: Record<string, { isBookmarked?: boolean; isLiked?: boolean; rating?: number; watchedAt?: Date; }> = {};
+      
       Object.entries(interactions).forEach(([contentId, interaction]) => {
-        const interactionData: {
-          isBookmarked?: boolean;
-          isLiked?: boolean;
-          rating?: number;
-          watchedAt?: Date;
-        } = {
+        const interactionData: { isBookmarked?: boolean; isLiked?: boolean; rating?: number; watchedAt?: Date; } = {
           isBookmarked: interaction.isBookmarked || false,
           isLiked: interaction.isLiked || false,
         };
-
+        
         if (interaction.rating) {
           interactionData.rating = interaction.rating;
         }
         if (interaction.watchedAt) {
           interactionData.watchedAt = interaction.watchedAt;
         }
-
+        
         result[contentId] = interactionData;
       });
-
+      
       return result;
     } catch (error: unknown) {
       this.logger.warn('Failed to fetch batch user interactions', {
@@ -1083,21 +1056,10 @@ export class ContentService {
   // 🔥 콘텐츠 검색 결과 빌드 (데이터 정규화 기반)
   private buildContentSearchResults(
     contents: Partial<ContentEntity>[],
-    userInteractions: Record<
-      string,
-      { isBookmarked?: boolean; isLiked?: boolean; rating?: number }
-    >,
-    contentStatistics: Record<
-      string,
-      {
-        views: number;
-        likes: number;
-        comments: number;
-        shares: number;
-        engagementRate: number;
-        updatedAt: Date;
-      }
-    >,
+    userInteractions: Record<string, { isBookmarked?: boolean; isLiked?: boolean; rating?: number }>,
+    contentStatistics: Record<string, { views: number; likes: number; comments: number; shares: number; engagementRate: number; updatedAt: Date; }>,
+    contentCategories: Record<string, ContentCategoryDto[]>,
+    contentTags: Record<string, ContentTagDto[]>,
     userId?: string
   ): ContentSearchResultDto[] {
     return contents.map((content) => {
@@ -1108,7 +1070,7 @@ export class ContentService {
         comments: 0,
         shares: 0,
         engagementRate: 0,
-        updatedAt: new Date(),
+        updatedAt: new Date()
       };
 
       return {
@@ -1123,13 +1085,19 @@ export class ContentService {
         duration: content.duration,
         publishedAt: content.publishedAt!,
         creatorId: content.creatorId!,
-        metadata: content.metadata!,
+        language: content.language,
+        isLive: content.isLive || false,
+        quality: content.quality,
+        ageRestriction: content.ageRestriction || false,
+        // 🔥 분리된 엔티티 데이터 포함
+        categories: contentCategories[content.id!] || [],
+        tags: contentTags[content.id!] || [],
         createdAt: content.createdAt!,
         statistics, // 실제 통계 사용
         // 🔥 크리에이터 정보는 별도 API 호출로 조회 (데이터 정규화)
         // 🔥 사용자 상호작용 정보 (userId가 있을 때만)
-        isBookmarked: userId ? interaction?.isBookmarked || false : undefined,
-        isLiked: userId ? interaction?.isLiked || false : undefined,
+        isBookmarked: userId ? (interaction?.isBookmarked || false) : undefined,
+        isLiked: userId ? (interaction?.isLiked || false) : undefined,
         watchedAt: userId ? (interaction as { watchedAt?: Date })?.watchedAt : undefined,
         rating: userId ? interaction?.rating : undefined,
       };
@@ -1137,9 +1105,7 @@ export class ContentService {
   }
 
   // 🔥 폴백 처리 결과 빌드 (authz-server 패턴)
-  private buildFallbackContentSearchResults(
-    contents: Partial<ContentEntity>[]
-  ): ContentSearchResultDto[] {
+  private buildFallbackContentSearchResults(contents: Partial<ContentEntity>[]): ContentSearchResultDto[] {
     return contents.map((content) => ({
       id: content.id!,
       type: content.type!,
@@ -1152,7 +1118,14 @@ export class ContentService {
       duration: content.duration,
       publishedAt: content.publishedAt!,
       creatorId: content.creatorId!,
-      metadata: content.metadata!,
+      // 개별 메타데이터 필드 (JSON 제거)
+      language: content.language,
+      isLive: content.isLive || false,
+      quality: content.quality,
+      ageRestriction: content.ageRestriction || false,
+      // 🔥 분리된 엔티티 데이터 (폴백 시 빈 배열)
+      categories: [],
+      tags: [],
       createdAt: content.createdAt!,
       statistics: {
         views: 0,
@@ -1160,7 +1133,7 @@ export class ContentService {
         comments: 0,
         shares: 0,
         engagementRate: 0,
-        updatedAt: new Date(),
+        updatedAt: new Date()
       }, // 폴백 시 기본값
       // 🔥 크리에이터 정보는 별도 API 호출로 조회 (폴백)
       // 🔥 사용자 상호작용 정보 기본값
@@ -1184,74 +1157,55 @@ export class ContentService {
     }
   }
 
-  // ==================== 상태 관리 메서드 ====================
+  // ==================== 콘텐츠 관리 메서드 ====================
 
-  async updateContentStatus(
+  async updateContentDetails(
     contentId: string,
-    status: 'active' | 'inactive' | 'flagged' | 'removed',
-    moderatedBy: string,
-    reason?: string,
-    transactionManager?: EntityManager
+    updateData: Partial<Pick<ContentEntity, 'title' | 'description' | 'thumbnail' | 'language' | 'isLive' | 'quality' | 'ageRestriction'>>,
+    transactionManager?: EntityManager,
   ): Promise<void> {
     try {
       // 1. 콘텐츠 존재 확인
       await this.findByIdOrFail(contentId);
 
-      // 2. 상태 업데이트
-      const updateData: Partial<ContentEntity> = {
-        status,
-        moderatedBy,
-        moderatedAt: new Date(),
+      // 2. 콘텐츠 정보 업데이트
+      const finalUpdateData: Partial<ContentEntity> = {
+        ...updateData,
+        updatedAt: new Date(),
       };
 
-      if (reason) {
-        updateData.statusReason = reason;
-      }
+      const repo = transactionManager ? transactionManager.getRepository(ContentEntity) : this.contentRepo;
+      await repo.update(contentId, finalUpdateData);
 
-      const repo = transactionManager
-        ? transactionManager.getRepository(ContentEntity)
-        : this.contentRepo;
-      await repo.update(contentId, updateData);
-
-      this.logger.log('Content status updated successfully', {
+      this.logger.log('Content details updated successfully', {
         contentId,
-        status,
-        moderatedBy,
-        reason,
+        updatedFields: Object.keys(updateData),
       });
-
-      // 3. 상태별 추가 처리
-      if (status === 'removed') {
-        // TODO: 콘텐츠 제거 시 추가 처리 (알림, 캐시 무효화 등)
-        this.logger.debug('Content marked as removed', { contentId });
-      } else if (status === 'flagged') {
-        // TODO: 플래그된 콘텐츠 처리 (관리자 알림 등)
-        this.logger.debug('Content flagged for review', { contentId });
-      }
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
       }
 
-      this.logger.error('Content status update failed', {
+      this.logger.error('Content details update failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
         contentId,
-        status,
-        moderatedBy,
       });
       throw ContentException.contentUpdateError();
     }
   }
 
-  async getContentsByStatus(
-    status: 'active' | 'inactive' | 'flagged' | 'removed',
-    limit?: number
+  async getRecentContent(
+    limit?: number,
+    platform?: string
   ): Promise<ContentEntity[]> {
     try {
       const queryOptions: any = {
-        where: { status },
-        order: { moderatedAt: 'DESC' },
+        order: { publishedAt: 'DESC' },
       };
+
+      if (platform) {
+        queryOptions.where = { platform };
+      }
 
       if (limit) {
         queryOptions.take = limit;
@@ -1259,82 +1213,83 @@ export class ContentService {
 
       return await this.contentRepo.find(queryOptions);
     } catch (error: unknown) {
-      this.logger.error('Failed to get contents by status', {
+      this.logger.error('Failed to get recent content', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        status,
+        platform,
         limit,
       });
       throw ContentException.contentFetchError();
     }
   }
 
-  async getContentStatusStatistics(): Promise<{
+  async getContentStatistics(): Promise<{
     totalContent: number;
-    activeContent: number;
-    inactiveContent: number;
-    flaggedContent: number;
-    removedContent: number;
-    contentByStatus: Array<{ status: string; count: number }>;
+    contentByPlatform: Array<{ platform: string; count: number }>;
+    contentByType: Array<{ type: string; count: number }>;
+    liveContent: number;
+    ageRestrictedContent: number;
   }> {
     try {
-      const [totalContent, activeContent, inactiveContent, flaggedContent, removedContent] =
-        await Promise.all([
-          this.contentRepo.count(),
-          this.contentRepo.count({ where: { status: 'active' } }),
-          this.contentRepo.count({ where: { status: 'inactive' } }),
-          this.contentRepo.count({ where: { status: 'flagged' } }),
-          this.contentRepo.count({ where: { status: 'removed' } }),
-        ]);
-
-      const contentByStatus = [
-        { status: 'active', count: activeContent },
-        { status: 'inactive', count: inactiveContent },
-        { status: 'flagged', count: flaggedContent },
-        { status: 'removed', count: removedContent },
-      ];
-
-      this.logger.debug('Content status statistics calculated', {
+      const [
         totalContent,
-        activeContent,
-        inactiveContent,
-        flaggedContent,
-        removedContent,
+        liveContent,
+        ageRestrictedContent,
+        contentByPlatform,
+        contentByType,
+      ] = await Promise.all([
+        this.contentRepo.count(),
+        this.contentRepo.count({ where: { isLive: true } }),
+        this.contentRepo.count({ where: { ageRestriction: true } }),
+        this.contentRepo.getPlatformDistribution(),
+        this.contentRepo.createQueryBuilder('content')
+          .select('content.type', 'type')
+          .addSelect('COUNT(*)', 'count')
+          .groupBy('content.type')
+          .getRawMany(),
+      ]);
+
+      this.logger.debug('Content statistics calculated', {
+        totalContent,
+        liveContent,
+        ageRestrictedContent,
+        platformCount: contentByPlatform.length,
+        typeCount: contentByType.length,
       });
 
       return {
         totalContent,
-        activeContent,
-        inactiveContent,
-        flaggedContent,
-        removedContent,
-        contentByStatus,
+        contentByPlatform,
+        contentByType: contentByType.map(item => ({
+          type: item.type,
+          count: parseInt(item.count),
+        })),
+        liveContent,
+        ageRestrictedContent,
       };
     } catch (error: unknown) {
-      this.logger.error('Failed to get content status statistics', {
+      this.logger.error('Failed to get content statistics', {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       throw ContentException.contentFetchError();
     }
   }
 
-  async getContentReports(contentId: string): Promise<
-    Array<{
-      id: string;
-      reportedBy: string;
-      reason: string;
-      status: string;
-      reportedAt: Date;
-      reviewedAt?: Date;
-      reviewComment?: string;
-    }>
-  > {
+  async getContentReports(contentId: string): Promise<Array<{
+    id: string;
+    reportedBy: string;
+    reason: string;
+    status: string;
+    reportedAt: Date;
+    reviewedAt?: Date;
+    reviewComment?: string;
+  }>> {
     try {
       // 콘텐츠 존재 확인
       await this.findByIdOrFail(contentId);
 
       // ReportService는 circular dependency를 피하기 위해 직접 주입하지 않음
       // AdminContentController에서 직접 ReportService를 사용하도록 구조 변경
-
+      
       this.logger.debug('Content reports request', { contentId });
       return [];
     } catch (error: unknown) {
@@ -1367,304 +1322,187 @@ export class ContentService {
     }
   }
 
-  // ==================== 분리된 엔티티 연동 메서드 ====================
+  // ==================== ADMIN 시간대별 통계 메서드 ====================
 
-  /**
-   * 콘텐츠 상세 정보 조회 (모든 관련 데이터 포함)
-   */
-  async getContentDetail(contentId: string): Promise<{
-    content: ContentEntity;
-    metadata?: ContentMetadataEntity;
-    moderation?: ContentModerationEntity;
-    statistics?: ContentStatisticsEntity;
-    sync?: any;
+  async getContentCountByCreatorId(creatorId: string): Promise<number> {
+    try {
+      return await this.contentRepo.count({ where: { creatorId } });
+    } catch (error: unknown) {
+      this.logger.error('Failed to get content count by creator ID', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      return 0;
+    }
+  }
+
+  async getTotalViewsByCreatorId(creatorId: string): Promise<number> {
+    try {
+      const result = await this.contentRepo
+        .createQueryBuilder('content')
+        .leftJoin('content_statistics', 'stats', 'content.id = stats.contentId')
+        .select('SUM(stats.views)', 'totalViews')
+        .where('content.creatorId = :creatorId', { creatorId })
+        .getRawOne();
+
+      return parseInt(result.totalViews) || 0;
+    } catch (error: unknown) {
+      this.logger.error('Failed to get total views by creator ID', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      return 0;
+    }
+  }
+
+  async getNewContentCounts(days: number): Promise<{
+    dailyNewContent: number;
+    weeklyNewContent: number;
+    monthlyNewContent: number;
   }> {
     try {
-      const content = await this.findByIdOrFail(contentId);
+      const now = new Date();
+      const dayAgo = new Date(now.getTime() - (1 * 24 * 60 * 60 * 1000));
+      const weekAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+      const monthAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
 
-      const [metadata, moderation, statistics, sync] = await Promise.all([
-        this.contentMetadataService.findByContentId(contentId),
-        this.contentModerationService.findByContentId(contentId),
-        this.contentStatisticsService.findByContentId(contentId),
-        this.contentSyncService.findByContentId(contentId),
+      const [dailyNewContent, weeklyNewContent, monthlyNewContent] = await Promise.all([
+        this.contentRepo.count({
+          where: {
+            createdAt: MoreThan(dayAgo),
+          },
+        }),
+        this.contentRepo.count({
+          where: {
+            createdAt: MoreThan(weekAgo),
+          },
+        }),
+        this.contentRepo.count({
+          where: {
+            createdAt: MoreThan(monthAgo),
+          },
+        }),
       ]);
 
       return {
-        content,
-        metadata: metadata || undefined,
-        moderation: moderation || undefined,
-        statistics: statistics || undefined,
-        sync: sync || undefined,
+        dailyNewContent,
+        weeklyNewContent,
+        monthlyNewContent,
       };
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      this.logger.error('Failed to get content detail', {
+      this.logger.error('Failed to get new content counts', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        contentId,
+        days,
       });
-      throw ContentException.contentFetchError();
+      return {
+        dailyNewContent: 0,
+        weeklyNewContent: 0,
+        monthlyNewContent: 0,
+      };
     }
   }
 
-  /**
-   * 완전한 콘텐츠 생성 (모든 관련 엔티티 포함)
-   */
-  async createCompleteContent(
-    contentData: CreateContentDto,
-    options: {
-      metadata: {
-        tags: string[];
-        category: string;
-        language: string;
-        isLive?: boolean;
-        quality?: 'sd' | 'hd' | '4k';
-        ageRestriction?: boolean;
-      };
-      initialStats?: {
-        views?: number;
-        likes?: number;
-        comments?: number;
-        shares?: number;
-      };
-      syncOptions?: {
-        platform?: string;
-        platformId?: string;
-        isAuthorizedData?: boolean;
-        expiresAt?: Date;
-      };
-      moderationStatus?: 'active' | 'inactive' | 'flagged' | 'removed';
-    }
-  ): Promise<string> {
-    return this.dataSource.transaction(async (manager) => {
-      try {
-        // 1. 메인 콘텐츠 생성
-        const contentId = await this.createContent(contentData, manager);
-
-        // 2. 메타데이터 생성
-        await this.contentMetadataService.createMetadata(
-          contentId,
-          options.metadata,
-          manager
-        );
-
-        // 3. 모더레이션 레코드 생성
-        await this.contentModerationService.createModerationRecord(
-          contentId,
-          { moderationStatus: options.moderationStatus },
-          manager
-        );
-
-        // 4. 통계 레코드 생성
-        await this.contentStatisticsService.createStatistics(
-          contentId,
-          options.initialStats,
-          manager
-        );
-
-        // 5. 동기화 레코드 생성 (옵션)
-        if (options.syncOptions) {
-          await this.contentSyncService.createSyncRecord(
-            contentId,
-            options.syncOptions,
-            manager
-          );
-        }
-
-        this.logger.log('Complete content created successfully', {
-          contentId,
-          hasMetadata: true,
-          hasModeration: true,
-          hasStatistics: true,
-          hasSync: !!options.syncOptions,
-        });
-
-        return contentId;
-      } catch (error: unknown) {
-        this.logger.error('Complete content creation failed', {
-          error: error instanceof Error ? error.message : 'Unknown error',
-          contentTitle: contentData.title,
-        });
-        throw ContentException.contentCreateError();
-      }
-    });
-  }
-
-  /**
-   * 완전한 콘텐츠 삭제 (모든 관련 엔티티 포함)
-   */
-  async deleteCompleteContent(contentId: string): Promise<void> {
-    return this.dataSource.transaction(async (manager) => {
-      try {
-        // 콘텐츠 존재 확인
-        await this.findByIdOrFail(contentId);
-
-        // 관련 엔티티들 삭제 (병렬 처리)
-        await Promise.all([
-          this.contentMetadataService.deleteMetadata(contentId),
-          this.contentModerationService.deleteModerationRecord(contentId),
-          this.contentStatisticsService.deleteStatistics(contentId),
-          this.contentSyncService.deleteSyncRecord(contentId),
-        ]);
-
-        // 메인 콘텐츠 삭제
-        await this.deleteContent(contentId);
-
-        this.logger.log('Complete content deleted successfully', {
-          contentId,
-        });
-      } catch (error: unknown) {
-        if (error instanceof HttpException) {
-          throw error;
-        }
-
-        this.logger.error('Complete content deletion failed', {
-          error: error instanceof Error ? error.message : 'Unknown error',
-          contentId,
-        });
-        throw ContentException.contentDeleteError();
-      }
-    });
-  }
-
-  /**
-   * 배치로 콘텐츠 상세 정보 조회
-   */
-  async getContentDetailBatch(contentIds: string[]): Promise<Record<string, {
-    content: ContentEntity;
-    metadata?: ContentMetadataEntity;
-    moderation?: ContentModerationEntity;
-    statistics?: ContentStatisticsEntity;
+  async getTopContentByViews(limit: number = 10): Promise<Array<{
+    contentId: string;
+    title: string;
+    views: number;
+    creatorName: string;
   }>> {
     try {
-      if (contentIds.length === 0) return {};
+      const results = await this.contentRepo
+        .createQueryBuilder('content')
+        .leftJoin('content_statistics', 'stats', 'content.id = stats.contentId')
+        .leftJoin('creators', 'creator', 'content.creatorId = creator.id')
+        .select([
+          'content.id as contentId',
+          'content.title as title',
+          'stats.views as views',
+          'COALESCE(creator.displayName, creator.name) as creatorName',
+        ])
+        .orderBy('stats.views', 'DESC')
+        .limit(limit)
+        .getRawMany();
 
-      const [contents, metadataBatch, moderationBatch, statisticsBatch] = await Promise.all([
-        this.findByIds(contentIds),
-        this.contentMetadataService.getMetadataBatch(contentIds),
-        this.contentModerationService.getModerationBatch(contentIds),
-        this.contentStatisticsService.getStatisticsBatch(contentIds),
-      ]);
-
-      const result: Record<string, any> = {};
-      
-      contents.forEach(content => {
-        result[content.id] = {
-          content,
-          metadata: metadataBatch[content.id],
-          moderation: moderationBatch[content.id],
-          statistics: statisticsBatch[content.id],
-        };
-      });
-
-      return result;
+      return results.map(result => ({
+        contentId: result.contentId,
+        title: result.title,
+        views: parseInt(result.views) || 0,
+        creatorName: result.creatorName || `Creator ${result.contentId}`,
+      }));
     } catch (error: unknown) {
-      this.logger.warn('Failed to fetch content detail batch', {
+      this.logger.error('Failed to get top content by views', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        contentCount: contentIds.length,
+        limit,
       });
-      return {};
+      return [];
     }
   }
 
-  // ==================== 새로운 검색 메서드 (메타데이터 활용) ====================
-
-  /**
-   * 태그 기반 콘텐츠 검색
-   */
-  async searchByTags(
-    tags: string[],
-    searchMode: 'any' | 'all' = 'any',
-    limit?: number
-  ): Promise<ContentEntity[]> {
+  async getPlatformDistribution(): Promise<Array<{
+    platform: string;
+    contentCount: number;
+    percentage: number;
+  }>> {
     try {
-      const metadataList = await this.contentMetadataService.findByTags(tags, searchMode, limit);
-      const contentIds = metadataList.map(m => m.contentId);
+      const totalContent = await this.contentRepo.count();
       
-      if (contentIds.length === 0) return [];
-      
-      return this.findByIds(contentIds);
-    } catch (error: unknown) {
-      this.logger.error('Tag-based content search failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        tags,
-        searchMode,
-      });
-      throw ContentException.contentFetchError();
-    }
-  }
-
-  /**
-   * 카테고리별 콘텐츠 검색
-   */
-  async findByCategory(category: string, limit?: number): Promise<ContentEntity[]> {
-    try {
-      const metadataList = await this.contentMetadataService.findByCategory(category, limit);
-      const contentIds = metadataList.map(m => m.contentId);
-      
-      if (contentIds.length === 0) return [];
-      
-      return this.findByIds(contentIds);
-    } catch (error: unknown) {
-      this.logger.error('Category-based content search failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        category,
-      });
-      throw ContentException.contentFetchError();
-    }
-  }
-
-  /**
-   * 라이브 콘텐츠 조회
-   */
-  async findLiveContent(limit?: number): Promise<ContentEntity[]> {
-    try {
-      const metadataList = await this.contentMetadataService.findLiveContent(limit);
-      const contentIds = metadataList.map(m => m.contentId);
-      
-      if (contentIds.length === 0) return [];
-      
-      return this.findByIds(contentIds);
-    } catch (error: unknown) {
-      this.logger.error('Live content search failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      throw ContentException.contentFetchError();
-    }
-  }
-
-  /**
-   * 모더레이션 상태별 콘텐츠 조회
-   */
-  async findByModerationStatus(
-    status: 'active' | 'inactive' | 'flagged' | 'removed',
-    limit?: number
-  ): Promise<ContentEntity[]> {
-    try {
-      const moderationRepo = this.dataSource.getRepository(ContentModerationEntity);
-      const queryOptions: any = {
-        where: { moderationStatus: status },
-        order: { moderatedAt: 'DESC' },
-      };
-
-      if (limit) {
-        queryOptions.take = limit;
+      if (totalContent === 0) {
+        return [];
       }
 
-      const moderationList = await moderationRepo.find(queryOptions);
-      const contentIds = moderationList.map(m => m.contentId);
-      
-      if (contentIds.length === 0) return [];
-      
-      return this.findByIds(contentIds);
+      const results = await this.contentRepo
+        .createQueryBuilder('content')
+        .select('content.platform', 'platform')
+        .addSelect('COUNT(*)', 'contentCount')
+        .groupBy('content.platform')
+        .getRawMany();
+
+      return results.map(result => ({
+        platform: result.platform,
+        contentCount: parseInt(result.contentCount),
+        percentage: Math.round((parseInt(result.contentCount) / totalContent) * 100),
+      }));
     } catch (error: unknown) {
-      this.logger.error('Moderation status based content search failed', {
+      this.logger.error('Failed to get platform distribution', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        status,
       });
-      throw ContentException.contentFetchError();
+      return [];
+    }
+  }
+
+  async getCategoryDistribution(): Promise<Array<{
+    category: string;
+    contentCount: number;
+    percentage: number;
+  }>> {
+    try {
+      const totalContent = await this.contentRepo.count();
+      
+      if (totalContent === 0) {
+        return [];
+      }
+
+      // ContentCategory 엔티티를 통해 카테고리 분포 조회
+      const results = await this.contentRepo
+        .createQueryBuilder('content')
+        .leftJoin('content_categories', 'cc', 'content.id = cc.contentId')
+        .leftJoin('categories', 'cat', 'cc.categoryId = cat.id')
+        .select('cat.name', 'category')
+        .addSelect('COUNT(*)', 'contentCount')
+        .where('cat.name IS NOT NULL')
+        .groupBy('cat.name')
+        .getRawMany();
+
+      return results.map(result => ({
+        category: result.category,
+        contentCount: parseInt(result.contentCount),
+        percentage: Math.round((parseInt(result.contentCount) / totalContent) * 100),
+      }));
+    } catch (error: unknown) {
+      this.logger.error('Failed to get category distribution', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return [];
     }
   }
 }

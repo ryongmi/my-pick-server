@@ -1,6 +1,11 @@
-export * from './content.repository.js';
-export * from './content-sync.repository.js';
-export * from './content-sync-metadata.repository.js';
-export * from './content-statistics.repository.js';
-export * from './content-moderation.repository.js';
-export * from './content-metadata.repository.js';
+export { ContentRepository } from './content.repository.js';
+export { ContentCategoryRepository } from './content-category.repository.js';
+export { ContentTagRepository } from './content-tag.repository.js';
+export { ContentInteractionRepository } from './content-interaction.repository.js';
+export { ContentSyncRepository } from './content-sync.repository.js';
+export { ContentSyncMetadataRepository } from './content-sync-metadata.repository.js';
+
+// 타입 exports
+export type { CategoryStats, CategoryDistribution } from './content-category.repository.js';
+export type { TagStats, PopularTag } from './content-tag.repository.js';
+export type { InteractionStats, UserEngagement, ContentPerformance } from './content-interaction.repository.js';

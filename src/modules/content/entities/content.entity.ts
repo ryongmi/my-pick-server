@@ -7,11 +7,17 @@ import { PlatformType } from '@common/enums/index.js';
 import { ContentType } from '../enums/index.js';
 
 @Entity('content')
-@Index(['creatorId']) // 크리에이터별 콘텐츠 조회 최적화
-@Index(['platform']) // 플랫폼별 조회 최적화
-@Index(['publishedAt']) // 발행일 기준 정렬 최적화
-@Index(['platform', 'publishedAt']) // 플랫폼별 최신순 조회 최적화
-@Index(['creatorId', 'publishedAt']) // 크리에이터별 최신 콘텐츠 조회 최적화
+@Index(['creatorId'])
+@Index(['platform', 'platformId'], { unique: true })
+@Index(['publishedAt'])
+@Index(['creatorId', 'publishedAt'])
+@Index(['platform', 'publishedAt'])
+@Index(['isLive'])
+@Index(['ageRestriction'])
+@Index(['language'])
+@Index(['quality'])
+@Index(['language', 'quality'])
+@Index(['isLive', 'ageRestriction'])
 export class ContentEntity extends BaseEntityUUID {
   @Column({ type: 'enum', enum: ContentType })
   type!: ContentType;
@@ -43,11 +49,23 @@ export class ContentEntity extends BaseEntityUUID {
   @Column()
   creatorId!: string; // FK 없이 creatorId 저장해서 직접 조회
 
-  // FK 없이 contentId로 ContentStatisticsEntity와 연결
+  // ==================== 메타데이터 (JSON에서 개별 컬럼으로 분리) ====================
+  // tags, category는 별도 엔티티(ContentTagEntity, ContentCategoryEntity)로 분리됨
 
-  // 메타데이터와 모더레이션 정보는 별도 엔티티로 분리됨
-  // - ContentMetadataEntity (1:1)
-  // - ContentModerationEntity (1:1)
-  // - ContentStatisticsEntity (1:1)
-  // - ContentSyncEntity (1:1)
+  @Column({ nullable: true, comment: '콘텐츠 언어 (ISO 639-1)' })
+  language?: string;
+
+  @Column({ default: false, comment: '실시간 방송 여부' })
+  isLive!: boolean;
+
+  @Column({
+    type: 'enum',
+    enum: ['sd', 'hd', '4k'],
+    nullable: true,
+    comment: '영상 품질',
+  })
+  quality?: 'sd' | 'hd' | '4k';
+
+  @Column({ default: false, comment: '연령 제한 콘텐츠 여부' })
+  ageRestriction!: boolean;
 }

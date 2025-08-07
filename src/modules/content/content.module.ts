@@ -6,18 +6,35 @@ import { UserInteractionModule } from '../user-interaction/user-interaction.modu
 import { 
   ContentEntity, 
   ContentStatisticsEntity,
-  ContentSyncMetadataEntity
+  ContentCategoryEntity,
+  ContentTagEntity,
+  ContentInteractionEntity,
+  ContentSyncEntity,
+  ContentSyncMetadataEntity,
 } from './entities/index.js';
 import { 
   ContentRepository,
-  ContentSyncMetadataRepository
+  ContentCategoryRepository,
+  ContentTagRepository,
+  ContentInteractionRepository,
+  ContentSyncRepository,
+  ContentSyncMetadataRepository,
 } from './repositories/index.js';
-import { ContentService } from './services/index.js';
+import { 
+  ContentService,
+  ContentCategoryService,
+  ContentTagService,
+  ContentInteractionService,
+  ContentSyncService,
+  ContentSyncMetadataService,
+} from './services/index.js';
 import {
   ContentController,
-  ContentInteractionController,
   ContentBookmarkController,
   UserContentInteractionController,
+  ContentCategoryController,
+  ContentTagController,
+  ContentAnalyticsController,
 } from './controllers/index.js';
 
 @Module({
@@ -25,25 +42,46 @@ import {
     TypeOrmModule.forFeature([
       ContentEntity, 
       ContentStatisticsEntity,
-      ContentSyncMetadataEntity
+      ContentCategoryEntity,
+      ContentTagEntity,
+      ContentInteractionEntity,
+      ContentSyncEntity,
+      ContentSyncMetadataEntity,
     ]),
     UserInteractionModule,
   ],
   controllers: [
     ContentController,
-    ContentInteractionController,
     ContentBookmarkController,
     UserContentInteractionController,
+    ContentCategoryController,
+    ContentTagController,
+    ContentAnalyticsController,
   ],
   providers: [
-    ContentRepository, 
+    // Repositories
+    ContentRepository,
+    ContentCategoryRepository,
+    ContentTagRepository,
+    ContentInteractionRepository,
+    ContentSyncRepository,
     ContentSyncMetadataRepository,
-    ContentService
+    
+    // Services
+    ContentService,
+    ContentCategoryService,
+    ContentTagService,
+    ContentInteractionService,
+    ContentSyncService,
+    ContentSyncMetadataService,
   ],
   exports: [
-    ContentService, 
+    ContentService,
     ContentRepository,
-    ContentSyncMetadataRepository
+    ContentCategoryService,
+    ContentTagService,
+    ContentInteractionService,
+    ContentSyncService,
   ],
 })
 export class ContentModule {}

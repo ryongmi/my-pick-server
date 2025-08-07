@@ -187,4 +187,27 @@ export class CreatorException {
       message: '플랫폼 동기화 중 오류가 발생했습니다.',
     });
   }
+
+  // ==================== 통계 관련 (400-499) ====================
+
+  static statisticsNotFound(): HttpException {
+    return new NotFoundException({
+      code: 'CREATOR_401',
+      message: '크리에이터 통계 정보를 찾을 수 없습니다.',
+    });
+  }
+
+  static statisticsFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_402',
+      message: '크리에이터 통계 조회 중 오류가 발생했습니다.',
+    });
+  }
+
+  static statisticsUpdateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_403',
+      message: '크리에이터 통계 업데이트 중 오류가 발생했습니다.',
+    });
+  }
 }
