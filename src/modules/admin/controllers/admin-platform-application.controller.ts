@@ -9,12 +9,21 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 
+import {
+  SwaggerApiTags,
+  SwaggerApiBearerAuth,
+  SwaggerApiOperation,
+  SwaggerApiParam,
+  SwaggerApiBody,
+  SwaggerApiOkResponse,
+  SwaggerApiPaginatedResponse,
+  SwaggerApiErrorResponse,
+} from '@krgeobuk/swagger/decorators';
 import { Serialize } from '@krgeobuk/core/decorators';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
-
 
 import { PlatformApplicationService } from '../../platform-application/services/index.js';
 import {
@@ -37,9 +46,10 @@ export class AdminPlatformApplicationController {
   constructor(private readonly platformApplicationService: PlatformApplicationService) {}
 
   @Get()
-  @SwaggerApiOperation({ 
+  @SwaggerApiOperation({
     summary: '플랫폼 신청 목록 조회 (관리자)',
-    description: '관리자가 모든 플랫폼 신청 목록을 조회합니다. 검색, 필터링, 페이지네이션을 지원합니다.'
+    description:
+      '관리자가 모든 플랫폼 신청 목록을 조회합니다. 검색, 필터링, 페이지네이션을 지원합니다.',
   })
   @SwaggerApiPaginatedResponse({
     status: 200,
@@ -59,9 +69,10 @@ export class AdminPlatformApplicationController {
   }
 
   @Get('stats')
-  @SwaggerApiOperation({ 
+  @SwaggerApiOperation({
     summary: '플랫폼 신청 통계 조회 (관리자)',
-    description: '관리자가 플랫폼 신청 통계를 조회합니다. 전체/승인/거부/대기 신청 수 등을 제공합니다.'
+    description:
+      '관리자가 플랫폼 신청 통계를 조회합니다. 전체/승인/거부/대기 신청 수 등을 제공합니다.',
   })
   @SwaggerApiOkResponse({
     status: 200,
@@ -75,15 +86,16 @@ export class AdminPlatformApplicationController {
   }
 
   @Get('creator/:creatorId')
-  @SwaggerApiOperation({ 
+  @SwaggerApiOperation({
     summary: '크리에이터별 플랫폼 신청 목록 조회 (관리자)',
-    description: '관리자가 특정 크리에이터의 모든 플랫폼 신청 내역을 조회합니다.'
+    description: '관리자가 특정 크리에이터의 모든 플랫폼 신청 내역을 조회합니다.',
   })
   @SwaggerApiParam({ name: 'creatorId', type: String, description: '크리에이터 ID' })
   @SwaggerApiOkResponse({
     status: 200,
     description: '크리에이터별 플랫폼 신청 목록 조회 성공',
-    dto: [ApplicationDetailDto],
+    dto: ApplicationDetailDto,
+    isArray: true,
   })
   @SwaggerApiErrorResponse({
     status: 404,
@@ -94,13 +106,35 @@ export class AdminPlatformApplicationController {
   async getApplicationsByCreator(
     @Param('creatorId', ParseUUIDPipe) creatorId: string
   ): Promise<ApplicationDetailDto[]> {
-    return await this.platformApplicationService.findByCreatorId(creatorId);
+    const applications = await this.platformApplicationService.findByCreatorId(creatorId);
+    return applications.map((app) => {
+      const result: any = {
+        id: app.id,
+        creatorId: app.creatorId,
+        userId: app.userId,
+        platformType: app.platformType,
+        appliedAt: app.appliedAt,
+        status: app.status,
+        createdAt: app.createdAt,
+        updatedAt: app.updatedAt,
+      };
+
+      // Only include optional properties if they have values
+      if (app.reviewedAt) {
+        result.reviewedAt = app.reviewedAt;
+      }
+      if (app.reviewerId) {
+        result.reviewerId = app.reviewerId;
+      }
+
+      return result;
+    });
   }
 
   @Get(':id')
-  @SwaggerApiOperation({ 
+  @SwaggerApiOperation({
     summary: '플랫폼 신청 상세 조회 (관리자)',
-    description: '관리자가 특정 플랫폼 신청의 상세 정보를 조회합니다.'
+    description: '관리자가 특정 플랫폼 신청의 상세 정보를 조회합니다.',
   })
   @SwaggerApiParam({ name: 'id', type: String, description: '플랫폼 신청 ID' })
   @SwaggerApiOkResponse({
@@ -118,9 +152,9 @@ export class AdminPlatformApplicationController {
   }
 
   @Post(':id/approve')
-  @SwaggerApiOperation({ 
+  @SwaggerApiOperation({
     summary: '플랫폼 신청 승인 (관리자)',
-    description: '관리자가 플랫폼 신청을 승인합니다. 승인 시 크리에이터 플랫폼이 생성됩니다.'
+    description: '관리자가 플랫폼 신청을 승인합니다. 승인 시 크리에이터 플랫폼이 생성됩니다.',
   })
   @SwaggerApiParam({ name: 'id', type: String, description: '플랫폼 신청 ID' })
   @SwaggerApiBody({ dto: ApproveApplicationDto })
@@ -131,16 +165,16 @@ export class AdminPlatformApplicationController {
   @RequirePermission('platform-application:approve')
   async approveApplication(
     @Param('id', ParseUUIDPipe) applicationId: string,
-    @Body() dto: ApproveApplicationDto,
+    @Body() dto: ApproveApplicationDto
     // @CurrentUser() admin: UserInfo
   ): Promise<void> {
     await this.platformApplicationService.approveApplication(applicationId, dto, 'admin-user-id'); // TODO: CurrentUser 구현 후 실제 admin.id 사용
   }
 
   @Post(':id/reject')
-  @SwaggerApiOperation({ 
+  @SwaggerApiOperation({
     summary: '플랫폼 신청 거부 (관리자)',
-    description: '관리자가 플랫폼 신청을 거부합니다. 거부 사유를 포함해야 합니다.'
+    description: '관리자가 플랫폼 신청을 거부합니다. 거부 사유를 포함해야 합니다.',
   })
   @SwaggerApiParam({ name: 'id', type: String, description: '플랫폼 신청 ID' })
   @SwaggerApiBody({ dto: RejectApplicationDto })
@@ -151,26 +185,27 @@ export class AdminPlatformApplicationController {
   @RequirePermission('platform-application:reject')
   async rejectApplication(
     @Param('id', ParseUUIDPipe) applicationId: string,
-    @Body() dto: RejectApplicationDto,
+    @Body() dto: RejectApplicationDto
     // @CurrentUser() admin: UserInfo
   ): Promise<void> {
     await this.platformApplicationService.rejectApplication(applicationId, dto, 'admin-user-id'); // TODO: CurrentUser 구현 후 실제 admin.id 사용
   }
 
   @Get('rejection-reasons')
-  @SwaggerApiOperation({ 
+  @SwaggerApiOperation({
     summary: '플랫폼 신청 거부 사유 목록 조회 (관리자)',
-    description: '관리자가 플랫폼 신청 거부 시 사용할 수 있는 표준 거부 사유 목록을 조회합니다.'
+    description: '관리자가 플랫폼 신청 거부 시 사용할 수 있는 표준 거부 사유 목록을 조회합니다.',
   })
   @SwaggerApiOkResponse({
     status: 200,
     description: '거부 사유 목록 및 메시지 조회 성공',
-    dto: [RejectionReasonItemDto],
+    dto: RejectionReasonItemDto,
+    isArray: true,
   })
   @RequirePermission('platform-application:read')
   @Serialize({ dto: RejectionReasonItemDto })
   async getRejectionReasons(): Promise<RejectionReasonItemDto[]> {
-    return Object.values(RejectionReason).map(reason => ({
+    return Object.values(RejectionReason).map((reason) => ({
       code: reason,
       message: PlatformApplicationException.getRejectionReasonMessage(reason),
     }));

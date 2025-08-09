@@ -1,6 +1,7 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { IsString, IsOptional, MaxLength } from 'class-validator';
 import { Expose } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ApproveApplicationDto {
   @ApiProperty({

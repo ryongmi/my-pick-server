@@ -1,18 +1,8 @@
-# version: '3.8'
+version: '3.8'
 services:
-  # nginx:
-  #   build:
-  #     context: ./nginx
-  #     dockerfile: Dockerfile.dev
-  #   restart: always
-  #   ports:
-  #     - "3050:80"
-  #   depends_on:
-  #     - backend
-  #     - frontend
   mysql:
     image: mysql:8
-    container_name: authz-mysql
+    container_name: my-pick-mysql
     ports:
       - 3310:3306
     env_file:
@@ -24,14 +14,12 @@ services:
       - TZ=Asia/Seoul
     volumes:
       - ./data/mysql:/var/lib/mysql
-      # - ./config/mysql/my.cnf:/etc/mysql/my.cnf
-      # - ./config/mysql/conf.d:/etc/mysql/conf.d
     networks:
-      - authz-network
+      - my-pick-network
 
   redis:
     image: redis:alpine
-    container_name: authz-redis
+    container_name: my-pick-redis
     ports:
       - 6383:6379
     env_file:
@@ -41,21 +29,21 @@ services:
     volumes:
       - ./data/redis:/data
     networks:
-      - authz-network
+      - my-pick-network
     command: ['redis-server', '--requirepass', '1234qwer']
     depends_on:
       - mysql
 
   server:
-    image: krgeobuk/authz-server:local
-    container_name: authz-server
+    image: krgeobuk/my-pick-server:local
+    container_name: my-pick-server
     build:
       context: .
       dockerfile: Dockerfile
       target: local
     ports:
-      - 8300:8300
-      - 9232:9229 # Node.js 디버깅 포트
+      - 4000:4000
+      - 9233:9229 # Node.js 디버깅 포트
     env_file:
       - ./envs/.env.local
     environment:
@@ -69,14 +57,14 @@ services:
       - /app/dist
       - /app/node_modules # 익명 볼륨
     networks:
-      - authz-network
+      - my-pick-network
       - msa-network
     depends_on:
       - redis
       - mysql
 
 networks:
-  authz-network:
+  my-pick-network:
     driver: bridge
   msa-network:
     external: true

@@ -2,7 +2,6 @@ import '@krgeobuk/core/interfaces/express';
 
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 
 import { setupSwagger } from '@krgeobuk/swagger/config';
 
@@ -19,6 +18,7 @@ async function bootstrap(): Promise<void> {
   const configService = app.get(ConfigService);
 
   const port = configService.get<DefaultConfig['port']>('port')!;
+  // const tcpPort = configService.get<DefaultConfig['tcpPort']>('tcpPort')!;
 
   // 글로벌 설정
   setNestApp(app, configService);
@@ -26,14 +26,14 @@ async function bootstrap(): Promise<void> {
   // Swagger 설정
   setupSwagger({ app, configService });
 
-  // TCP 마이크로서비스 설정 (포트 8110)
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.TCP,
-    options: {
-      host: '0.0.0.0',
-      port: 8110,
-    },
-  });
+  // TCP 마이크로서비스 설정
+  // app.connectMicroservice<MicroserviceOptions>({
+  //   transport: Transport.TCP,
+  //   options: {
+  //     host: '0.0.0.0',
+  //     port: tcpPort,
+  //   },
+  // });
 
   await app.startAllMicroservices();
   await app.listen(port);

@@ -34,7 +34,12 @@ export class CreatorApplicationRequirementEntity extends BaseEntityUUID {
   @Column({ type: 'enum', enum: RequirementCategory, comment: '요구사항 카테고리' })
   category!: RequirementCategory;
 
-  @Column({ type: 'enum', enum: RequirementStatus, default: RequirementStatus.PENDING, comment: '요구사항 상태' })
+  @Column({
+    type: 'enum',
+    enum: RequirementStatus,
+    default: RequirementStatus.PENDING,
+    comment: '요구사항 상태',
+  })
   status!: RequirementStatus;
 
   @Column({ default: false, comment: '완료 여부' })
@@ -44,14 +49,14 @@ export class CreatorApplicationRequirementEntity extends BaseEntityUUID {
   priority!: number;
 
   @Column({ nullable: true, comment: '예상 완료 시간 (일)' })
-  estimatedDays?: number;
+  estimatedDays?: number | null;
 
   @Column({ nullable: true, comment: '완료일시' })
-  completedAt?: Date;
+  completedAt?: Date | null;
 
   @Column({ type: 'text', nullable: true, comment: '추가 설명/가이드' })
-  description?: string;
+  description?: string | null;
 
   @Column({ nullable: true, comment: '관련 URL (가이드, 문서 등)' })
-  relatedUrl?: string;
+  relatedUrl?: string | null;
 }

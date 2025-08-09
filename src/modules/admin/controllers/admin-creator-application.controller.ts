@@ -33,7 +33,6 @@ import { CreatorApplicationService } from '../../creator-application/services/in
 import { ReviewApplicationDto, ApplicationDetailDto } from '../../creator-application/dto/index.js';
 import { ApplicationStatus } from '../../creator-application/enums/index.js';
 
-
 @SwaggerApiTags({ tags: ['admin/creator-applications'] })
 @SwaggerApiBearerAuth()
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
@@ -47,10 +46,10 @@ export class AdminCreatorApplicationController {
     summary: '크리에이터 신청 목록 조회 (관리자)',
     description: '관리자가 모든 크리에이터 신청서를 조회합니다.',
   })
-  @SwaggerApiPaginatedResponse({ 
+  @SwaggerApiPaginatedResponse({
     status: 200,
     description: '크리에이터 신청 목록 조회 성공',
-    dto: ApplicationDetailDto 
+    dto: ApplicationDetailDto,
   })
   // @UseGuards(AuthGuard)
   @RequirePermission('creator-application:read')
@@ -60,11 +59,15 @@ export class AdminCreatorApplicationController {
     @Query('limit') limit: number = 20
   ): Promise<PaginatedResult<ApplicationDetailDto>> {
     // Convert number limit to LimitType
-    const limitType: LimitType = limit <= 15 ? LimitType.FIFTEEN :
-                                 limit <= 30 ? LimitType.THIRTY :
-                                 limit <= 50 ? LimitType.FIFTY :
-                                 LimitType.HUNDRED;
-                                 
+    const limitType: LimitType =
+      limit <= 15
+        ? LimitType.FIFTEEN
+        : limit <= 30
+          ? LimitType.THIRTY
+          : limit <= 50
+            ? LimitType.FIFTY
+            : LimitType.HUNDRED;
+
     const searchOptions: {
       page: number;
       limit: LimitType;
@@ -73,7 +76,7 @@ export class AdminCreatorApplicationController {
     if (status !== undefined) {
       searchOptions.status = status;
     }
-    
+
     return this.creatorApplicationService.searchApplicationsForAdmin(searchOptions);
   }
 
@@ -84,7 +87,7 @@ export class AdminCreatorApplicationController {
   })
   @SwaggerApiOkResponse({
     status: 200,
-    description: '신청 통계 조회 성공'
+    description: '신청 통계 조회 성공',
   })
   // @UseGuards(AuthGuard)
   @RequirePermission('creator-application:read')
@@ -106,10 +109,10 @@ export class AdminCreatorApplicationController {
     description: '신청서 ID',
     type: String,
   })
-  @SwaggerApiOkResponse({ 
+  @SwaggerApiOkResponse({
     status: 200,
     description: '크리에이터 신청 상세 조회 성공',
-    dto: ApplicationDetailDto 
+    dto: ApplicationDetailDto,
   })
   // @UseGuards(AuthGuard)
   @RequirePermission('creator-application:read')
@@ -134,7 +137,7 @@ export class AdminCreatorApplicationController {
   })
   @SwaggerApiBody({
     dto: ReviewApplicationDto,
-    description: '승인 정보'
+    description: '승인 정보',
   })
   // @UseGuards(AuthGuard)
   @RequirePermission('creator-application:approve')
@@ -170,7 +173,7 @@ export class AdminCreatorApplicationController {
   })
   @SwaggerApiBody({
     dto: ReviewApplicationDto,
-    description: '거부 정보'
+    description: '거부 정보',
   })
   // @UseGuards(AuthGuard)
   @RequirePermission('creator-application:reject')
@@ -194,4 +197,3 @@ export class AdminCreatorApplicationController {
     await this.creatorApplicationService.reviewApplication(applicationId, dto);
   }
 }
-

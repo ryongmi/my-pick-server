@@ -1,5 +1,7 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
 
+import { EntityManager } from 'typeorm';
+
 import { UserSubscriptionRepository } from '../repositories/index.js';
 import { UserSubscriptionEntity } from '../entities/index.js';
 import { SubscribeCreatorDto } from '../dto/index.js';
@@ -65,7 +67,7 @@ export class UserSubscriptionService {
 
   // ==================== 변경 메서드 ====================
 
-  async subscribeToCreator(dto: SubscribeCreatorDto): Promise<void> {
+  async subscribeToCreator(dto: SubscribeCreatorDto, transactionManager?: EntityManager): Promise<void> {
     try {
       // 1. 중복 구독 확인
       const exists = await this.userSubscriptionRepo.exists({
@@ -88,7 +90,7 @@ export class UserSubscriptionService {
         notificationEnabled: dto.notificationEnabled ?? true,
       });
 
-      await this.userSubscriptionRepo.save(subscription);
+      await this.userSubscriptionRepo.saveEntity(subscription, transactionManager);
 
       // 3. 성공 로깅
       this.logger.log('User subscribed to creator successfully', {

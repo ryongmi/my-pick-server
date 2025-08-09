@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Query,
-  ParseUUIDPipe,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, ParseUUIDPipe } from '@nestjs/common';
 
 import { Serialize } from '@krgeobuk/core/decorators';
 import { PaginatedResult } from '@krgeobuk/core/interfaces';
@@ -53,7 +47,6 @@ export class CreatorController {
     return await this.creatorService.searchCreators(query);
   }
 
-
   @Get(':id')
   @SwaggerApiOperation({
     summary: '크리에이터 상세 조회',
@@ -83,8 +76,6 @@ export class CreatorController {
     return await this.creatorService.getCreatorById(creatorId);
   }
 
-
-
   // ==================== 플랫폼 관리 ====================
 
   @Get(':id/platforms')
@@ -105,11 +96,6 @@ export class CreatorController {
   async getCreatorPlatforms(@Param('id', ParseUUIDPipe) creatorId: string) {
     return await this.platformService.findByCreatorId(creatorId);
   }
-
-
-
-
-
 
   // ==================== 향상된 통계 ====================
 
@@ -144,5 +130,4 @@ export class CreatorController {
       totalViews: creatorDetail.platformStats.totalViews,
     };
   }
-
 }

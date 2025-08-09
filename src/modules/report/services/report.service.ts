@@ -1,5 +1,6 @@
 import { Injectable, Logger, Inject, HttpException } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+
 import { EntityManager } from 'typeorm';
 
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
@@ -36,7 +37,7 @@ export class ReportService {
     private readonly evidenceRepo: ReportEvidenceRepository,
     private readonly reviewRepo: ReportReviewRepository,
     private readonly actionRepo: ReportActionRepository,
-    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
+    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy
   ) {}
 
   // ==================== PUBLIC METHODS ====================
@@ -55,7 +56,7 @@ export class ReportService {
 
   async findByIdOrFail(reportId: string): Promise<ReportEntity> {
     const report = await this.findById(reportId);
-    
+
     if (!report) {
       this.logger.warn('Report not found', { reportId });
       throw ReportException.reportNotFound();
@@ -78,8 +79,8 @@ export class ReportService {
       const offset = (page - 1) * limit;
 
       // 쿼리 조건 구성
-      const whereConditions: any = {};
-      
+      const whereConditions: Record<string, unknown> = {};
+
       if (query.status) whereConditions.status = query.status;
       if (query.targetType) whereConditions.targetType = query.targetType;
       if (query.targetId) whereConditions.targetId = query.targetId;
@@ -87,7 +88,7 @@ export class ReportService {
       if (query.priority) whereConditions.priority = query.priority;
 
       // 정렬 조건
-      const orderBy: any = {};
+      const orderBy: Record<string, 'ASC' | 'DESC'> = {};
       const sortBy = query.sortBy || 'createdAt';
       const sortOrder = query.sortOrder || 'DESC';
       orderBy[sortBy] = sortOrder;
@@ -190,20 +191,26 @@ export class ReportService {
       const priority = this.calculateReportPriority(dto.reason);
 
       // 신고 생성
-      const reportData: Partial<ReportEntity> = {
+      const reportData: any = {
         reporterId,
         targetType: dto.targetType,
         targetId: dto.targetId,
         reason: dto.reason,
-        description: dto.description,
         status: ReportStatus.PENDING,
         priority,
       };
 
+      if (dto.description !== undefined) {
+        reportData.description = dto.description;
+      }
+
       const report = await this.reportRepo.createReport(reportData);
 
       // 증거 정보가 있다면 별도 엔티티로 저장
-      if (dto.evidence && (dto.evidence.screenshots || dto.evidence.urls || dto.evidence.additionalInfo)) {
+      if (
+        dto.evidence &&
+        (dto.evidence.screenshots || dto.evidence.urls || dto.evidence.additionalInfo)
+      ) {
         await this.evidenceRepo.saveEvidence(report.id, dto.evidence);
       }
 
@@ -258,21 +265,33 @@ export class ReportService {
       await this.reportRepo.updateReport(reportId, { status: dto.status });
 
       // 검토 정보 저장
-      await this.reviewRepo.saveReview(reportId, {
+      const reviewData: any = {
         reviewerId,
         reviewedAt: new Date(),
-        reviewComment: dto.reviewComment,
-      });
+      };
+
+      if (dto.reviewComment !== undefined) {
+        reviewData.reviewComment = dto.reviewComment;
+      }
+
+      await this.reviewRepo.saveReview(reportId, reviewData);
 
       // 조치 정보가 있다면 저장
       if (dto.actions) {
-        await this.actionRepo.saveAction(reportId, {
-          actionType: dto.actions.actionType as ReportActionType || ReportActionType.NONE,
-          duration: dto.actions.duration,
-          reason: dto.actions.reason,
+        const actionData: any = {
+          actionType: (dto.actions.actionType as ReportActionType) || ReportActionType.NONE,
           executedBy: reviewerId,
           executionStatus: 'pending',
-        });
+        };
+
+        if (dto.actions.duration !== undefined) {
+          actionData.duration = dto.actions.duration;
+        }
+        if (dto.actions.reason !== undefined) {
+          actionData.reason = dto.actions.reason;
+        }
+
+        await this.actionRepo.saveAction(reportId, actionData);
 
         // 조치 실행
         if (dto.actions.actionType && dto.actions.actionType !== 'none') {
@@ -342,7 +361,7 @@ export class ReportService {
       });
 
       await Promise.all(
-        reportIds.map(reportId => this.reportRepo.updateReport(reportId, { status }))
+        reportIds.map((reportId) => this.reportRepo.updateReport(reportId, { status }))
       );
 
       this.logger.log('Batch status update completed', {
@@ -365,7 +384,7 @@ export class ReportService {
   }> {
     try {
       const pendingReports = await this.reportRepo.findPendingReports(limit);
-      
+
       let processed = 0;
       let failed = 0;
 
@@ -373,8 +392,8 @@ export class ReportService {
         try {
           // 자동 처리 로직 (단순한 규칙 기반)
           if (await this.shouldAutoResolve(report)) {
-            await this.reportRepo.updateReport(report.id, { 
-              status: ReportStatus.DISMISSED 
+            await this.reportRepo.updateReport(report.id, {
+              status: ReportStatus.DISMISSED,
             });
             processed++;
           }
@@ -478,33 +497,68 @@ export class ReportService {
         this.getTargetInfo(report.targetType, report.targetId),
       ]);
 
-      return {
+      const result: any = {
         id: report.id,
         reporterId: report.reporterId,
         targetType: report.targetType,
         targetId: report.targetId,
         reason: report.reason,
-        description: report.description,
-        evidence: evidence ? {
-          screenshots: evidence.screenshots,
-          urls: evidence.urls,
-          additionalInfo: evidence.additionalInfo,
-        } : undefined,
         status: report.status,
-        reviewerId: review?.reviewerId,
-        reviewedAt: review?.reviewedAt,
-        reviewComment: review?.reviewComment,
-        actions: action ? {
-          actionType: action.actionType as any,
-          duration: action.duration,
-          reason: action.reason,
-        } : undefined,
         priority: report.priority,
         createdAt: report.createdAt,
         updatedAt: report.updatedAt,
-        reporterInfo,
-        targetInfo,
       };
+
+      // Handle optional properties conditionally
+      if (report.description !== undefined) {
+        result.description = report.description;
+      }
+
+      if (evidence) {
+        const evidenceData: any = {};
+        if (evidence.screenshots !== undefined) {
+          evidenceData.screenshots = evidence.screenshots;
+        }
+        if (evidence.urls !== undefined) {
+          evidenceData.urls = evidence.urls;
+        }
+        if (evidence.additionalInfo !== undefined) {
+          evidenceData.additionalInfo = evidence.additionalInfo;
+        }
+        result.evidence = evidenceData;
+      }
+
+      if (review?.reviewerId !== undefined) {
+        result.reviewerId = review.reviewerId;
+      }
+      if (review?.reviewedAt !== undefined) {
+        result.reviewedAt = review.reviewedAt;
+      }
+      if (review?.reviewComment !== undefined) {
+        result.reviewComment = review.reviewComment;
+      }
+
+      if (action) {
+        const actionData: any = {
+          actionType: action.actionType as ReportActionType,
+        };
+        if (action.duration !== undefined) {
+          actionData.duration = action.duration;
+        }
+        if (action.reason !== undefined) {
+          actionData.reason = action.reason;
+        }
+        result.actions = actionData;
+      }
+
+      if (reporterInfo !== undefined) {
+        result.reporterInfo = reporterInfo;
+      }
+      if (targetInfo !== undefined) {
+        result.targetInfo = targetInfo;
+      }
+
+      return result;
     } catch (error: unknown) {
       this.logger.warn('Failed to build report detail', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -512,25 +566,34 @@ export class ReportService {
       });
 
       // 최소한의 정보만 반환
-      return {
+      const basicDetail: any = {
         id: report.id,
         reporterId: report.reporterId,
         targetType: report.targetType,
         targetId: report.targetId,
         reason: report.reason,
-        description: report.description,
         status: report.status,
         priority: report.priority,
         createdAt: report.createdAt,
         updatedAt: report.updatedAt,
       };
+
+      if (report.description !== undefined) {
+        basicDetail.description = report.description;
+      }
+
+      return basicDetail;
     }
   }
 
-  private async getReporterInfo(reporterId: string): Promise<{ email: string; name?: string } | undefined> {
+  private async getReporterInfo(
+    reporterId: string
+  ): Promise<{ email: string; name?: string } | undefined> {
     try {
-      const userInfo = await this.authClient.send('user.findById', { userId: reporterId }).toPromise();
-      
+      const userInfo = await this.authClient
+        .send('user.findById', { userId: reporterId })
+        .toPromise();
+
       if (userInfo) {
         return {
           email: userInfo.email,
@@ -547,38 +610,54 @@ export class ReportService {
     return undefined;
   }
 
-  private async getTargetInfo(targetType: ReportTargetType, targetId: string): Promise<{ title?: string; name?: string; type?: string } | undefined> {
+  private async getTargetInfo(
+    targetType: ReportTargetType,
+    targetId: string
+  ): Promise<{ title?: string; name?: string; type?: string } | undefined> {
     try {
       switch (targetType) {
-        case ReportTargetType.USER:
-          const userInfo = await this.authClient.send('user.findById', { userId: targetId }).toPromise();
+        case ReportTargetType.USER: {
+          const userInfo = await this.authClient
+            .send('user.findById', { userId: targetId })
+            .toPromise();
           return userInfo ? { name: userInfo.name || userInfo.email, type: 'user' } : undefined;
-          
-        case ReportTargetType.CREATOR:
+        }
+
+        case ReportTargetType.CREATOR: {
           try {
             // Creator 서비스를 통해 크리에이터 정보 조회
-            const creatorInfo = await this.authClient.send('creator.findById', { creatorId: targetId }).toPromise();
-            return creatorInfo ? { 
-              name: creatorInfo.displayName || creatorInfo.name, 
-              type: 'creator' 
-            } : { name: `Creator ${targetId}`, type: 'creator' };
+            const creatorInfo = await this.authClient
+              .send('creator.findById', { creatorId: targetId })
+              .toPromise();
+            return creatorInfo
+              ? {
+                  name: creatorInfo.displayName || creatorInfo.name,
+                  type: 'creator',
+                }
+              : { name: `Creator ${targetId}`, type: 'creator' };
           } catch {
             return { name: `Creator ${targetId}`, type: 'creator' };
           }
-          
-        case ReportTargetType.CONTENT:
+        }
+
+        case ReportTargetType.CONTENT: {
           try {
             // Content 서비스를 통해 콘텐츠 정보 조회
-            const contentInfo = await this.authClient.send('content.findById', { contentId: targetId }).toPromise();
-            return contentInfo ? { 
-              title: contentInfo.title, 
-              name: contentInfo.title,
-              type: 'content' 
-            } : { title: `Content ${targetId}`, type: 'content' };
+            const contentInfo = await this.authClient
+              .send('content.findById', { contentId: targetId })
+              .toPromise();
+            return contentInfo
+              ? {
+                  title: contentInfo.title,
+                  name: contentInfo.title,
+                  type: 'content',
+                }
+              : { title: `Content ${targetId}`, type: 'content' };
           } catch {
             return { title: `Content ${targetId}`, type: 'content' };
           }
-          
+        }
+
         default:
           return undefined;
       }
@@ -588,7 +667,7 @@ export class ReportService {
         targetType,
         targetId,
       });
-      
+
       // 기본값 반환
       switch (targetType) {
         case ReportTargetType.CREATOR:
@@ -601,26 +680,34 @@ export class ReportService {
     }
   }
 
-  private async validateReportTarget(targetType: ReportTargetType, targetId: string): Promise<void> {
+  private async validateReportTarget(
+    targetType: ReportTargetType,
+    targetId: string
+  ): Promise<void> {
     if (!targetId || targetId.trim().length === 0) {
       throw ReportException.invalidReportData();
     }
 
     try {
       switch (targetType) {
-        case ReportTargetType.USER:
+        case ReportTargetType.USER: {
           // Auth 서비스를 통해 사용자 존재 확인
-          const userExists = await this.authClient.send('user.exists', { userId: targetId }).toPromise();
+          const userExists = await this.authClient
+            .send('user.exists', { userId: targetId })
+            .toPromise();
           if (!userExists) {
             this.logger.warn('Report target user not found', { targetId });
             throw ReportException.targetNotFound();
           }
           break;
+        }
 
-        case ReportTargetType.CREATOR:
+        case ReportTargetType.CREATOR: {
           // Creator 서비스를 통해 크리에이터 존재 확인
           try {
-            const creatorExists = await this.authClient.send('creator.exists', { creatorId: targetId }).toPromise();
+            const creatorExists = await this.authClient
+              .send('creator.exists', { creatorId: targetId })
+              .toPromise();
             if (!creatorExists) {
               this.logger.warn('Report target creator not found', { targetId });
               throw ReportException.targetNotFound();
@@ -633,11 +720,14 @@ export class ReportService {
             // 크리에이터 검증 실패 시에도 신고는 허용 (수동 검토를 위해)
           }
           break;
+        }
 
-        case ReportTargetType.CONTENT:
+        case ReportTargetType.CONTENT: {
           // Content 서비스를 통해 콘텐츠 존재 확인
           try {
-            const contentExists = await this.authClient.send('content.exists', { contentId: targetId }).toPromise();
+            const contentExists = await this.authClient
+              .send('content.exists', { contentId: targetId })
+              .toPromise();
             if (!contentExists) {
               this.logger.warn('Report target content not found', { targetId });
               throw ReportException.targetNotFound();
@@ -650,6 +740,7 @@ export class ReportService {
             // 콘텐츠 검증 실패 시에도 신고는 허용 (수동 검토를 위해)
           }
           break;
+        }
 
         default:
           throw ReportException.invalidReportData();
@@ -664,7 +755,7 @@ export class ReportService {
         targetType,
         targetId,
       });
-      
+
       // 검증 실패 시에도 신고는 허용 (관리자가 수동으로 검토할 수 있도록)
     }
   }
@@ -675,12 +766,12 @@ export class ReportService {
       case ReportReason.HATE_SPEECH:
       case ReportReason.HARASSMENT:
         return 1; // 높음
-        
+
       case ReportReason.INAPPROPRIATE_CONTENT:
       case ReportReason.COPYRIGHT_VIOLATION:
       case ReportReason.SCAM:
         return 2; // 보통
-        
+
       default:
         return 3; // 낮음
     }
@@ -689,7 +780,11 @@ export class ReportService {
   private validateStatusTransition(currentStatus: ReportStatus, newStatus: ReportStatus): void {
     const validTransitions: Record<ReportStatus, ReportStatus[]> = {
       [ReportStatus.PENDING]: [ReportStatus.UNDER_REVIEW, ReportStatus.DISMISSED],
-      [ReportStatus.UNDER_REVIEW]: [ReportStatus.RESOLVED, ReportStatus.REJECTED, ReportStatus.DISMISSED],
+      [ReportStatus.UNDER_REVIEW]: [
+        ReportStatus.RESOLVED,
+        ReportStatus.REJECTED,
+        ReportStatus.DISMISSED,
+      ],
       [ReportStatus.RESOLVED]: [],
       [ReportStatus.REJECTED]: [],
       [ReportStatus.DISMISSED]: [],
@@ -702,9 +797,17 @@ export class ReportService {
 
   private async executeReportAction(
     report: ReportEntity,
-    actions: { actionType: string; duration?: number; reason?: string }
+    actions: { actionType?: string; duration?: number; reason?: string }
   ): Promise<void> {
     try {
+      // actionType이 없으면 아무 작업도 하지 않음
+      if (!actions.actionType) {
+        this.logger.debug('No action type specified, skipping action execution', {
+          reportId: report.id,
+        });
+        return;
+      }
+
       this.logger.log('Executing report action', {
         reportId: report.id,
         actionType: actions.actionType,
@@ -713,21 +816,28 @@ export class ReportService {
         targetId: report.targetId,
       });
 
-      switch (actions.actionType) {
+      // 이제 actionType이 존재함을 TypeScript가 알 수 있음
+      const confirmedActions = actions as {
+        actionType: string;
+        duration?: number;
+        reason?: string;
+      };
+
+      switch (confirmedActions.actionType) {
         case ReportActionType.WARNING:
-          await this.executeWarningAction(report, actions);
+          await this.executeWarningAction(report, confirmedActions);
           break;
 
         case ReportActionType.SUSPENSION:
-          await this.executeSuspensionAction(report, actions);
+          await this.executeSuspensionAction(report, confirmedActions);
           break;
 
         case ReportActionType.BAN:
-          await this.executeBanAction(report, actions);
+          await this.executeBanAction(report, confirmedActions);
           break;
 
         case ReportActionType.CONTENT_REMOVAL:
-          await this.executeContentRemovalAction(report, actions);
+          await this.executeContentRemovalAction(report, confirmedActions);
           break;
 
         case ReportActionType.NONE:
@@ -756,7 +866,7 @@ export class ReportService {
         targetType: report.targetType,
         targetId: report.targetId,
       });
-      
+
       // 조치 실행 실패 상태 업데이트
       await this.actionRepo.updateAction(report.id, {
         executionStatus: 'failed',
@@ -771,11 +881,13 @@ export class ReportService {
     try {
       if (report.targetType === ReportTargetType.USER) {
         // Auth 서비스에 경고 요청 전송
-        await this.authClient.send('user.sendWarning', {
-          userId: report.targetId,
-          reason: actions.reason || '신고로 인한 경고',
-          reportId: report.id,
-        }).toPromise();
+        await this.authClient
+          .send('user.sendWarning', {
+            userId: report.targetId,
+            reason: actions.reason || '신고로 인한 경고',
+            reportId: report.id,
+          })
+          .toPromise();
 
         this.logger.log('Warning sent to user', {
           reportId: report.id,
@@ -799,12 +911,14 @@ export class ReportService {
     try {
       if (report.targetType === ReportTargetType.USER) {
         // Auth 서비스에 정지 요청 전송
-        await this.authClient.send('user.suspend', {
-          userId: report.targetId,
-          duration: actions.duration || 7, // 기본 7일
-          reason: actions.reason || '신고로 인한 계정 정지',
-          reportId: report.id,
-        }).toPromise();
+        await this.authClient
+          .send('user.suspend', {
+            userId: report.targetId,
+            duration: actions.duration || 7, // 기본 7일
+            reason: actions.reason || '신고로 인한 계정 정지',
+            reportId: report.id,
+          })
+          .toPromise();
 
         this.logger.log('User suspended', {
           reportId: report.id,
@@ -813,12 +927,14 @@ export class ReportService {
         });
       } else if (report.targetType === ReportTargetType.CREATOR) {
         // Creator 서비스에 정지 요청 전송
-        await this.authClient.send('creator.suspend', {
-          creatorId: report.targetId,
-          duration: actions.duration || 7,
-          reason: actions.reason || '신고로 인한 크리에이터 정지',
-          reportId: report.id,
-        }).toPromise();
+        await this.authClient
+          .send('creator.suspend', {
+            creatorId: report.targetId,
+            duration: actions.duration || 7,
+            reason: actions.reason || '신고로 인한 크리에이터 정지',
+            reportId: report.id,
+          })
+          .toPromise();
 
         this.logger.log('Creator suspended', {
           reportId: report.id,
@@ -844,13 +960,15 @@ export class ReportService {
     try {
       if (report.targetType === ReportTargetType.USER) {
         // Auth 서비스에 차단 요청 전송
-        await this.authClient.send('user.ban', {
-          userId: report.targetId,
-          reason: actions.reason || '신고로 인한 계정 차단',
-          reportId: report.id,
-          permanent: !actions.duration, // duration이 없으면 영구 차단
-          duration: actions.duration,
-        }).toPromise();
+        await this.authClient
+          .send('user.ban', {
+            userId: report.targetId,
+            reason: actions.reason || '신고로 인한 계정 차단',
+            reportId: report.id,
+            permanent: !actions.duration, // duration이 없으면 영구 차단
+            duration: actions.duration,
+          })
+          .toPromise();
 
         this.logger.log('User banned', {
           reportId: report.id,
@@ -860,13 +978,15 @@ export class ReportService {
         });
       } else if (report.targetType === ReportTargetType.CREATOR) {
         // Creator 서비스에 차단 요청 전송
-        await this.authClient.send('creator.ban', {
-          creatorId: report.targetId,
-          reason: actions.reason || '신고로 인한 크리에이터 차단',
-          reportId: report.id,
-          permanent: !actions.duration,
-          duration: actions.duration,
-        }).toPromise();
+        await this.authClient
+          .send('creator.ban', {
+            creatorId: report.targetId,
+            reason: actions.reason || '신고로 인한 크리에이터 차단',
+            reportId: report.id,
+            permanent: !actions.duration,
+            duration: actions.duration,
+          })
+          .toPromise();
 
         this.logger.log('Creator banned', {
           reportId: report.id,
@@ -893,11 +1013,13 @@ export class ReportService {
     try {
       if (report.targetType === ReportTargetType.CONTENT) {
         // Content 서비스에 삭제 요청 전송
-        await this.authClient.send('content.remove', {
-          contentId: report.targetId,
-          reason: actions.reason || '신고로 인한 콘텐츠 삭제',
-          reportId: report.id,
-        }).toPromise();
+        await this.authClient
+          .send('content.remove', {
+            contentId: report.targetId,
+            reason: actions.reason || '신고로 인한 콘텐츠 삭제',
+            reportId: report.id,
+          })
+          .toPromise();
 
         this.logger.log('Content removed', {
           reportId: report.id,
@@ -921,7 +1043,10 @@ export class ReportService {
     if (report.priority === 3) {
       const daysSinceCreated = (Date.now() - report.createdAt.getTime()) / (1000 * 60 * 60 * 24);
       if (daysSinceCreated > 7) {
-        const relatedReports = await this.reportRepo.getCountByTarget(report.targetType, report.targetId);
+        const relatedReports = await this.reportRepo.getCountByTarget(
+          report.targetType,
+          report.targetId
+        );
         return relatedReports <= 2;
       }
     }

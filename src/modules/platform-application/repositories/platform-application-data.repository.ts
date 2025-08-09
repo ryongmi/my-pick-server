@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+
 import { DataSource } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
@@ -19,7 +20,7 @@ export class PlatformApplicationDataRepository extends BaseRepository<PlatformAp
   }
 
   async findByPlatformTypeAndId(
-    type: PlatformType, 
+    type: PlatformType,
     platformId: string
   ): Promise<PlatformApplicationDataEntity | null> {
     return this.findOne({

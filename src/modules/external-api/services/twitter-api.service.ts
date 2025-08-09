@@ -476,24 +476,28 @@ export class TwitterApiService {
         listedCount: user.public_metrics.listed_count,
       },
       entities: {
-        url: user.entities?.url ? { 
-          urls: (user.entities.url.urls || []).map((urlEntity) => ({
-            start: 0, // User entities don't have start/end positions
-            end: 0,
-            url: urlEntity.url,
-            expanded_url: urlEntity.expanded_url,
-            display_url: urlEntity.display_url,
-          }))
-        } : undefined,
-        description: user.entities?.description ? { 
-          urls: (user.entities.description.urls || []).map((urlEntity) => ({
-            start: 0, // User entities don't have start/end positions
-            end: 0,
-            url: urlEntity.url,
-            expanded_url: urlEntity.expanded_url,
-            display_url: urlEntity.display_url,
-          }))
-        } : undefined,
+        url: user.entities?.url
+          ? {
+              urls: (user.entities.url.urls || []).map((urlEntity) => ({
+                start: 0, // User entities don't have start/end positions
+                end: 0,
+                url: urlEntity.url,
+                expanded_url: urlEntity.expanded_url,
+                display_url: urlEntity.display_url,
+              })),
+            }
+          : undefined,
+        description: user.entities?.description
+          ? {
+              urls: (user.entities.description.urls || []).map((urlEntity) => ({
+                start: 0, // User entities don't have start/end positions
+                end: 0,
+                url: urlEntity.url,
+                expanded_url: urlEntity.expanded_url,
+                display_url: urlEntity.display_url,
+              })),
+            }
+          : undefined,
       },
     };
   }
@@ -571,4 +575,3 @@ export class TwitterApiService {
     };
   }
 }
-

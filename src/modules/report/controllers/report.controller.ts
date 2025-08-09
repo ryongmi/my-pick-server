@@ -72,7 +72,7 @@ export class ReportController {
   })
   async createReport(
     @Body() dto: CreateReportDto,
-    @CurrentJwt() { id: userId }: JwtPayload,
+    @CurrentJwt() { id: userId }: JwtPayload
   ): Promise<void> {
     this.logger.debug('Creating new report', {
       userId,
@@ -103,9 +103,9 @@ export class ReportController {
   @UseGuards(AuthorizationGuard)
   @RequireRole('admin', 'superAdmin')
   @RequirePermission('reports:read')
-  @Serialize(ReportDetailDto)
+  @Serialize({ dto: ReportDetailDto })
   async getReports(
-    @Query() query: ReportSearchQueryDto,
+    @Query() query: ReportSearchQueryDto
   ): Promise<PaginatedResult<ReportDetailDto>> {
     this.logger.debug('Fetching reports list', {
       page: query.page,
@@ -139,10 +139,8 @@ export class ReportController {
   @UseGuards(AuthorizationGuard)
   @RequireRole('admin', 'superAdmin')
   @RequirePermission('reports:read')
-  @Serialize(ReportDetailDto)
-  async getReportById(
-    @Param('id', ParseUUIDPipe) reportId: string,
-  ): Promise<ReportDetailDto> {
+  @Serialize({ dto: ReportDetailDto })
+  async getReportById(@Param('id', ParseUUIDPipe) reportId: string): Promise<ReportDetailDto> {
     this.logger.debug('Fetching report detail', { reportId });
 
     return await this.reportService.getReportById(reportId);
@@ -181,7 +179,7 @@ export class ReportController {
   async reviewReport(
     @Param('id', ParseUUIDPipe) reportId: string,
     @Body() dto: ReviewReportDto,
-    @CurrentJwt() { id: reviewerId }: JwtPayload,
+    @CurrentJwt() { id: reviewerId }: JwtPayload
   ): Promise<void> {
     this.logger.debug('Reviewing report', {
       reportId,
@@ -224,9 +222,7 @@ export class ReportController {
   @UseGuards(AuthorizationGuard)
   @RequireRole('superAdmin')
   @RequirePermission('reports:delete')
-  async deleteReport(
-    @Param('id', ParseUUIDPipe) reportId: string,
-  ): Promise<void> {
+  async deleteReport(@Param('id', ParseUUIDPipe) reportId: string): Promise<void> {
     this.logger.debug('Deleting report', { reportId });
 
     await this.reportService.deleteReport(reportId);
@@ -275,7 +271,7 @@ export class ReportController {
   @RequireRole('superAdmin')
   @RequirePermission('reports:write')
   async batchProcessReports(
-    @Query('limit') limit?: number,
+    @Query('limit') limit?: number
   ): Promise<{ processed: number; failed: number }> {
     this.logger.debug('Starting batch report processing', { limit });
 

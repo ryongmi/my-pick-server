@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+
 import { DataSource, Repository, FindManyOptions, Between, MoreThan } from 'typeorm';
 
 import { ReportEntity } from '../entities/index.js';
@@ -32,11 +33,16 @@ export class ReportRepository extends Repository<ReportEntity> {
   // ==================== 검색 및 필터링 메서드 ====================
 
   async findByReporter(reporterId: string, limit?: number): Promise<ReportEntity[]> {
-    return this.find({
+    const findOptions: any = {
       where: { reporterId },
       order: { createdAt: 'DESC' },
-      take: limit,
-    });
+    };
+
+    if (limit !== undefined) {
+      findOptions.take = limit;
+    }
+
+    return this.find(findOptions);
   }
 
   async findByTarget(targetType: ReportTargetType, targetId: string): Promise<ReportEntity[]> {
@@ -47,19 +53,29 @@ export class ReportRepository extends Repository<ReportEntity> {
   }
 
   async findByStatus(status: ReportStatus, limit?: number): Promise<ReportEntity[]> {
-    return this.find({
+    const findOptions: any = {
       where: { status },
       order: { createdAt: 'ASC' }, // 오래된 신고부터 처리
-      take: limit,
-    });
+    };
+
+    if (limit !== undefined) {
+      findOptions.take = limit;
+    }
+
+    return this.find(findOptions);
   }
 
   async findPendingReports(limit?: number): Promise<ReportEntity[]> {
-    return this.find({
+    const findOptions: any = {
       where: { status: ReportStatus.PENDING },
       order: { priority: 'ASC', createdAt: 'ASC' }, // 우선순위, 생성시간 순
-      take: limit,
-    });
+    };
+
+    if (limit !== undefined) {
+      findOptions.take = limit;
+    }
+
+    return this.find(findOptions);
   }
 
   // ==================== 통계 메서드 ====================
@@ -92,7 +108,7 @@ export class ReportRepository extends Repository<ReportEntity> {
   async findDuplicateReport(
     reporterId: string,
     targetType: ReportTargetType,
-    targetId: string,
+    targetId: string
   ): Promise<ReportEntity | null> {
     return this.findOne({
       where: {
@@ -106,33 +122,37 @@ export class ReportRepository extends Repository<ReportEntity> {
 
   // ==================== 최적화된 쿼리 메서드 ====================
 
-  async getReportStatsByTargetType(): Promise<Array<{
-    targetType: ReportTargetType;
-    count: number;
-  }>> {
+  async getReportStatsByTargetType(): Promise<
+    Array<{
+      targetType: ReportTargetType;
+      count: number;
+    }>
+  > {
     const result = await this.createQueryBuilder('report')
       .select('report.targetType', 'targetType')
       .addSelect('COUNT(*)', 'count')
       .groupBy('report.targetType')
       .getRawMany();
 
-    return result.map(item => ({
+    return result.map((item) => ({
       targetType: item.targetType,
       count: parseInt(item.count, 10),
     }));
   }
 
-  async getReportStatsByStatus(): Promise<Array<{
-    status: ReportStatus;
-    count: number;
-  }>> {
+  async getReportStatsByStatus(): Promise<
+    Array<{
+      status: ReportStatus;
+      count: number;
+    }>
+  > {
     const result = await this.createQueryBuilder('report')
       .select('report.status', 'status')
       .addSelect('COUNT(*)', 'count')
       .groupBy('report.status')
       .getRawMany();
 
-    return result.map(item => ({
+    return result.map((item) => ({
       status: item.status,
       count: parseInt(item.count, 10),
     }));
@@ -140,10 +160,12 @@ export class ReportRepository extends Repository<ReportEntity> {
 
   // ==================== 강화된 통계 메서드 ====================
 
-  async getReportStatsByReason(): Promise<Array<{
-    reason: ReportReason;
-    count: number;
-  }>> {
+  async getReportStatsByReason(): Promise<
+    Array<{
+      reason: ReportReason;
+      count: number;
+    }>
+  > {
     const result = await this.createQueryBuilder('report')
       .select('report.reason', 'reason')
       .addSelect('COUNT(*)', 'count')
@@ -151,7 +173,7 @@ export class ReportRepository extends Repository<ReportEntity> {
       .orderBy('count', 'DESC')
       .getRawMany();
 
-    return result.map(item => ({
+    return result.map((item) => ({
       reason: item.reason,
       count: parseInt(item.count, 10),
     }));
@@ -167,10 +189,15 @@ export class ReportRepository extends Repository<ReportEntity> {
     });
   }
 
-  async getTopReportedTargets(targetType: ReportTargetType, limit = 10): Promise<Array<{
-    targetId: string;
-    count: number;
-  }>> {
+  async getTopReportedTargets(
+    targetType: ReportTargetType,
+    limit = 10
+  ): Promise<
+    Array<{
+      targetId: string;
+      count: number;
+    }>
+  > {
     const result = await this.createQueryBuilder('report')
       .select('report.targetId', 'targetId')
       .addSelect('COUNT(*)', 'count')
@@ -180,16 +207,18 @@ export class ReportRepository extends Repository<ReportEntity> {
       .limit(limit)
       .getRawMany();
 
-    return result.map(item => ({
+    return result.map((item) => ({
       targetId: item.targetId,
       count: parseInt(item.count, 10),
     }));
   }
 
-  async getReportTrends(days = 30): Promise<Array<{
-    date: string;
-    count: number;
-  }>> {
+  async getReportTrends(days = 30): Promise<
+    Array<{
+      date: string;
+      count: number;
+    }>
+  > {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
@@ -201,7 +230,7 @@ export class ReportRepository extends Repository<ReportEntity> {
       .orderBy('date', 'ASC')
       .getRawMany();
 
-    return result.map(item => ({
+    return result.map((item) => ({
       date: item.date,
       count: parseInt(item.count, 10),
     }));

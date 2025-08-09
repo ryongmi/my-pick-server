@@ -1,3 +1,5 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { Type } from 'class-transformer';
 import {
   IsString,
@@ -10,7 +12,6 @@ import {
   MaxLength,
 } from 'class-validator';
 import { Expose } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 import { PlatformType, VerificationProofType } from '../enums/index.js';
 

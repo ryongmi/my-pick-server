@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+
+import { DataSource, Repository, MoreThanOrEqual } from 'typeorm';
 
 import { ReportReviewEntity } from '../entities/index.js';
 
@@ -13,26 +14,51 @@ export class ReportReviewRepository extends Repository<ReportReviewEntity> {
     return this.findOne({ where: { reportId } });
   }
 
-  async saveReview(reportId: string, reviewData: {
-    reviewerId?: string;
-    reviewedAt?: Date;
-    reviewComment?: string;
-  }): Promise<void> {
+  async saveReview(
+    reportId: string,
+    reviewData: {
+      reviewerId?: string;
+      reviewedAt?: Date;
+      reviewComment?: string;
+    }
+  ): Promise<void> {
     const review = new ReportReviewEntity();
     review.reportId = reportId;
-    review.reviewerId = reviewData.reviewerId;
-    review.reviewedAt = reviewData.reviewedAt;
-    review.reviewComment = reviewData.reviewComment;
+
+    if (reviewData.reviewerId !== undefined) {
+      review.reviewerId = reviewData.reviewerId;
+    }
+    if (reviewData.reviewedAt !== undefined) {
+      review.reviewedAt = reviewData.reviewedAt;
+    }
+    if (reviewData.reviewComment !== undefined) {
+      review.reviewComment = reviewData.reviewComment;
+    }
 
     await this.save(review);
   }
 
-  async updateReview(reportId: string, reviewData: Partial<{
-    reviewerId: string;
-    reviewedAt: Date;
-    reviewComment: string;
-  }>): Promise<void> {
-    await this.update({ reportId }, reviewData);
+  async updateReview(
+    reportId: string,
+    reviewData: Partial<{
+      reviewerId: string;
+      reviewedAt: Date;
+      reviewComment: string;
+    }>
+  ): Promise<void> {
+    const updateData: any = {};
+
+    if (reviewData.reviewerId !== undefined) {
+      updateData.reviewerId = reviewData.reviewerId;
+    }
+    if (reviewData.reviewedAt !== undefined) {
+      updateData.reviewedAt = reviewData.reviewedAt;
+    }
+    if (reviewData.reviewComment !== undefined) {
+      updateData.reviewComment = reviewData.reviewComment;
+    }
+
+    await this.update({ reportId }, updateData);
   }
 
   async findByReviewerId(reviewerId: string, limit = 50): Promise<ReportReviewEntity[]> {
@@ -57,7 +83,7 @@ export class ReportReviewRepository extends Repository<ReportReviewEntity> {
       this.count({
         where: {
           reviewerId,
-          reviewedAt: { $gte: startOfMonth } as any,
+          reviewedAt: MoreThanOrEqual(startOfMonth),
         },
       }),
     ]);
@@ -70,8 +96,9 @@ export class ReportReviewRepository extends Repository<ReportReviewEntity> {
       .andWhere('review.reviewedAt IS NOT NULL')
       .getRawOne();
 
-    const averageReviewTime = averageTimeResult?.avgHours ? 
-      Math.round(parseFloat(averageTimeResult.avgHours) * 100) / 100 : 0;
+    const averageReviewTime = averageTimeResult?.avgHours
+      ? Math.round(parseFloat(averageTimeResult.avgHours) * 100) / 100
+      : 0;
 
     return {
       totalReviews,

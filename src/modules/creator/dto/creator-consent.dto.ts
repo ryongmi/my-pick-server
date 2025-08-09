@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { Expose, Type } from 'class-transformer';
 
 import { ConsentType } from '../entities/index.js';

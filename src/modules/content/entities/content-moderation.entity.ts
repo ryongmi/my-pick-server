@@ -9,32 +9,32 @@ export class ContentModerationEntity {
   @PrimaryColumn({ comment: '외래키(content.id)이자 기본키 - 1:1 관계 최적화' })
   contentId!: string;
 
-  @Column({ 
-    type: 'enum', 
-    enum: ['active', 'inactive', 'flagged', 'removed'], 
+  @Column({
+    type: 'enum',
+    enum: ['active', 'inactive', 'flagged', 'removed'],
     default: 'active',
-    comment: '콘텐츠 모더레이션 상태'
+    comment: '콘텐츠 모더레이션 상태',
   })
   moderationStatus!: 'active' | 'inactive' | 'flagged' | 'removed';
 
-  @Column({ 
-    type: 'text', 
+  @Column({
+    type: 'text',
     nullable: true,
-    comment: '상태 변경 사유'
+    comment: '상태 변경 사유',
   })
-  reason?: string;
+  reason?: string | null;
 
-  @Column({ 
+  @Column({
     nullable: true,
-    comment: '모더레이션 처리자 ID'
+    comment: '모더레이션 처리자 ID',
   })
-  moderatorId?: string;
+  moderatorId?: string | null;
 
-  @Column({ 
+  @Column({
     nullable: true,
-    comment: '모더레이션 처리 시간'
+    comment: '모더레이션 처리 시간',
   })
-  moderatedAt?: Date;
+  moderatedAt?: Date | null;
 
   @CreateDateColumn()
   createdAt!: Date;

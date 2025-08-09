@@ -1,6 +1,7 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { IsString, IsOptional, IsArray, MaxLength, IsEnum, ValidateIf } from 'class-validator';
 import { Expose } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 import { RejectionReason } from '../enums/index.js';
 
@@ -30,7 +31,7 @@ export class RejectApplicationDto {
     maxLength: 500,
   })
   @Expose()
-  @ValidateIf(o => o.reasons.includes(RejectionReason.OTHER))
+  @ValidateIf((o) => o.reasons.includes(RejectionReason.OTHER))
   @IsString()
   @MaxLength(500)
   customReason?: string;

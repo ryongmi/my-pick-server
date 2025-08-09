@@ -7,9 +7,7 @@ import { CreatorCategoryStatisticsEntity } from '../entities/index.js';
 export class CreatorCategoryStatisticsService {
   private readonly logger = new Logger(CreatorCategoryStatisticsService.name);
 
-  constructor(
-    private readonly categoryStatsRepo: CreatorCategoryStatisticsRepository
-  ) {}
+  constructor(private readonly categoryStatsRepo: CreatorCategoryStatisticsRepository) {}
 
   // ==================== PUBLIC METHODS ====================
 
@@ -49,7 +47,7 @@ export class CreatorCategoryStatisticsService {
     } catch (error: unknown) {
       this.logger.error('Failed to get category performance summary', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId
+        creatorId,
       });
 
       // 실패 시 기본값 반환
@@ -58,7 +56,7 @@ export class CreatorCategoryStatisticsService {
         topCategory: null,
         totalCategoryContent: 0,
         totalCategoryViews: 0,
-        averageViewsPerCategory: 0
+        averageViewsPerCategory: 0,
       };
     }
   }
@@ -87,13 +85,13 @@ export class CreatorCategoryStatisticsService {
       this.logger.debug('Category statistics updated', {
         creatorId,
         category,
-        statsKeys: Object.keys(stats)
+        statsKeys: Object.keys(stats),
       });
     } catch (error: unknown) {
       this.logger.error('Failed to update category statistics', {
         error: error instanceof Error ? error.message : 'Unknown error',
         creatorId,
-        category
+        category,
       });
       throw error;
     }
@@ -102,14 +100,17 @@ export class CreatorCategoryStatisticsService {
   /**
    * 특정 카테고리의 상위 크리에이터 조회
    */
-  async getTopCreatorsByCategory(category: string, limit = 100): Promise<CreatorCategoryStatisticsEntity[]> {
+  async getTopCreatorsByCategory(
+    category: string,
+    limit = 100
+  ): Promise<CreatorCategoryStatisticsEntity[]> {
     try {
       return await this.categoryStatsRepo.findTopByCategory(category, limit);
     } catch (error: unknown) {
       this.logger.error('Failed to get top creators by category', {
         error: error instanceof Error ? error.message : 'Unknown error',
         category,
-        limit
+        limit,
       });
       return [];
     }
@@ -118,19 +119,21 @@ export class CreatorCategoryStatisticsService {
   /**
    * 카테고리별 글로벌 랭킹 조회
    */
-  async getGlobalCategoryRankings(limit = 50): Promise<{
-    category: string;
-    totalCreators: number;
-    totalContent: number;
-    totalViews: number;
-    averageEngagement: number;
-  }[]> {
+  async getGlobalCategoryRankings(limit = 50): Promise<
+    {
+      category: string;
+      totalCreators: number;
+      totalContent: number;
+      totalViews: number;
+      averageEngagement: number;
+    }[]
+  > {
     try {
       return await this.categoryStatsRepo.getGlobalCategoryRankings(limit);
     } catch (error: unknown) {
       this.logger.error('Failed to get global category rankings', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        limit
+        limit,
       });
       return [];
     }
@@ -141,34 +144,41 @@ export class CreatorCategoryStatisticsService {
   /**
    * 여러 크리에이터의 카테고리 통계를 creatorId별로 그룹화
    */
-  async groupCategoryStatsByCreatorId(creatorIds: string[]): Promise<Record<string, CreatorCategoryStatisticsEntity[]>> {
+  async groupCategoryStatsByCreatorId(
+    creatorIds: string[]
+  ): Promise<Record<string, CreatorCategoryStatisticsEntity[]>> {
     const categoryStats = await this.findByCreatorIds(creatorIds);
-    
+
     const groupedStats: Record<string, CreatorCategoryStatisticsEntity[]> = {};
-    
+
     // 모든 creatorId를 빈 배열로 초기화
-    creatorIds.forEach(creatorId => {
+    creatorIds.forEach((creatorId) => {
       groupedStats[creatorId] = [];
     });
-    
+
     // 카테고리 통계를 creatorId별로 그룹화
-    categoryStats.forEach(stats => {
-      groupedStats[stats.creatorId].push(stats);
+    categoryStats.forEach((stats) => {
+      groupedStats[stats.creatorId]!.push(stats);
     });
-    
+
     return groupedStats;
   }
 
   /**
    * 여러 크리에이터의 카테고리 성과 요약 배치 조회
    */
-  async getCategoryPerformanceSummaryBatch(creatorIds: string[]): Promise<Record<string, {
-    totalCategories: number;
-    topCategory: string | null;
-    totalCategoryContent: number;
-    totalCategoryViews: number;
-    averageViewsPerCategory: number;
-  }>> {
+  async getCategoryPerformanceSummaryBatch(creatorIds: string[]): Promise<
+    Record<
+      string,
+      {
+        totalCategories: number;
+        topCategory: string | null;
+        totalCategoryContent: number;
+        totalCategoryViews: number;
+        averageViewsPerCategory: number;
+      }
+    >
+  > {
     const result: Record<string, any> = {};
 
     // 각 크리에이터의 카테고리 성과 요약을 개별적으로 계산

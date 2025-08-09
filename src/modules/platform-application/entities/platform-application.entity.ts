@@ -2,6 +2,8 @@ import { Entity, Column, Index } from 'typeorm';
 
 import { BaseEntityUUID } from '@krgeobuk/core/entities';
 
+import { PlatformType } from '@common/enums/index.js';
+
 import { ApplicationStatus } from '../enums/index.js';
 
 @Entity('platform_applications')
@@ -16,12 +18,18 @@ export class PlatformApplicationEntity extends BaseEntityUUID {
   @Column()
   userId!: string; // 신청자 사용자 ID (크리에이터 소유자)
 
+  @Column({ type: 'enum', enum: PlatformType })
+  platformType!: PlatformType;
+
+  @Column()
+  appliedAt!: Date;
+
   @Column({ type: 'enum', enum: ApplicationStatus, default: ApplicationStatus.PENDING })
   status!: ApplicationStatus;
 
   @Column({ nullable: true })
-  reviewedAt?: Date;
+  reviewedAt?: Date | null;
 
   @Column({ nullable: true })
-  reviewerId?: string; // 검토자 ID (admin)
+  reviewerId?: string | null; // 검토자 ID (admin)
 }

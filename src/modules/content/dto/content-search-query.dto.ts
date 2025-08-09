@@ -1,4 +1,13 @@
-import { IsOptional, IsString, IsArray, IsNumber, IsEnum, IsDateString, Min, Max } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsArray,
+  IsNumber,
+  IsEnum,
+  IsDateString,
+  Min,
+  Max,
+} from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 
 import { ContentType } from '../enums/index.js';
@@ -11,7 +20,7 @@ export class ContentSearchQueryDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  @Transform(({ value }) => typeof value === 'string' ? value.split(',') : value)
+  @Transform(({ value }) => (typeof value === 'string' ? value.split(',') : value))
   creatorIds?: string[] | undefined;
 
   @IsOptional()
@@ -29,7 +38,7 @@ export class ContentSearchQueryDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  @Transform(({ value }) => typeof value === 'string' ? value.split(',') : value)
+  @Transform(({ value }) => (typeof value === 'string' ? value.split(',') : value))
   tags?: string[] | undefined;
 
   @IsOptional()

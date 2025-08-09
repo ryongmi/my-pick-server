@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Query,
-  ParseUUIDPipe,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, ParseUUIDPipe } from '@nestjs/common';
 
 import { plainToInstance } from 'class-transformer';
 
@@ -20,7 +14,11 @@ import {
 import { UserInteractionService } from '@modules/user-interaction/index.js';
 
 import { ContentService } from '../services/index.js';
-import { ContentSearchResultDto } from '../dto/index.js';
+import {
+  ContentSearchResultDto,
+  ContentIdsResponseDto,
+  UserInteractionStatsDto,
+} from '../dto/index.js';
 
 @SwaggerApiTags({ tags: ['user-content-interaction'] })
 @Controller('users/:userId/interactions')
@@ -87,16 +85,7 @@ export class UserContentInteractionController {
   @SwaggerApiOkResponse({
     status: 200,
     description: '북마크 콘텐츠 ID 목록 조회 성공',
-    schema: {
-      type: 'object',
-      properties: {
-        contentIds: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '북마크한 콘텐츠 ID 목록',
-        },
-      },
-    },
+    dto: ContentIdsResponseDto,
   })
   async getUserBookmarks(
     @Param('userId', ParseUUIDPipe) userId: string
@@ -115,16 +104,7 @@ export class UserContentInteractionController {
   @SwaggerApiOkResponse({
     status: 200,
     description: '좋아요 콘텐츠 ID 목록 조회 성공',
-    schema: {
-      type: 'object',
-      properties: {
-        contentIds: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '좋아요한 콘텐츠 ID 목록',
-        },
-      },
-    },
+    dto: ContentIdsResponseDto,
   })
   async getUserLikes(
     @Param('userId', ParseUUIDPipe) userId: string
@@ -186,26 +166,7 @@ export class UserContentInteractionController {
   @SwaggerApiOkResponse({
     status: 200,
     description: '상호작용 통계 조회 성공',
-    schema: {
-      type: 'object',
-      properties: {
-        totalInteractions: {
-          type: 'number',
-          description: '총 상호작용 수',
-          example: 150,
-        },
-        bookmarkCount: {
-          type: 'number',
-          description: '북마크 수',
-          example: 25,
-        },
-        likeCount: {
-          type: 'number',
-          description: '좋아요 수',
-          example: 80,
-        },
-      },
-    },
+    dto: UserInteractionStatsDto,
   })
   async getUserInteractionStats(@Param('userId', ParseUUIDPipe) userId: string): Promise<{
     totalInteractions: number;

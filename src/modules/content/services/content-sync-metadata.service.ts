@@ -23,9 +23,7 @@ export interface QuotaAnalysis {
 export class ContentSyncMetadataService {
   private readonly logger = new Logger(ContentSyncMetadataService.name);
 
-  constructor(
-    private readonly contentSyncMetadataRepo: ContentSyncMetadataRepository
-  ) {}
+  constructor(private readonly contentSyncMetadataRepo: ContentSyncMetadataRepository) {}
 
   // ==================== PUBLIC METHODS ====================
 
@@ -36,7 +34,7 @@ export class ContentSyncMetadataService {
   async updateSyncMetrics(contentId: string, metrics: SyncMetricsDto): Promise<void> {
     try {
       await this.contentSyncMetadataRepo.updateSyncMetadata(contentId, metrics);
-      
+
       this.logger.log('Sync metrics updated successfully', {
         contentId,
         apiCallCount: metrics.apiCallCount,
@@ -56,7 +54,7 @@ export class ContentSyncMetadataService {
   async incrementApiCall(contentId: string, quotaUsed: number = 1): Promise<void> {
     try {
       await this.contentSyncMetadataRepo.incrementApiCallCount(contentId, 1);
-      
+
       // 쿼터 사용량도 함께 업데이트
       const existing = await this.findByContentId(contentId);
       if (existing) {
@@ -104,14 +102,19 @@ export class ContentSyncMetadataService {
 
       const isQuotaExceeded = this.isQuotaExceeded(metadata.quotaUsed || 0);
 
-      return {
+      const result: any = {
         contentId,
         totalApiCalls: metadata.apiCallCount || 0,
         totalQuotaUsed: metadata.quotaUsed || 0,
         averageSyncDuration: metadata.syncDuration || 0,
-        lastQuotaReset: metadata.lastQuotaReset,
         isQuotaExceeded,
       };
+
+      if (metadata.lastQuotaReset) {
+        result.lastQuotaReset = metadata.lastQuotaReset;
+      }
+
+      return result;
     } catch (error: unknown) {
       this.logger.error('Failed to get quota analysis', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -122,14 +125,14 @@ export class ContentSyncMetadataService {
   }
 
   async recordSyncPerformance(
-    contentId: string, 
-    startTime: Date, 
+    contentId: string,
+    startTime: Date,
     endTime: Date,
     apiCallsUsed: number = 1
   ): Promise<void> {
     try {
       const syncDuration = endTime.getTime() - startTime.getTime();
-      
+
       await this.updateSyncMetrics(contentId, {
         syncDuration,
       });
@@ -177,11 +180,11 @@ export class ContentSyncMetadataService {
 
   private shouldResetQuota(lastQuotaReset?: Date): boolean {
     if (!lastQuotaReset) return true;
-    
+
     const now = new Date();
     const lastReset = new Date(lastQuotaReset);
     const hoursSinceReset = (now.getTime() - lastReset.getTime()) / (1000 * 60 * 60);
-    
+
     return hoursSinceReset >= 24; // 24시간마다 쿼터 리셋
   }
 }

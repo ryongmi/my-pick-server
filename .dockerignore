@@ -10,8 +10,20 @@ envs/
 dist
 node_modules
 
-# Docker Volumne 디렉토리 무시
+# Docker Volume 디렉토리 무시
 data
-# mysqldata
-# redisdata
+
+# 테스트 파일들
+test
+**/*.spec.ts
+**/*.test.ts
+
+# 로그 및 개발 파일들
+logs
+.DS_Store
+Thumbs.db
+*.log
+.vscode
+.idea
+
 README.md

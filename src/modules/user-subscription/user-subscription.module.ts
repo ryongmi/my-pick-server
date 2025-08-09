@@ -18,4 +18,3 @@ import { UserSubscriptionController, CreatorSubscriptionController } from './con
   exports: [UserSubscriptionService, UserSubscriptionRepository],
 })
 export class UserSubscriptionModule {}
-

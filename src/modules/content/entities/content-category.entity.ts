@@ -1,11 +1,4 @@
-import {
-  Entity,
-  PrimaryColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  Index,
-} from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 @Entity('content_categories')
 @Index(['contentId'])
@@ -22,7 +15,7 @@ export class ContentCategoryEntity {
   isPrimary!: boolean; // 주 카테고리 여부
 
   @Column({ nullable: true })
-  subcategory?: string; // 세부 카테고리
+  subcategory?: string | null; // 세부 카테고리
 
   @Column({ type: 'decimal', precision: 3, scale: 2, default: 1.0 })
   confidence!: number; // AI 분류 신뢰도 (0.0-1.0)
@@ -31,7 +24,7 @@ export class ContentCategoryEntity {
   source!: 'manual' | 'ai' | 'platform'; // 카테고리 분류 방식
 
   @Column({ nullable: true })
-  classifiedBy?: string; // 분류자 ID (사용자/AI 모델)
+  classifiedBy?: string | null; // 분류자 ID (사용자/AI 모델)
 
   @CreateDateColumn()
   createdAt!: Date;

@@ -43,7 +43,7 @@ ENV NODE_OPTIONS="--experimental-specifier-resolution=node"
 
 # RUN npm run build
 
-EXPOSE 8000
+EXPOSE 4000
 
 CMD ["npm", "run", "start:debug"]
 
@@ -60,7 +60,7 @@ COPY --from=build /app/dist ./dist
 
 COPY package*.json ./
 
-EXPOSE 8000
+EXPOSE 4000
 
 USER node
 
@@ -78,7 +78,7 @@ COPY --from=build /app/dist ./dist
 
 COPY package*.json ./
 
-EXPOSE 8000
+EXPOSE 4000
 
 USER node
 

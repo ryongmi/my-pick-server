@@ -1,14 +1,14 @@
-import { 
-  HttpException, 
-  NotFoundException, 
-  ConflictException, 
+import {
+  HttpException,
+  NotFoundException,
+  ConflictException,
   InternalServerErrorException,
-  BadRequestException 
+  BadRequestException,
 } from '@nestjs/common';
 
 export class CreatorException {
   // ==================== 조회 관련 (100-199) ====================
-  
+
   static creatorNotFound(): HttpException {
     return new NotFoundException({
       code: 'CREATOR_101',
@@ -66,7 +66,7 @@ export class CreatorException {
   }
 
   // ==================== 생성/수정 관련 (200-299) ====================
-  
+
   static creatorAlreadyExists(): HttpException {
     return new ConflictException({
       code: 'CREATOR_201',
@@ -152,7 +152,7 @@ export class CreatorException {
   }
 
   // ==================== 비즈니스 로직 관련 (300-399) ====================
-  
+
   static invalidCreatorData(): HttpException {
     return new BadRequestException({
       code: 'CREATOR_301',
@@ -185,6 +185,13 @@ export class CreatorException {
     return new InternalServerErrorException({
       code: 'CREATOR_305',
       message: '플랫폼 동기화 중 오류가 발생했습니다.',
+    });
+  }
+
+  static platformSyncInProgress(): HttpException {
+    return new ConflictException({
+      code: 'CREATOR_306',
+      message: '해당 플랫폼의 동기화가 이미 진행 중입니다.',
     });
   }
 

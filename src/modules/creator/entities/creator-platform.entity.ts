@@ -23,7 +23,7 @@ export class CreatorPlatformEntity extends BaseEntityUUID {
   url!: string;
 
   @Column({ nullable: true })
-  displayName?: string;
+  displayName?: string | null;
 
   @Column({ default: 0 })
   followerCount!: number;
@@ -38,10 +38,8 @@ export class CreatorPlatformEntity extends BaseEntityUUID {
   isActive!: boolean;
 
   @Column({ nullable: true })
-  lastSyncAt?: Date;
+  lastSyncAt?: Date | null;
 
   @Column({ type: 'enum', enum: SyncStatus, default: SyncStatus.ACTIVE })
   syncStatus!: SyncStatus;
-
 }
-

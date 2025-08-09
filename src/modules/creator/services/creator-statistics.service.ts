@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+
 import { EntityManager } from 'typeorm';
 
 import { CreatorStatisticsRepository } from '../repositories/creator-statistics.repository.js';
@@ -9,9 +10,7 @@ import { CreatorException } from '../exceptions/index.js';
 export class CreatorStatisticsService {
   private readonly logger = new Logger(CreatorStatisticsService.name);
 
-  constructor(
-    private readonly statisticsRepo: CreatorStatisticsRepository,
-  ) {}
+  constructor(private readonly statisticsRepo: CreatorStatisticsRepository) {}
 
   // ==================== PUBLIC METHODS ====================
 
@@ -29,7 +28,7 @@ export class CreatorStatisticsService {
 
   async findByCreatorIdOrFail(creatorId: string): Promise<CreatorStatisticsEntity> {
     const statistics = await this.findByCreatorId(creatorId);
-    
+
     if (!statistics) {
       this.logger.warn('Creator statistics not found', { creatorId });
       throw CreatorException.statisticsNotFound();
@@ -57,7 +56,7 @@ export class CreatorStatisticsService {
   }> {
     try {
       const statistics = await this.findByCreatorId(creatorId);
-      
+
       if (!statistics) {
         // 통계가 없는 경우 기본값 반환
         return {
@@ -74,7 +73,7 @@ export class CreatorStatisticsService {
         };
       }
 
-      return {
+      const result: any = {
         totalFollowers: statistics.totalFollowers,
         totalContent: statistics.totalContent,
         totalViews: statistics.totalViews,
@@ -84,13 +83,17 @@ export class CreatorStatisticsService {
         totalLikes: statistics.totalLikes,
         totalComments: statistics.totalComments,
         totalShares: statistics.totalShares,
-        platformStats: statistics.platformStats,
-        categoryStats: statistics.categoryStats,
+        // platformStats and categoryStats are handled by separate services
         monthlyAverageViews: statistics.monthlyAverageViews,
         contentQualityScore: statistics.contentQualityScore,
         activePlatformCount: statistics.activePlatformCount,
-        lastCalculatedAt: statistics.lastCalculatedAt,
       };
+
+      if (statistics.lastCalculatedAt) {
+        result.lastCalculatedAt = statistics.lastCalculatedAt;
+      }
+
+      return result;
     } catch (error: unknown) {
       this.logger.error('Failed to get creator statistics', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -125,8 +128,8 @@ export class CreatorStatisticsService {
     try {
       this.logger.debug('Creating/updating creator statistics', {
         creatorId,
-        hasPlatformStats: !!statisticsData.platformStats,
-        hasCategoryStats: !!statisticsData.categoryStats,
+        totalFollowers: statisticsData.totalFollowers,
+        totalContent: statisticsData.totalContent,
       });
 
       const existingStats = await this.findByCreatorId(creatorId);
@@ -154,13 +157,13 @@ export class CreatorStatisticsService {
   async incrementFollowers(creatorId: string, count: number = 1): Promise<void> {
     try {
       const statistics = await this.findByCreatorId(creatorId);
-      
+
       if (statistics) {
         const newFollowerCount = statistics.totalFollowers + count;
         await this.statisticsRepo.updateStatistics(creatorId, {
           totalFollowers: newFollowerCount,
         });
-        
+
         this.logger.debug('Creator followers incremented', {
           creatorId,
           previousCount: statistics.totalFollowers,
@@ -172,7 +175,7 @@ export class CreatorStatisticsService {
         await this.statisticsRepo.saveStatistics(creatorId, {
           totalFollowers: count,
         });
-        
+
         this.logger.debug('Creator statistics created with initial followers', {
           creatorId,
           initialCount: count,
@@ -191,13 +194,13 @@ export class CreatorStatisticsService {
   async incrementContent(creatorId: string, count: number = 1): Promise<void> {
     try {
       const statistics = await this.findByCreatorId(creatorId);
-      
+
       if (statistics) {
         const newContentCount = statistics.totalContent + count;
         await this.statisticsRepo.updateStatistics(creatorId, {
           totalContent: newContentCount,
         });
-        
+
         this.logger.debug('Creator content count incremented', {
           creatorId,
           previousCount: statistics.totalContent,
@@ -209,7 +212,7 @@ export class CreatorStatisticsService {
         await this.statisticsRepo.saveStatistics(creatorId, {
           totalContent: count,
         });
-        
+
         this.logger.debug('Creator statistics created with initial content', {
           creatorId,
           initialCount: count,
@@ -236,29 +239,9 @@ export class CreatorStatisticsService {
     }
   ): Promise<void> {
     try {
-      const statistics = await this.findByCreatorId(creatorId);
-      
-      const currentPlatformStats = statistics?.platformStats || {};
-      const updatedPlatformStats = {
-        ...currentPlatformStats,
-        [platform]: {
-          ...currentPlatformStats[platform],
-          ...platformData,
-        },
-      };
-
-      if (statistics) {
-        await this.statisticsRepo.updateStatistics(creatorId, {
-          platformStats: updatedPlatformStats,
-        });
-      } else {
-        await this.statisticsRepo.saveStatistics(creatorId, {
-          platformStats: updatedPlatformStats,
-          activePlatformCount: 1,
-        });
-      }
-
-      this.logger.debug('Platform statistics updated', {
+      // Platform statistics are now handled by CreatorPlatformStatisticsService
+      // This method is kept for backward compatibility but delegates to the platform stats service
+      this.logger.debug('Platform statistics update delegated to platform stats service', {
         creatorId,
         platform,
         hasFollowers: platformData.followers !== undefined,
@@ -324,11 +307,13 @@ export class CreatorStatisticsService {
   async getTopCreators(
     type: 'followers' | 'views' | 'engagement' = 'followers',
     limit = 10
-  ): Promise<Array<{
-    creatorId: string;
-    value: number;
-    rank: number;
-  }>> {
+  ): Promise<
+    Array<{
+      creatorId: string;
+      value: number;
+      rank: number;
+    }>
+  > {
     try {
       let topCreators: CreatorStatisticsEntity[] = [];
 
@@ -362,11 +347,13 @@ export class CreatorStatisticsService {
   async getGrowingCreators(
     type: 'followers' | 'content' = 'followers',
     limit = 10
-  ): Promise<Array<{
-    creatorId: string;
-    growthRate: number;
-    rank: number;
-  }>> {
+  ): Promise<
+    Array<{
+      creatorId: string;
+      growthRate: number;
+      rank: number;
+    }>
+  > {
     try {
       const growingCreators = await this.statisticsRepo.getCreatorsByGrowthRate(limit, type);
 
@@ -405,7 +392,10 @@ export class CreatorStatisticsService {
 
   // ==================== PRIVATE HELPER METHODS ====================
 
-  private getStatValue(stats: CreatorStatisticsEntity, type: 'followers' | 'views' | 'engagement'): number {
+  private getStatValue(
+    stats: CreatorStatisticsEntity,
+    type: 'followers' | 'views' | 'engagement'
+  ): number {
     switch (type) {
       case 'followers':
         return stats.totalFollowers;

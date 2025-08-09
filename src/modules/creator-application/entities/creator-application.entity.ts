@@ -20,18 +20,17 @@ export class CreatorApplicationEntity extends BaseEntityUUID {
   appliedAt!: Date;
 
   @Column({ nullable: true, comment: '검토 완료일시' })
-  reviewedAt?: Date;
+  reviewedAt?: Date | null;
 
   @Column({ nullable: true, comment: '최종 검토자 ID' })
-  reviewerId?: string;
+  reviewerId?: string | null;
 
   @Column({ type: 'text', nullable: true, comment: '신청자 메시지' })
-  applicantMessage?: string;
+  applicantMessage?: string | null;
 
   @Column({ nullable: true, comment: '예상 처리 시간 (일)' })
-  estimatedProcessingDays?: number;
+  estimatedProcessingDays?: number | null;
 
   @Column({ default: 0, comment: '우선순위 (높을수록 우선)' })
   priority!: number;
 }
-

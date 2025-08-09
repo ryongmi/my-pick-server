@@ -1,4 +1,5 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
+
 import { EntityManager, MoreThan, LessThan } from 'typeorm';
 
 import { CreatorConsentRepository, type ConsentStats } from '../repositories/index.js';
@@ -15,7 +16,7 @@ export class CreatorConsentService {
   // ==================== PUBLIC METHODS ====================
 
   // 기본 조회 메서드들 (BaseRepository 직접 사용)
-  
+
   /**
    * 크리에이터의 활성 동의 타입 목록 조회
    */
@@ -29,7 +30,7 @@ export class CreatorConsentService {
         },
         select: ['type'],
       });
-      return consents.map(c => c.type);
+      return consents.map((c) => c.type);
     } catch (error: unknown) {
       this.logger.error('Active consents fetch failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -204,13 +205,16 @@ export class CreatorConsentService {
 
   // ==================== 변경 메서드 ====================
 
-  async grantConsent(dto: {
-    creatorId: string;
-    type: ConsentType;
-    expiresAt?: Date;
-    consentData?: string;
-    version?: string;
-  }, transactionManager?: EntityManager): Promise<void> {
+  async grantConsent(
+    dto: {
+      creatorId: string;
+      type: ConsentType;
+      expiresAt?: Date;
+      consentData?: string;
+      version?: string;
+    },
+    transactionManager?: EntityManager
+  ): Promise<void> {
     try {
       // 기존 동의 무효화
       await this.consentRepo.update(
@@ -225,7 +229,7 @@ export class CreatorConsentService {
         grantedAt: new Date(),
       });
 
-      await this.consentRepo.save(consent);
+      await this.consentRepo.saveEntity(consent, transactionManager);
 
       this.logger.log('Consent granted successfully', {
         creatorId: dto.creatorId,
@@ -246,7 +250,11 @@ export class CreatorConsentService {
     }
   }
 
-  async revokeConsent(creatorId: string, type: ConsentType, transactionManager?: EntityManager): Promise<void> {
+  async revokeConsent(
+    creatorId: string,
+    type: ConsentType,
+    transactionManager?: EntityManager
+  ): Promise<void> {
     try {
       const updateResult = await this.consentRepo.update(
         { creatorId, type, isGranted: true },

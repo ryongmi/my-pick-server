@@ -1,4 +1,5 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
+
 import { EntityManager, In } from 'typeorm';
 
 import { ContentStatisticsRepository } from '../repositories/content-statistics.repository.js';
@@ -95,7 +96,9 @@ export class ContentStatisticsService {
         ? transactionManager.getRepository(ContentStatisticsEntity)
         : this.statisticsRepo;
 
-      await (transactionManager ? repository.save(statistics) : this.statisticsRepo.saveEntity(statistics));
+      await (transactionManager
+        ? repository.save(statistics)
+        : this.statisticsRepo.saveEntity(statistics));
 
       this.logger.log('Content statistics created', {
         contentId,
@@ -121,17 +124,21 @@ export class ContentStatisticsService {
         ? transactionManager.getRepository(ContentStatisticsEntity)
         : this.statisticsRepo;
 
-      let statistics = await (transactionManager 
+      let statistics = await (transactionManager
         ? repository.findOne({ where: { contentId } })
         : this.statisticsRepo.findOne({ where: { contentId } }));
 
       if (statistics) {
         // 기존 레코드 업데이트
         Object.assign(statistics, dto);
-        
+
         // 참여율 재계산
-        if (dto.views !== undefined || dto.likes !== undefined || 
-            dto.comments !== undefined || dto.shares !== undefined) {
+        if (
+          dto.views !== undefined ||
+          dto.likes !== undefined ||
+          dto.comments !== undefined ||
+          dto.shares !== undefined
+        ) {
           statistics.engagementRate = this.calculateEngagementRate(
             statistics.views,
             statistics.likes,
@@ -152,7 +159,9 @@ export class ContentStatisticsService {
         );
       }
 
-      await (transactionManager ? repository.save(statistics) : this.statisticsRepo.saveEntity(statistics));
+      await (transactionManager
+        ? repository.save(statistics)
+        : this.statisticsRepo.saveEntity(statistics));
 
       this.logger.log('Content statistics updated', {
         contentId,
@@ -171,7 +180,7 @@ export class ContentStatisticsService {
   async incrementViews(contentId: string, increment: number = 1): Promise<void> {
     try {
       const statistics = await this.findByContentIdOrFail(contentId);
-      
+
       statistics.views = Number(statistics.views) + increment;
       statistics.engagementRate = this.calculateEngagementRate(
         statistics.views,
@@ -204,7 +213,7 @@ export class ContentStatisticsService {
   async incrementLikes(contentId: string, increment: number = 1): Promise<void> {
     try {
       const statistics = await this.findByContentIdOrFail(contentId);
-      
+
       statistics.likes = statistics.likes + increment;
       statistics.engagementRate = this.calculateEngagementRate(
         statistics.views,
@@ -381,7 +390,10 @@ export class ContentStatisticsService {
     }
   }
 
-  async getTrendingContent(hours: number = 24, limit: number = 50): Promise<ContentStatisticsEntity[]> {
+  async getTrendingContent(
+    hours: number = 24,
+    limit: number = 50
+  ): Promise<ContentStatisticsEntity[]> {
     try {
       return await this.statisticsRepo.getTrendingContent(hours, limit);
     } catch (error: unknown) {
@@ -415,7 +427,7 @@ export class ContentStatisticsService {
 
   async hasStatistics(contentId: string): Promise<boolean> {
     try {
-      return await this.statisticsRepo.exists({ where: { contentId } });
+      return await this.statisticsRepo.exists({ contentId });
     } catch (error: unknown) {
       this.logger.error('Failed to check statistics existence', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -440,15 +452,15 @@ export class ContentStatisticsService {
 
   private calculateEngagementRate(
     views: number,
-    likes: number, 
+    likes: number,
     comments: number,
     shares: number
   ): number {
     if (views === 0) return 0;
-    
+
     const totalEngagements = likes + comments + shares;
     const rate = (totalEngagements / views) * 100;
-    
+
     return Number(rate.toFixed(2));
   }
 }

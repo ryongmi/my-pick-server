@@ -176,6 +176,9 @@ export class CreatorPlatformSyncRepository extends BaseRepository<CreatorPlatfor
 
     const counts: Record<VideoSyncStatus, number> = {
       [VideoSyncStatus.NEVER_SYNCED]: 0,
+      [VideoSyncStatus.INITIAL_SYNCING]: 0,
+      [VideoSyncStatus.INCREMENTAL]: 0,
+      [VideoSyncStatus.CONSENT_CHANGED]: 0,
       [VideoSyncStatus.IN_PROGRESS]: 0,
       [VideoSyncStatus.COMPLETED]: 0,
       [VideoSyncStatus.FAILED]: 0,

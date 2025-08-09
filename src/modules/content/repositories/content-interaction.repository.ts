@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+
 import { DataSource, Repository, MoreThan, Between } from 'typeorm';
 
 import { ContentInteractionEntity } from '../entities/index.js';
@@ -50,7 +51,10 @@ export class ContentInteractionRepository extends Repository<ContentInteractionE
     });
   }
 
-  async findInteraction(contentId: string, userId: string): Promise<ContentInteractionEntity | null> {
+  async findInteraction(
+    contentId: string,
+    userId: string
+  ): Promise<ContentInteractionEntity | null> {
     return await this.findOne({
       where: { contentId, userId },
     });
@@ -135,7 +139,7 @@ export class ContentInteractionRepository extends Repository<ContentInteractionE
       .limit(limit)
       .getRawMany();
 
-    return results.map(result => ({
+    return results.map((result) => ({
       contentId: result.contentId,
       viewCount: parseInt(result.viewCount) || 0,
       likeCount: parseInt(result.likeCount) || 0,
@@ -181,7 +185,7 @@ export class ContentInteractionRepository extends Repository<ContentInteractionE
       .limit(limit)
       .getRawMany();
 
-    return results.map(result => ({
+    return results.map((result) => ({
       userId: result.userId,
       interactionCount: parseInt(result.interactionCount),
       avgWatchPercentage: parseFloat(result.avgWatchPercentage) || 0,
@@ -191,12 +195,9 @@ export class ContentInteractionRepository extends Repository<ContentInteractionE
 
   // ==================== 통계 및 집계 메서드 ====================
 
-  async getOverallStats(
-    startDate?: Date,
-    endDate?: Date
-  ): Promise<InteractionStats> {
+  async getOverallStats(startDate?: Date, endDate?: Date): Promise<InteractionStats> {
     let whereCondition = {};
-    
+
     if (startDate && endDate) {
       whereCondition = {
         createdAt: Between(startDate, endDate),
@@ -223,7 +224,9 @@ export class ContentInteractionRepository extends Repository<ContentInteractionE
     };
   }
 
-  async getInteractionsByDevice(contentId?: string): Promise<Array<{ deviceType: string; count: number }>> {
+  async getInteractionsByDevice(
+    contentId?: string
+  ): Promise<Array<{ deviceType: string; count: number }>> {
     const queryBuilder = this.createQueryBuilder('ci')
       .select('ci.deviceType', 'deviceType')
       .addSelect('COUNT(*)', 'count')
@@ -233,10 +236,7 @@ export class ContentInteractionRepository extends Repository<ContentInteractionE
       queryBuilder.andWhere('ci.contentId = :contentId', { contentId });
     }
 
-    return await queryBuilder
-      .groupBy('ci.deviceType')
-      .orderBy('count', 'DESC')
-      .getRawMany();
+    return await queryBuilder.groupBy('ci.deviceType').orderBy('count', 'DESC').getRawMany();
   }
 
   // ==================== 배치 처리 메서드 ====================
@@ -246,7 +246,20 @@ export class ContentInteractionRepository extends Repository<ContentInteractionE
       .insert()
       .into(ContentInteractionEntity)
       .values(interaction)
-      .orUpdate(['interactionType', 'isBookmarked', 'isLiked', 'isShared', 'watchedAt', 'watchDuration', 'watchPercentage', 'rating', 'comment', 'deviceType', 'referrer', 'updatedAt'])
+      .orUpdate([
+        'interactionType',
+        'isBookmarked',
+        'isLiked',
+        'isShared',
+        'watchedAt',
+        'watchDuration',
+        'watchPercentage',
+        'rating',
+        'comment',
+        'deviceType',
+        'referrer',
+        'updatedAt',
+      ])
       .execute();
   }
 

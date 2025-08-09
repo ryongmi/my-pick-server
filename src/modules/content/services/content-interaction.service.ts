@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import { 
-  ContentInteractionRepository, 
-  type InteractionStats, 
-  type UserEngagement, 
-  type ContentPerformance 
+import {
+  ContentInteractionRepository,
+  type InteractionStats,
+  type UserEngagement,
+  type ContentPerformance,
 } from '../repositories/index.js';
 import { ContentInteractionEntity } from '../entities/index.js';
 import { ContentException } from '../exceptions/index.js';
@@ -25,7 +25,10 @@ export class ContentInteractionService {
     return await this.interactionRepo.findByUserId(userId);
   }
 
-  async findInteraction(contentId: string, userId: string): Promise<ContentInteractionEntity | null> {
+  async findInteraction(
+    contentId: string,
+    userId: string
+  ): Promise<ContentInteractionEntity | null> {
     return await this.interactionRepo.findInteraction(contentId, userId);
   }
 
@@ -44,7 +47,7 @@ export class ContentInteractionService {
   // ==================== 변경 메서드 ====================
 
   async recordView(
-    contentId: string, 
+    contentId: string,
     userId: string,
     metadata?: {
       watchDuration?: number;
@@ -59,12 +62,22 @@ export class ContentInteractionService {
         userId,
         interactionType: 'view',
         watchedAt: new Date(),
-        watchDuration: metadata?.watchDuration,
-        watchPercentage: metadata?.watchPercentage,
-        deviceType: metadata?.deviceType,
-        referrer: metadata?.referrer,
         updatedAt: new Date(),
       };
+
+      // Only add optional properties if they have defined values
+      if (metadata?.watchDuration !== undefined) {
+        interaction.watchDuration = metadata.watchDuration;
+      }
+      if (metadata?.watchPercentage !== undefined) {
+        interaction.watchPercentage = metadata.watchPercentage;
+      }
+      if (metadata?.deviceType !== undefined) {
+        interaction.deviceType = metadata.deviceType;
+      }
+      if (metadata?.referrer !== undefined) {
+        interaction.referrer = metadata.referrer;
+      }
 
       await this.interactionRepo.upsertInteraction(interaction);
 
@@ -172,8 +185,8 @@ export class ContentInteractionService {
   }
 
   async submitRating(
-    contentId: string, 
-    userId: string, 
+    contentId: string,
+    userId: string,
     rating: number,
     comment?: string
   ): Promise<void> {
@@ -186,9 +199,13 @@ export class ContentInteractionService {
         contentId,
         userId,
         rating,
-        comment,
         updatedAt: new Date(),
       };
+
+      // Only add comment if it has a defined value
+      if (comment !== undefined) {
+        interaction.comment = comment;
+      }
 
       await this.interactionRepo.upsertInteraction(interaction);
 
@@ -259,10 +276,7 @@ export class ContentInteractionService {
     }
   }
 
-  async getOverallStats(
-    startDate?: Date,
-    endDate?: Date
-  ): Promise<InteractionStats> {
+  async getOverallStats(startDate?: Date, endDate?: Date): Promise<InteractionStats> {
     try {
       return await this.interactionRepo.getOverallStats(startDate, endDate);
     } catch (error: unknown) {
@@ -275,7 +289,9 @@ export class ContentInteractionService {
     }
   }
 
-  async getInteractionsByDevice(contentId?: string): Promise<Array<{ deviceType: string; count: number }>> {
+  async getInteractionsByDevice(
+    contentId?: string
+  ): Promise<Array<{ deviceType: string; count: number }>> {
     try {
       return await this.interactionRepo.getInteractionsByDevice(contentId);
     } catch (error: unknown) {
@@ -302,7 +318,7 @@ export class ContentInteractionService {
     if (views.length === 0) return;
 
     try {
-      const interactions = views.map(view => ({
+      const interactions = views.map((view) => ({
         ...view,
         interactionType: 'view' as const,
         watchedAt: new Date(),
@@ -313,8 +329,8 @@ export class ContentInteractionService {
 
       this.logger.log('Batch views recorded', {
         viewCount: views.length,
-        uniqueContent: new Set(views.map(v => v.contentId)).size,
-        uniqueUsers: new Set(views.map(v => v.userId)).size,
+        uniqueContent: new Set(views.map((v) => v.contentId)).size,
+        uniqueUsers: new Set(views.map((v) => v.userId)).size,
       });
     } catch (error: unknown) {
       this.logger.error('Failed to batch record views', {
@@ -354,7 +370,7 @@ export class ContentInteractionService {
   }> {
     try {
       const interactions = await this.findByUserId(userId);
-      
+
       if (interactions.length === 0) {
         return {
           preferredCategories: [],
@@ -366,22 +382,26 @@ export class ContentInteractionService {
 
       // 시청 패턴 분석 로직
       const watchPercentages = interactions
-        .filter(i => i.watchPercentage !== null && i.watchPercentage !== undefined)
-        .map(i => i.watchPercentage!);
-      
-      const averageWatchPercentage = watchPercentages.length > 0
-        ? watchPercentages.reduce((sum, p) => sum + p, 0) / watchPercentages.length
-        : 0;
+        .filter((i) => i.watchPercentage !== null && i.watchPercentage !== undefined)
+        .map((i) => i.watchPercentage!);
+
+      const averageWatchPercentage =
+        watchPercentages.length > 0
+          ? watchPercentages.reduce((sum, p) => sum + p, 0) / watchPercentages.length
+          : 0;
 
       // 활동 시간대 분석
-      const hours = interactions.map(i => new Date(i.updatedAt).getHours());
-      const hourCounts = hours.reduce((acc, hour) => {
-        acc[hour] = (acc[hour] || 0) + 1;
-        return acc;
-      }, {} as Record<number, number>);
+      const hours = interactions.map((i) => new Date(i.updatedAt).getHours());
+      const hourCounts = hours.reduce(
+        (acc, hour) => {
+          acc[hour] = (acc[hour] || 0) + 1;
+          return acc;
+        },
+        {} as Record<number, number>
+      );
 
       const mostActiveHours = Object.entries(hourCounts)
-        .sort(([,a], [,b]) => b - a)
+        .sort(([, a], [, b]) => b - a)
         .slice(0, 3)
         .map(([hour]) => parseInt(hour));
 

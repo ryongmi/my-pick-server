@@ -1,4 +1,14 @@
-import { IsString, IsOptional, IsEnum, IsNumber, IsDateString, ValidateNested, Min, IsBoolean, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsNumber,
+  IsDateString,
+  ValidateNested,
+  Min,
+  IsBoolean,
+  IsArray,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 import { ContentType } from '../enums/index.js';
@@ -74,7 +84,7 @@ export class CreateContentDto {
   creatorId!: string;
 
   // ==================== 메타데이터 필드 (JSON에서 개별 필드로 분리) ====================
-  
+
   @IsOptional()
   @IsString()
   language?: string;
@@ -92,7 +102,7 @@ export class CreateContentDto {
   ageRestriction?: boolean;
 
   // ==================== 분리된 엔티티 데이터 ====================
-  
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

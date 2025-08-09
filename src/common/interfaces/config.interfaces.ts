@@ -4,6 +4,15 @@ export interface DefaultConfig {
   corsOrigins: string | undefined;
 }
 
+export interface ClientConfig {
+  authServiceHost: string | undefined;
+  authServicePort: number | undefined;
+  authzServiceHost: string | undefined;
+  authzServicePort: number | undefined;
+  portalServiceHost: string | undefined;
+  portalServicePort: number | undefined;
+}
+
 export interface MysqlConfig {
   host: string | undefined;
   port: number | undefined;
@@ -20,12 +29,8 @@ export interface RedisConfig {
   password: string | undefined;
 }
 
-export interface GoogleConfig {
-  clientId: string | undefined;
-  clientSecret: string | undefined;
-  redirectUrl: string | undefined;
-  tokenUrl: string | undefined;
-  userInfoUrl: string | undefined;
+export interface YouTubeConfig {
+  youtubeApiKey: string | undefined;
 }
 
 export interface NaverConfig {
@@ -37,16 +42,5 @@ export interface NaverConfig {
 }
 
 export interface JwtConfig {
-  accessPrivateKey: string | undefined;
   accessPublicKey: string | undefined;
-  refreshPrivateKey: string | undefined;
-  refreshPublicKey: string | undefined;
-  accessExpiresIn: string | undefined;
-  refreshExpiresIn: string | undefined;
-  sessionCookiePath: string | undefined;
-  refreshMaxAge: number | undefined;
-  refreshStore: string | undefined;
-  blackListStore: string | undefined;
-  naverStateStore: string | undefined;
-  googleStateStore: string | undefined;
 }

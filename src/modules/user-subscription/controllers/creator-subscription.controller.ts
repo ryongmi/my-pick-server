@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  UseGuards,
-  HttpCode,
-  ParseUUIDPipe,
-} from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, HttpCode, ParseUUIDPipe } from '@nestjs/common';
 
 import { plainToInstance } from 'class-transformer';
 
@@ -43,15 +36,15 @@ export class CreatorSubscriptionController {
 
   @Get()
   @HttpCode(200)
-  @SwaggerApiOperation({ 
+  @SwaggerApiOperation({
     summary: '크리에이터 구독자 목록 조회',
-    description: '특정 크리에이터의 구독자 사용자 ID 목록을 조회합니다.'
+    description: '특정 크리에이터의 구독자 사용자 ID 목록을 조회합니다.',
   })
-  @SwaggerApiParam({ 
-    name: 'creatorId', 
-    type: String, 
+  @SwaggerApiParam({
+    name: 'creatorId',
+    type: String,
     description: '크리에이터 ID',
-    example: '550e8400-e29b-41d4-a716-446655440000'
+    example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @SwaggerApiOkResponse({
     status: 200,
@@ -80,15 +73,15 @@ export class CreatorSubscriptionController {
 
   @Get('count')
   @HttpCode(200)
-  @SwaggerApiOperation({ 
+  @SwaggerApiOperation({
     summary: '크리에이터 구독자 수 조회',
-    description: '특정 크리에이터의 구독자 수를 조회합니다.'
+    description: '특정 크리에이터의 구독자 수를 조회합니다.',
   })
-  @SwaggerApiParam({ 
-    name: 'creatorId', 
-    type: String, 
+  @SwaggerApiParam({
+    name: 'creatorId',
+    type: String,
     description: '크리에이터 ID',
-    example: '550e8400-e29b-41d4-a716-446655440000'
+    example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @SwaggerApiOkResponse({
     status: 200,
@@ -117,15 +110,15 @@ export class CreatorSubscriptionController {
   @Get('stats')
   @RequireRole('superAdmin')
   @HttpCode(200)
-  @SwaggerApiOperation({ 
+  @SwaggerApiOperation({
     summary: '크리에이터 구독 통계 조회 (관리자 전용)',
-    description: '특정 크리에이터의 구독 관련 상세 통계를 조회합니다.'
+    description: '특정 크리에이터의 구독 관련 상세 통계를 조회합니다.',
   })
-  @SwaggerApiParam({ 
-    name: 'creatorId', 
-    type: String, 
+  @SwaggerApiParam({
+    name: 'creatorId',
+    type: String,
     description: '크리에이터 ID',
-    example: '550e8400-e29b-41d4-a716-446655440000'
+    example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @SwaggerApiOkResponse({
     status: 200,
@@ -153,18 +146,29 @@ export class CreatorSubscriptionController {
     ]);
 
     // 가장 최근 구독 날짜 찾기
-    const lastSubscribedAt = subscriptions.length > 0 
-      ? subscriptions.reduce((latest, sub) => 
-          sub.subscribedAt > latest ? sub.subscribedAt : latest, 
-          subscriptions[0].subscribedAt
-        )
-      : undefined;
+    const lastSubscribedAt =
+      subscriptions.length > 0
+        ? subscriptions.reduce(
+            (latest, sub) => (sub.subscribedAt > latest ? sub.subscribedAt : latest),
+            subscriptions[0]!.subscribedAt
+          )
+        : undefined;
 
-    return {
+    const result: {
+      creatorId: string;
+      subscriberCount: number;
+      hasSubscribers: boolean;
+      lastSubscribedAt?: Date;
+    } = {
       creatorId,
       subscriberCount,
       hasSubscribers: subscriberCount > 0,
-      lastSubscribedAt,
     };
+
+    if (lastSubscribedAt) {
+      result.lastSubscribedAt = lastSubscribedAt;
+    }
+
+    return result;
   }
 }

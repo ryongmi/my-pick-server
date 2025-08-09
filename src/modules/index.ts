@@ -7,3 +7,4 @@ export { ExternalApiModule } from './external-api/index.js';
 export { PlatformApplicationModule } from './platform-application/index.js';
 export { ReportModule } from './report/index.js';
 export { AdminModule } from './admin/index.js';
+export { HealthModule } from './health/index.js';

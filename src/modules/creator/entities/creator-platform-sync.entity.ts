@@ -16,32 +16,32 @@ export class CreatorPlatformSyncEntity {
   videoSyncStatus!: VideoSyncStatus;
 
   @Column({ nullable: true })
-  lastVideoSyncAt?: Date; // 마지막 영상 동기화 시점
+  lastVideoSyncAt?: Date | null; // 마지막 영상 동기화 시점
 
   @Column({ nullable: true })
-  syncStartedAt?: Date; // 동기화 시작 시점
+  syncStartedAt?: Date | null; // 동기화 시작 시점
 
   @Column({ nullable: true })
-  syncCompletedAt?: Date; // 동기화 완료 시점
+  syncCompletedAt?: Date | null; // 동기화 완료 시점
 
   // ==================== 영상 동기화 진행률 ====================
 
   @Column({ nullable: true })
-  totalVideoCount?: number; // 채널 총 영상 수 (진행률 계산용)
+  totalVideoCount?: number | null; // 채널 총 영상 수 (진행률 계산용)
 
   @Column({ nullable: true })
-  syncedVideoCount?: number; // 동기화된 영상 수
+  syncedVideoCount?: number | null; // 동기화된 영상 수
 
   @Column({ nullable: true })
-  failedVideoCount?: number; // 동기화 실패한 영상 수
+  failedVideoCount?: number | null; // 동기화 실패한 영상 수
 
   // ==================== 오류 및 메타데이터 ====================
 
   @Column({ type: 'text', nullable: true })
-  lastSyncError?: string; // 마지막 동기화 에러 메시지
+  lastSyncError?: string | null; // 마지막 동기화 에러 메시지
 
   @Column({ type: 'text', nullable: true })
-  syncMetadata?: string; // JSON 형태의 추가 메타데이터 (외부 API 응답, 설정 등)
+  syncMetadata?: string | null; // JSON 형태의 추가 메타데이터 (외부 API 응답, 설정 등)
 
   // ==================== 타임스탬프 ====================
 

@@ -5,3 +5,8 @@ export * from './create-content.dto.js';
 export * from './update-content.dto.js';
 export * from './content-category.dto.js';
 export * from './content-tag.dto.js';
+export * from './watch-duration.dto.js';
+export * from './rating.dto.js';
+export * from './content-ids-response.dto.js';
+export * from './user-interaction-stats.dto.js';
+export * from './trending-content.dto.js';

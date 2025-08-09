@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { DataSource, In, LessThan, MoreThan, Between } from 'typeorm';
+
+import { DataSource, In, LessThan, MoreThan, Between, IsNull } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
 import { LimitType, SortOrderType } from '@krgeobuk/core/enum';
@@ -114,9 +115,9 @@ export class ContentModerationRepository extends BaseRepository<ContentModeratio
 
   async findPendingModeration(): Promise<ContentModerationEntity[]> {
     return this.find({
-      where: { 
+      where: {
         moderationStatus: 'flagged',
-        moderatedAt: null 
+        moderatedAt: IsNull(),
       },
       order: { createdAt: 'ASC' }, // 오래된 것부터 처리
     });
@@ -161,9 +162,9 @@ export class ContentModerationRepository extends BaseRepository<ContentModeratio
       this.count({ where: { moderationStatus: 'inactive' } }),
       this.count({ where: { moderationStatus: 'flagged' } }),
       this.count({ where: { moderationStatus: 'removed' } }),
-      startDate || endDate 
+      startDate || endDate
         ? qb.getCount()
-        : this.count({ where: { moderatedAt: MoreThan(new Date(0)) } })
+        : this.count({ where: { moderatedAt: MoreThan(new Date(0)) } }),
     ]);
 
     return {
@@ -186,12 +187,12 @@ export class ContentModerationRepository extends BaseRepository<ContentModeratio
     restoredCount: number; // inactive -> active
   }> {
     const moderationAlias = 'moderation';
-    
+
     const totalActions = await this.createQueryBuilder(moderationAlias)
       .where(`${moderationAlias}.moderatorId = :moderatorId`, { moderatorId })
-      .andWhere(`${moderationAlias}.moderatedAt BETWEEN :startDate AND :endDate`, { 
-        startDate, 
-        endDate 
+      .andWhere(`${moderationAlias}.moderatedAt BETWEEN :startDate AND :endDate`, {
+        startDate,
+        endDate,
       })
       .getCount();
 
@@ -236,14 +237,14 @@ export class ContentModerationRepository extends BaseRepository<ContentModeratio
     if (contentIds.length === 0) return;
 
     const now = new Date();
-    
+
     await this.update(
       { contentId: In(contentIds) },
       {
         moderationStatus: status,
         moderatorId,
         moderatedAt: now,
-        reason,
+        ...(reason && { reason }),
         updatedAt: now,
       }
     );

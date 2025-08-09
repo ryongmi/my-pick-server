@@ -122,15 +122,17 @@ export class PlatformApplicationException {
 
   static getRejectionReasonMessage(reason: string): string {
     const messages: Record<string, string> = {
-      'invalid_platform_info': '플랫폼 정보가 올바르지 않습니다. 정확한 채널 ID나 사용자명을 확인해주세요.',
-      'insufficient_verification': '인증 자료가 부족합니다. 더 명확한 소유권 증명을 제출해주세요.',
-      'duplicate_platform': '이미 등록된 플랫폼입니다. 중복 신청은 처리할 수 없습니다.',
-      'inappropriate_content': '부적절한 콘텐츠가 포함되어 있습니다. 커뮤니티 가이드라인을 확인해주세요.',
-      'low_activity': '플랫폼 활동이 부족합니다. 최근 3개월 이내 활발한 활동이 필요합니다.',
-      'technical_issues': '기술적 문제로 인해 플랫폼 연동이 불가능합니다.',
-      'fake_account': '가짜 계정으로 의심됩니다. 공식 계정임을 증명하는 자료를 제출해주세요.',
-      'policy_violation': '서비스 정책을 위반하는 내용이 발견되었습니다.',
-      'other': '기타 사유로 인해 승인이 어렵습니다. 자세한 내용은 코멘트를 확인해주세요.',
+      invalid_platform_info:
+        '플랫폼 정보가 올바르지 않습니다. 정확한 채널 ID나 사용자명을 확인해주세요.',
+      insufficient_verification: '인증 자료가 부족합니다. 더 명확한 소유권 증명을 제출해주세요.',
+      duplicate_platform: '이미 등록된 플랫폼입니다. 중복 신청은 처리할 수 없습니다.',
+      inappropriate_content:
+        '부적절한 콘텐츠가 포함되어 있습니다. 커뮤니티 가이드라인을 확인해주세요.',
+      low_activity: '플랫폼 활동이 부족합니다. 최근 3개월 이내 활발한 활동이 필요합니다.',
+      technical_issues: '기술적 문제로 인해 플랫폼 연동이 불가능합니다.',
+      fake_account: '가짜 계정으로 의심됩니다. 공식 계정임을 증명하는 자료를 제출해주세요.',
+      policy_violation: '서비스 정책을 위반하는 내용이 발견되었습니다.',
+      other: '기타 사유로 인해 승인이 어렵습니다. 자세한 내용은 코멘트를 확인해주세요.',
     };
 
     return messages[reason] || '알 수 없는 거부 사유입니다.';
@@ -145,7 +147,7 @@ export class PlatformApplicationException {
       return this.getRejectionReasonMessage(reasons[0]!);
     }
 
-    const messages = reasons.map(reason => `• ${this.getRejectionReasonMessage(reason)}`);
+    const messages = reasons.map((reason) => `• ${this.getRejectionReasonMessage(reason)}`);
     return `다음과 같은 사유로 승인이 어렵습니다:\n${messages.join('\n')}`;
   }
 }

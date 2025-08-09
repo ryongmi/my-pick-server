@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+
 import { DataSource, Repository, MoreThan } from 'typeorm';
 
 import { ContentTagEntity } from '../entities/index.js';
@@ -91,7 +92,7 @@ export class ContentTagRepository extends Repository<ContentTagEntity> {
       .limit(limit)
       .getRawMany();
 
-    return results.map(r => r.tag);
+    return results.map((r) => r.tag);
   }
 
   // ==================== 통계 및 집계 메서드 ====================
@@ -142,8 +143,8 @@ export class ContentTagRepository extends Repository<ContentTagEntity> {
 
     await this.createQueryBuilder()
       .update(ContentTagEntity)
-      .set({ 
-        usageCount: () => 'usageCount + 1'
+      .set({
+        usageCount: () => 'usageCount + 1',
       })
       .where('tag IN (:...tags)', { tags })
       .execute();
@@ -156,8 +157,8 @@ export class ContentTagRepository extends Repository<ContentTagEntity> {
 
     const queryBuilder = this.createQueryBuilder()
       .update(ContentTagEntity)
-      .set({ 
-        relevanceScore: () => 'VALUES(relevanceScore)'
+      .set({
+        relevanceScore: () => 'VALUES(relevanceScore)',
       });
 
     for (const update of updates) {
@@ -178,7 +179,7 @@ export class ContentTagRepository extends Repository<ContentTagEntity> {
       .limit(limit)
       .getRawMany();
 
-    return results.map(r => r.tag);
+    return results.map((r) => r.tag);
   }
 
   async getTagSuggestions(partialTag: string, limit = 10): Promise<string[]> {
@@ -189,6 +190,6 @@ export class ContentTagRepository extends Repository<ContentTagEntity> {
       .limit(limit)
       .getRawMany();
 
-    return results.map(r => r.tag);
+    return results.map((r) => r.tag);
   }
 }

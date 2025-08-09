@@ -26,6 +26,7 @@ import { UserSubscriptionService } from '../../user-subscription/services/index.
 import { UserInteractionService } from '../../user-interaction/services/index.js';
 import { CreatorService } from '../../creator/services/index.js';
 import { ReportService } from '../../report/services/index.js';
+import { ReportTargetType } from '../../report/enums/index.js';
 import {
   AdminUserSearchQueryDto,
   AdminUserListItemDto,
@@ -34,7 +35,6 @@ import {
   UserStatus,
 } from '../dto/index.js';
 import { AdminException } from '../exceptions/index.js';
-
 
 @Controller('admin/users')
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
@@ -47,27 +47,29 @@ export class AdminUserController {
     private readonly userInteractionService: UserInteractionService,
     private readonly creatorService: CreatorService,
     private readonly reportService: ReportService,
-    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
+    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy
   ) {}
 
   @Get()
   // @UseGuards(AuthGuard)
   @RequirePermission('user:read')
   async getUserList(
-    @Query() query: AdminUserSearchQueryDto,
+    @Query() query: AdminUserSearchQueryDto
     // @CurrentUser() admin: UserInfo,
   ): Promise<PaginatedResult<AdminUserListItemDto>> {
     try {
       // Auth-service에서 사용자 목록 조회
-      const usersResult = await this.authClient.send('user.search', {
-        page: query.page || 1,
-        limit: query.limit || 20,
-        status: query.status,
-        email: query.email,
-        name: query.name,
-        startDate: query.startDate,
-        endDate: query.endDate,
-      }).toPromise();
+      const usersResult = await this.authClient
+        .send('user.search', {
+          page: query.page || 1,
+          limit: query.limit || 20,
+          status: query.status,
+          email: query.email,
+          name: query.name,
+          startDate: query.startDate,
+          endDate: query.endDate,
+        })
+        .toPromise();
 
       this.logger.debug('Users fetched from auth service', {
         totalItems: usersResult?.pageInfo?.totalItems || 0,
@@ -92,25 +94,30 @@ export class AdminUserController {
 
       // 각 사용자의 추가 정보 조회
       const enrichedUsers = await Promise.all(
-        usersResult.items.map(async (user: any) => {
+        usersResult.items.map(async (user: Record<string, unknown>) => {
+          const userId = user.id as string;
           const [subscriptionCount, interactionCount] = await Promise.all([
-            this.userSubscriptionService.getSubscriptionCount(user.id).catch(() => 0),
-            this.userInteractionService.getUserInteractionCount(user.id).catch(() => 0),
+            this.userSubscriptionService.getSubscriptionCount(userId).catch(() => 0),
+            this.userInteractionService.getUserInteractionCount(userId).catch(() => 0),
           ]);
 
           // 크리에이터 여부 확인
-          const isCreator = await this.checkIfUserIsCreator(user.id).catch(() => false);
+          const isCreator = await this.checkIfUserIsCreator(userId).catch(() => false);
 
-          return plainToInstance(AdminUserListItemDto, {
-            ...user,
-            subscriptionCount,
-            interactionCount,
-            reportCount: 0, // TODO: 신고 수 구현 필요
-            isCreator,
-          }, {
-            excludeExtraneousValues: true,
-          });
-        }),
+          return plainToInstance(
+            AdminUserListItemDto,
+            {
+              ...user,
+              subscriptionCount,
+              interactionCount,
+              reportCount: 0, // TODO: 신고 수 구현 필요
+              isCreator,
+            },
+            {
+              excludeExtraneousValues: true,
+            }
+          );
+        })
       );
 
       return {
@@ -133,13 +140,13 @@ export class AdminUserController {
   // @UseGuards(AuthGuard)
   @RequirePermission('user:read')
   async getUserDetail(
-    @Param('id', ParseUUIDPipe) userId: string,
+    @Param('id', ParseUUIDPipe) userId: string
     // @CurrentUser() admin: UserInfo,
   ): Promise<AdminUserDetailDto> {
     try {
       // Auth-service에서 사용자 상세 정보 조회
       const userDetail = await this.authClient.send('user.findById', { userId }).toPromise();
-      
+
       if (!userDetail) {
         this.logger.warn('User not found in auth service', { userId });
         throw AdminException.userNotFound();
@@ -148,33 +155,33 @@ export class AdminUserController {
       this.logger.debug('User detail fetched from auth service', { userId });
 
       // 추가 정보 조회
-      const [
-        subscriptionCount,
-        interactionCount,
-        subscriptions,
-        recentInteractions,
-      ] = await Promise.all([
-        this.userSubscriptionService.getSubscriptionCount(userId).catch(() => 0),
-        this.userInteractionService.getUserInteractionCount(userId).catch(() => 0),
-        this.getUserSubscriptions(userId).catch(() => []),
-        this.getUserRecentInteractions(userId).catch(() => []),
-      ]);
+      const [subscriptionCount, interactionCount, subscriptions, recentInteractions] =
+        await Promise.all([
+          this.userSubscriptionService.getSubscriptionCount(userId).catch(() => 0),
+          this.userInteractionService.getUserInteractionCount(userId).catch(() => 0),
+          this.getUserSubscriptions(userId).catch(() => []),
+          this.getUserRecentInteractions(userId).catch(() => []),
+        ]);
 
       const isCreator = await this.checkIfUserIsCreator(userId).catch(() => false);
 
-      return plainToInstance(AdminUserDetailDto, {
-        ...userDetail,
-        subscriptionCount,
-        interactionCount,
-        reportCount: 0, // TODO: 신고 수 구현 필요
-        isCreator,
-        subscriptions,
-        recentInteractions,
-        reports: [], // TODO: 신고 목록 구현 필요
-        moderationHistory: [], // TODO: 모더레이션 이력 구현 필요
-      }, {
-        excludeExtraneousValues: true,
-      });
+      return plainToInstance(
+        AdminUserDetailDto,
+        {
+          ...userDetail,
+          subscriptionCount,
+          interactionCount,
+          reportCount: 0, // TODO: 신고 수 구현 필요
+          isCreator,
+          subscriptions,
+          recentInteractions,
+          reports: [], // TODO: 신고 목록 구현 필요
+          moderationHistory: [], // TODO: 모더레이션 이력 구현 필요
+        },
+        {
+          excludeExtraneousValues: true,
+        }
+      );
     } catch (error: unknown) {
       throw AdminException.userDataFetchError();
     }
@@ -186,7 +193,7 @@ export class AdminUserController {
   @RequirePermission('user:write')
   async updateUserStatus(
     @Param('id', ParseUUIDPipe) userId: string,
-    @Body() dto: UpdateUserStatusDto,
+    @Body() dto: UpdateUserStatusDto
     // @CurrentUser() admin: UserInfo,
   ): Promise<void> {
     try {
@@ -196,13 +203,15 @@ export class AdminUserController {
       // }
 
       // Auth-service에 사용자 상태 업데이트 요청
-      await this.authClient.send('user.updateStatus', {
-        userId,
-        status: dto.status,
-        reason: dto.reason,
-        suspensionDays: dto.suspensionDays,
-        moderatedBy: dto.moderatedBy,
-      }).toPromise();
+      await this.authClient
+        .send('user.updateStatus', {
+          userId,
+          status: dto.status,
+          reason: dto.reason,
+          suspensionDays: dto.suspensionDays,
+          moderatedBy: dto.moderatedBy,
+        })
+        .toPromise();
 
       this.logger.log('User status updated successfully', {
         userId,
@@ -224,7 +233,7 @@ export class AdminUserController {
   @RequirePermission('user:read')
   async getUserActivity(
     @Param('id', ParseUUIDPipe) userId: string,
-    @Query('days') days: number = 30,
+    @Query('days') days: number = 30
     // @CurrentUser() admin: UserInfo,
   ): Promise<{
     loginHistory: Array<{
@@ -247,7 +256,7 @@ export class AdminUserController {
   }> {
     try {
       // TODO: 사용자 활동 이력 조회 구현
-      
+
       return {
         loginHistory: [], // TODO: auth-service에서 로그인 이력 조회
         contentInteractions: [], // TODO: 콘텐츠 상호작용 이력 조회
@@ -262,7 +271,7 @@ export class AdminUserController {
   // @UseGuards(AuthGuard)
   @RequirePermission('user:read')
   async getUserReports(
-    @Param('id', ParseUUIDPipe) userId: string,
+    @Param('id', ParseUUIDPipe) userId: string
     // @CurrentUser() admin: UserInfo,
   ): Promise<{
     reportsByUser: Array<{
@@ -289,7 +298,7 @@ export class AdminUserController {
         limit: 50,
       });
 
-      const reportsByUser = reportsByUserResult.items.map(report => ({
+      const reportsByUser = reportsByUserResult.items.map((report) => ({
         id: report.id,
         targetType: report.targetType,
         targetId: report.targetId,
@@ -300,13 +309,13 @@ export class AdminUserController {
 
       // 사용자에 대한 신고 목록
       const reportsAgainstUserResult = await this.reportService.searchReports({
-        targetType: 'user' as any,
+        targetType: ReportTargetType.USER,
         targetId: userId,
         page: 1,
         limit: 50,
       });
 
-      const reportsAgainstUser = reportsAgainstUserResult.items.map(report => ({
+      const reportsAgainstUser = reportsAgainstUserResult.items.map((report) => ({
         id: report.id,
         reportedBy: report.reporterId,
         reason: report.reason,
@@ -330,9 +339,8 @@ export class AdminUserController {
   @Get('statistics/overview')
   // @UseGuards(AuthGuard)
   @RequirePermission('user:read')
-  async getUserStatistics(
-    // @CurrentUser() admin: UserInfo,
-  ): Promise<{
+  async getUserStatistics() // @CurrentUser() admin: UserInfo,
+  : Promise<{
     totalUsers: number;
     activeUsers: number;
     suspendedUsers: number;
@@ -344,7 +352,7 @@ export class AdminUserController {
   }> {
     try {
       // TODO: 사용자 통계 구현
-      
+
       return {
         totalUsers: 10000,
         activeUsers: 9500,
@@ -372,7 +380,7 @@ export class AdminUserController {
       // TODO: CreatorService나 CreatorApplicationService에서 확인
       // const creator = await this.creatorService.findByUserId(userId);
       // return !!creator;
-      
+
       // 임시 반환값
       return Math.random() > 0.8; // 20% 확률로 크리에이터
     } catch (error: unknown) {
@@ -380,23 +388,25 @@ export class AdminUserController {
     }
   }
 
-  private async getUserSubscriptions(userId: string): Promise<Array<{
-    creatorId: string;
-    creatorName: string;
-    subscribedAt: Date;
-  }>> {
+  private async getUserSubscriptions(userId: string): Promise<
+    Array<{
+      creatorId: string;
+      creatorName: string;
+      subscribedAt: Date;
+    }>
+  > {
     try {
       const subscriptions = await this.userSubscriptionService.getSubscriptionsByUserId(userId);
-      const creatorIds = subscriptions.map(sub => sub.creatorId);
-      
+      const creatorIds = subscriptions.map((sub) => sub.creatorId);
+
       if (creatorIds.length === 0) {
         return [];
       }
 
       const creators = await this.creatorService.findByIds(creatorIds);
-      
-      return subscriptions.map(sub => {
-        const creator = creators.find(c => c.id === sub.creatorId);
+
+      return subscriptions.map((sub) => {
+        const creator = creators.find((c) => c.id === sub.creatorId);
         return {
           creatorId: sub.creatorId,
           creatorName: creator?.displayName || 'Unknown Creator',
@@ -408,17 +418,19 @@ export class AdminUserController {
     }
   }
 
-  private async getUserRecentInteractions(userId: string): Promise<Array<{
-    contentId: string;
-    contentTitle: string;
-    type: 'view' | 'like' | 'bookmark' | 'comment';
-    interactedAt: Date;
-  }>> {
+  private async getUserRecentInteractions(userId: string): Promise<
+    Array<{
+      contentId: string;
+      contentTitle: string;
+      type: 'view' | 'like' | 'bookmark' | 'comment';
+      interactedAt: Date;
+    }>
+  > {
     try {
       const interactions = await this.userInteractionService.getInteractionsByUserId(userId);
-      
+
       // TODO: Content 정보와 조인하여 제목 가져오기
-      return interactions.slice(0, 10).map(interaction => ({
+      return interactions.slice(0, 10).map((interaction) => ({
         contentId: interaction.contentId,
         contentTitle: 'Content Title', // TODO: 실제 콘텐츠 제목
         type: interaction.isLiked ? 'like' : interaction.isBookmarked ? 'bookmark' : 'view',

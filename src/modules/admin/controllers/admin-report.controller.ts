@@ -20,7 +20,6 @@ import {
   SwaggerApiParam,
   SwaggerApiBody,
   SwaggerApiOkResponse,
-  SwaggerApiNoContentResponse,
   SwaggerApiPaginatedResponse,
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
@@ -31,11 +30,9 @@ import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import type { JwtPayload } from '@krgeobuk/jwt/interfaces';
 
 import { ReportService } from '../../report/services/index.js';
-import {
-  ReportSearchQueryDto,
-  ReviewReportDto,
-  ReportDetailDto,
-} from '../../report/dto/index.js';
+import { ReportTargetType } from '../../report/enums/index.js';
+import { ReportSearchQueryDto, ReviewReportDto, ReportDetailDto } from '../../report/dto/index.js';
+import { UpdatePriorityDto } from '../dto/index.js';
 
 @SwaggerApiTags({ tags: ['admin-reports'] })
 @SwaggerApiBearerAuth()
@@ -52,10 +49,14 @@ export class AdminReportController {
     summary: '관리자용 신고 목록 조회',
     description: '관리자가 모든 신고 목록을 조회합니다. 상태별, 대상별 필터링을 지원합니다.',
   })
-  @SwaggerApiPaginatedResponse({ dto: ReportDetailDto, status: 200, description: '신고 목록 조회 성공' })
+  @SwaggerApiPaginatedResponse({
+    dto: ReportDetailDto,
+    status: 200,
+    description: '신고 목록 조회 성공',
+  })
   @RequirePermission('report:read')
   async getAllReports(
-    @Query() query: ReportSearchQueryDto,
+    @Query() query: ReportSearchQueryDto
   ): Promise<PaginatedResult<ReportDetailDto>> {
     return await this.reportService.searchReports(query);
   }
@@ -65,12 +66,16 @@ export class AdminReportController {
     summary: '검토 대기 중인 신고 목록',
     description: '우선순위와 생성시간 순으로 정렬된 검토 대기 중인 신고 목록을 조회합니다.',
   })
-  @SwaggerApiPaginatedResponse({ dto: ReportDetailDto, status: 200, description: '대기 신고 목록 조회 성공' })
+  @SwaggerApiPaginatedResponse({
+    dto: ReportDetailDto,
+    status: 200,
+    description: '대기 신고 목록 조회 성공',
+  })
   @RequirePermission('report:read')
   async getPendingReports(
-    @Query() query: Omit<ReportSearchQueryDto, 'status'>,
+    @Query() query: Omit<ReportSearchQueryDto, 'status'>
   ): Promise<PaginatedResult<ReportDetailDto>> {
-    const searchQuery = { ...query, status: 'pending' as const };
+    const searchQuery: ReportSearchQueryDto = { ...query, status: 'pending' as any };
     return await this.reportService.searchReports(searchQuery);
   }
 
@@ -82,34 +87,6 @@ export class AdminReportController {
   @SwaggerApiOkResponse({
     status: 200,
     description: '신고 통계 조회 성공',
-    schema: {
-      type: 'object',
-      properties: {
-        totalReports: { type: 'number' },
-        pendingReports: { type: 'number' },
-        resolvedReports: { type: 'number' },
-        reportsByTargetType: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              targetType: { type: 'string' },
-              count: { type: 'number' },
-            },
-          },
-        },
-        reportsByStatus: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              status: { type: 'string' },
-              count: { type: 'number' },
-            },
-          },
-        },
-      },
-    },
   })
   @RequirePermission('report:read')
   async getReportStatistics(): Promise<{
@@ -130,9 +107,7 @@ export class AdminReportController {
   @SwaggerApiParam({ name: 'id', type: String, description: '신고 ID' })
   @SwaggerApiOkResponse({ dto: ReportDetailDto, status: 200, description: '신고 상세 조회 성공' })
   @RequirePermission('report:read')
-  async getReportById(
-    @Param('id', ParseUUIDPipe) reportId: string,
-  ): Promise<ReportDetailDto> {
+  async getReportById(@Param('id', ParseUUIDPipe) reportId: string): Promise<ReportDetailDto> {
     return await this.reportService.getReportById(reportId);
   }
 
@@ -144,12 +119,12 @@ export class AdminReportController {
   })
   @SwaggerApiParam({ name: 'id', type: String, description: '신고 ID' })
   @SwaggerApiBody({ dto: ReviewReportDto })
-  @SwaggerApiNoContentResponse({ status: 204, description: '신고 검토 완료' })
+  @SwaggerApiOkResponse({ status: 204, description: '신고 검토 완료' })
   @RequirePermission('report:write')
   async reviewReport(
     @Param('id', ParseUUIDPipe) reportId: string,
     @Body() dto: ReviewReportDto,
-    @CurrentJwt() { id }: JwtPayload,
+    @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
     await this.reportService.reviewReport(reportId, id, dto);
   }
@@ -161,7 +136,7 @@ export class AdminReportController {
     description: '관리자가 신고를 삭제합니다. 검토 완료된 신고는 삭제할 수 없습니다.',
   })
   @SwaggerApiParam({ name: 'id', type: String, description: '신고 ID' })
-  @SwaggerApiNoContentResponse({ status: 204, description: '신고 삭제 완료' })
+  @SwaggerApiOkResponse({ status: 204, description: '신고 삭제 완료' })
   @RequirePermission('report:delete')
   async deleteReport(@Param('id', ParseUUIDPipe) reportId: string): Promise<void> {
     await this.reportService.deleteReport(reportId);
@@ -173,11 +148,15 @@ export class AdminReportController {
     description: '특정 사용자가 접수한 모든 신고 이력을 조회합니다.',
   })
   @SwaggerApiParam({ name: 'userId', type: String, description: '사용자 ID' })
-  @SwaggerApiPaginatedResponse({ dto: ReportDetailDto, status: 200, description: '사용자 신고 이력 조회 성공' })
+  @SwaggerApiPaginatedResponse({
+    dto: ReportDetailDto,
+    status: 200,
+    description: '사용자 신고 이력 조회 성공',
+  })
   @RequirePermission('report:read')
   async getUserReports(
     @Param('userId') userId: string,
-    @Query() query: Omit<ReportSearchQueryDto, 'reporterId'>,
+    @Query() query: Omit<ReportSearchQueryDto, 'reporterId'>
   ): Promise<PaginatedResult<ReportDetailDto>> {
     const searchQuery = { ...query, reporterId: userId };
     return await this.reportService.searchReports(searchQuery);
@@ -188,18 +167,22 @@ export class AdminReportController {
     summary: '특정 대상에 대한 모든 신고',
     description: '특정 콘텐츠, 크리에이터, 또는 사용자에 대한 모든 신고를 조회합니다.',
   })
-  @SwaggerApiParam({ name: 'targetType', enum: ['user', 'creator', 'content'], description: '신고 대상 타입' })
+  @SwaggerApiParam({ name: 'targetType', type: String, description: '신고 대상 타입' })
   @SwaggerApiParam({ name: 'targetId', type: String, description: '신고 대상 ID' })
-  @SwaggerApiPaginatedResponse({ dto: ReportDetailDto, status: 200, description: '대상별 신고 목록 조회 성공' })
+  @SwaggerApiPaginatedResponse({
+    dto: ReportDetailDto,
+    status: 200,
+    description: '대상별 신고 목록 조회 성공',
+  })
   @RequirePermission('report:read')
   async getTargetReports(
     @Param('targetType') targetType: string,
     @Param('targetId') targetId: string,
-    @Query() query: Omit<ReportSearchQueryDto, 'targetType' | 'targetId'>,
+    @Query() query: Omit<ReportSearchQueryDto, 'targetType' | 'targetId'>
   ): Promise<PaginatedResult<ReportDetailDto>> {
     const searchQuery = {
       ...query,
-      targetType: targetType as any,
+      targetType: targetType as ReportTargetType,
       targetId,
     };
     return await this.reportService.searchReports(searchQuery);
@@ -213,22 +196,17 @@ export class AdminReportController {
   })
   @SwaggerApiParam({ name: 'id', type: String, description: '신고 ID' })
   @SwaggerApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        priority: { type: 'number', minimum: 1, maximum: 3 },
-      },
-      required: ['priority'],
-    },
+    description: '우선순위 변경 정보',
+    dto: UpdatePriorityDto,
   })
-  @SwaggerApiNoContentResponse({ status: 204, description: '우선순위 변경 완료' })
+  @SwaggerApiOkResponse({ status: 204, description: '우선순위 변경 완료' })
   @RequirePermission('report:write')
   async updateReportPriority(
     @Param('id', ParseUUIDPipe) reportId: string,
-    @Body() body: { priority: number },
+    @Body() body: UpdatePriorityDto
   ): Promise<void> {
     await this.reportService.findByIdOrFail(reportId); // 존재 확인
-    
+
     // TODO: ReportService에 우선순위 업데이트 메서드 추가 필요
     this.logger.log('Report priority update requested', {
       reportId,

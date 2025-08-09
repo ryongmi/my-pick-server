@@ -8,4 +8,8 @@ export { ContentSyncMetadataRepository } from './content-sync-metadata.repositor
 // 타입 exports
 export type { CategoryStats, CategoryDistribution } from './content-category.repository.js';
 export type { TagStats, PopularTag } from './content-tag.repository.js';
-export type { InteractionStats, UserEngagement, ContentPerformance } from './content-interaction.repository.js';
+export type {
+  InteractionStats,
+  UserEngagement,
+  ContentPerformance,
+} from './content-interaction.repository.js';

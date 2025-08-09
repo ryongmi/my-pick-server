@@ -4,7 +4,7 @@ import { SyncStatus, PlatformType } from '@common/enums/index.js';
 
 import { CreatorPlatformRepository } from '../../creator/repositories/index.js';
 import { CreatorPlatformEntity } from '../../creator/entities/index.js';
-import { AddPlatformDto, UpdatePlatformDto } from '../../creator/dto/index.js';
+import { CreatePlatformDto, UpdatePlatformDto } from '../../creator/dto/index.js';
 import { CreatorException } from '../../creator/exceptions/index.js';
 import { CreatorService } from '../../creator/services/creator.service.js';
 
@@ -14,12 +14,12 @@ export class AdminPlatformService {
 
   constructor(
     private readonly creatorPlatformRepo: CreatorPlatformRepository,
-    private readonly creatorService: CreatorService,
+    private readonly creatorService: CreatorService
   ) {}
 
   // ==================== ADMIN PLATFORM 관리 메서드 ====================
 
-  async addPlatformToCreator(creatorId: string, dto: AddPlatformDto): Promise<void> {
+  async addPlatformToCreator(creatorId: string, dto: CreatePlatformDto): Promise<void> {
     try {
       // 1. Creator 존재 확인
       const creator = await this.creatorService.findByIdOrFail(creatorId);
@@ -49,10 +49,10 @@ export class AdminPlatformService {
         type: dto.type,
         platformId: dto.platformId,
         url: dto.url,
-        followerCount: dto.followerCount || 0,
-        contentCount: dto.contentCount || 0,
-        totalViews: dto.totalViews || 0,
-        isActive: dto.isActive ?? true,
+        followerCount: 0,
+        contentCount: 0,
+        totalViews: 0,
+        isActive: true,
       });
 
       await this.creatorPlatformRepo.saveEntity(platform);
@@ -114,14 +114,16 @@ export class AdminPlatformService {
       const platform = await this.findByIdOrFail(platformId);
 
       // 2. 최소 1개 플랫폼 유지 검증
-      const creatorPlatforms = await this.creatorPlatformRepo.findByCreatorId(platform.creatorId);
+      const creatorPlatforms = await this.creatorPlatformRepo.find({
+        where: { creatorId: platform.creatorId },
+      });
       if (creatorPlatforms.length <= 1) {
         this.logger.warn('Cannot remove last platform from creator', {
           platformId,
           creatorId: platform.creatorId,
           platformCount: creatorPlatforms.length,
         });
-        throw CreatorException.cannotRemoveLastPlatform();
+        throw new Error('Cannot remove last platform from creator');
       }
 
       // 3. 삭제 수행
@@ -238,9 +240,7 @@ export class AdminPlatformService {
   }
 
   // 🔥 YouTube 플랫폼 데이터 동기화
-  private async syncYouTubePlatformData(
-    platform: CreatorPlatformEntity
-  ): Promise<{
+  private async syncYouTubePlatformData(platform: CreatorPlatformEntity): Promise<{
     followerCount?: number;
     contentCount?: number;
     totalViews?: number;

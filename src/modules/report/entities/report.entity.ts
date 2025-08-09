@@ -26,7 +26,7 @@ export class ReportEntity extends BaseEntityUUID {
   reason!: ReportReason;
 
   @Column({ type: 'text', nullable: true })
-  description?: string; // 신고 상세 설명
+  description?: string | null; // 신고 상세 설명
 
   @Column({ type: 'enum', enum: ReportStatus, default: ReportStatus.PENDING })
   status!: ReportStatus;
@@ -36,6 +36,6 @@ export class ReportEntity extends BaseEntityUUID {
 
   // 분리된 엔티티들과 연결 (FK 없이 reportId로 연결)
   // - ReportEvidenceEntity (1:1) - 증거 정보
-  // - ReportReviewEntity (1:1) - 검토 정보  
+  // - ReportReviewEntity (1:1) - 검토 정보
   // - ReportActionEntity (1:1) - 조치 정보
 }

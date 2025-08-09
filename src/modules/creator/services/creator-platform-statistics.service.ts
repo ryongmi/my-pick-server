@@ -7,9 +7,7 @@ import { CreatorPlatformStatisticsEntity } from '../entities/index.js';
 export class CreatorPlatformStatisticsService {
   private readonly logger = new Logger(CreatorPlatformStatisticsService.name);
 
-  constructor(
-    private readonly platformStatsRepo: CreatorPlatformStatisticsRepository
-  ) {}
+  constructor(private readonly platformStatsRepo: CreatorPlatformStatisticsRepository) {}
 
   // ==================== PUBLIC METHODS ====================
 
@@ -45,7 +43,7 @@ export class CreatorPlatformStatisticsService {
     } catch (error: unknown) {
       this.logger.error('Failed to get aggregated platform stats', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId
+        creatorId,
       });
 
       // 실패 시 기본값 반환
@@ -57,7 +55,7 @@ export class CreatorPlatformStatisticsService {
         totalComments: 0,
         totalShares: 0,
         averageEngagementRate: 0,
-        activePlatformCount: 0
+        activePlatformCount: 0,
       };
     }
   }
@@ -85,13 +83,13 @@ export class CreatorPlatformStatisticsService {
       this.logger.debug('Platform statistics updated', {
         creatorId,
         platform,
-        statsKeys: Object.keys(stats)
+        statsKeys: Object.keys(stats),
       });
     } catch (error: unknown) {
       this.logger.error('Failed to update platform statistics', {
         error: error instanceof Error ? error.message : 'Unknown error',
         creatorId,
-        platform
+        platform,
       });
       throw error;
     }
@@ -100,14 +98,17 @@ export class CreatorPlatformStatisticsService {
   /**
    * 특정 플랫폼의 상위 크리에이터 조회
    */
-  async getTopCreatorsByPlatform(platform: string, limit = 100): Promise<CreatorPlatformStatisticsEntity[]> {
+  async getTopCreatorsByPlatform(
+    platform: string,
+    limit = 100
+  ): Promise<CreatorPlatformStatisticsEntity[]> {
     try {
       return await this.platformStatsRepo.findTopByPlatform(platform, limit);
     } catch (error: unknown) {
       this.logger.error('Failed to get top creators by platform', {
         error: error instanceof Error ? error.message : 'Unknown error',
         platform,
-        limit
+        limit,
       });
       return [];
     }
@@ -118,37 +119,44 @@ export class CreatorPlatformStatisticsService {
   /**
    * 여러 크리에이터의 플랫폼 통계를 creatorId별로 그룹화
    */
-  async groupPlatformStatsByCreatorId(creatorIds: string[]): Promise<Record<string, CreatorPlatformStatisticsEntity[]>> {
+  async groupPlatformStatsByCreatorId(
+    creatorIds: string[]
+  ): Promise<Record<string, CreatorPlatformStatisticsEntity[]>> {
     const platformStats = await this.findByCreatorIds(creatorIds);
-    
+
     const groupedStats: Record<string, CreatorPlatformStatisticsEntity[]> = {};
-    
+
     // 모든 creatorId를 빈 배열로 초기화
-    creatorIds.forEach(creatorId => {
+    creatorIds.forEach((creatorId) => {
       groupedStats[creatorId] = [];
     });
-    
+
     // 플랫폼 통계를 creatorId별로 그룹화
-    platformStats.forEach(stats => {
-      groupedStats[stats.creatorId].push(stats);
+    platformStats.forEach((stats) => {
+      groupedStats[stats.creatorId]!.push(stats);
     });
-    
+
     return groupedStats;
   }
 
   /**
    * 여러 크리에이터의 통합 통계 배치 계산
    */
-  async getAggregatedStatsBatch(creatorIds: string[]): Promise<Record<string, {
-    totalFollowers: number;
-    totalContent: number;
-    totalViews: number;
-    totalLikes: number;
-    totalComments: number;
-    totalShares: number;
-    averageEngagementRate: number;
-    activePlatformCount: number;
-  }>> {
+  async getAggregatedStatsBatch(creatorIds: string[]): Promise<
+    Record<
+      string,
+      {
+        totalFollowers: number;
+        totalContent: number;
+        totalViews: number;
+        totalLikes: number;
+        totalComments: number;
+        totalShares: number;
+        averageEngagementRate: number;
+        activePlatformCount: number;
+      }
+    >
+  > {
     const result: Record<string, any> = {};
 
     // 각 크리에이터의 통합 통계를 개별적으로 계산

@@ -23,7 +23,7 @@ export class CreatorApplicationRepository extends BaseRepository<CreatorApplicat
   constructor(private dataSource: DataSource) {
     super(CreatorApplicationEntity, dataSource);
   }
-  
+
   async searchApplications(
     options: ApplicationSearchOptions
   ): Promise<PaginatedResult<Partial<CreatorApplicationEntity>>> {
@@ -102,4 +102,3 @@ export class CreatorApplicationRepository extends BaseRepository<CreatorApplicat
     return this.count({ where: { status } });
   }
 }
-

@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { EntityManager } from 'typeorm';
+
 import { CreatorApplicationRequirementRepository } from '../repositories/index.js';
-import { 
-  CreatorApplicationRequirementEntity, 
-  RequirementCategory, 
-  RequirementStatus 
+import {
+  CreatorApplicationRequirementEntity,
+  RequirementCategory,
+  RequirementStatus,
 } from '../entities/index.js';
 
 export interface CreateRequirementDto {
@@ -43,9 +45,7 @@ export interface RequirementProgress {
 export class CreatorApplicationRequirementService {
   private readonly logger = new Logger(CreatorApplicationRequirementService.name);
 
-  constructor(
-    private readonly requirementRepo: CreatorApplicationRequirementRepository
-  ) {}
+  constructor(private readonly requirementRepo: CreatorApplicationRequirementRepository) {}
 
   // ==================== PUBLIC METHODS ====================
 
@@ -54,20 +54,20 @@ export class CreatorApplicationRequirementService {
   }
 
   async findByReviewIdAndStatus(
-    reviewId: string, 
+    reviewId: string,
     status: RequirementStatus
   ): Promise<CreatorApplicationRequirementEntity[]> {
     return this.requirementRepo.findByReviewIdAndStatus(reviewId, status);
   }
 
   async findByCategory(
-    reviewId: string, 
+    reviewId: string,
     category: RequirementCategory
   ): Promise<CreatorApplicationRequirementEntity[]> {
     return this.requirementRepo.findByCategory(reviewId, category);
   }
 
-  async createRequirement(dto: CreateRequirementDto): Promise<CreatorApplicationRequirementEntity> {
+  async createRequirement(dto: CreateRequirementDto, transactionManager?: EntityManager): Promise<CreatorApplicationRequirementEntity> {
     try {
       const requirement = this.requirementRepo.create({
         ...dto,
@@ -76,7 +76,7 @@ export class CreatorApplicationRequirementService {
         priority: dto.priority || 1,
       });
 
-      const savedRequirement = await this.requirementRepo.save(requirement);
+      const savedRequirement = await this.requirementRepo.saveEntity(requirement, transactionManager);
 
       this.logger.log('Requirement created successfully', {
         requirementId: savedRequirement.id,
@@ -153,21 +153,21 @@ export class CreatorApplicationRequirementService {
     try {
       const allRequirements = await this.findByReviewId(reviewId);
       const totalRequirements = allRequirements.length;
-      
+
       if (totalRequirements === 0) {
         return this.createEmptyProgress(reviewId);
       }
 
-      const completedRequirements = allRequirements.filter(r => r.isCompleted).length;
+      const completedRequirements = allRequirements.filter((r) => r.isCompleted).length;
       const completionRate = (completedRequirements / totalRequirements) * 100;
 
       const pendingCount = await this.requirementRepo.countByReviewIdAndStatus(
-        reviewId, 
+        reviewId,
         RequirementStatus.PENDING
       );
-      
+
       const inProgressCount = await this.requirementRepo.countByReviewIdAndStatus(
-        reviewId, 
+        reviewId,
         RequirementStatus.IN_PROGRESS
       );
 
@@ -199,10 +199,13 @@ export class CreatorApplicationRequirementService {
     return this.findByReviewIdAndStatus(reviewId, RequirementStatus.PENDING);
   }
 
-  async getHighPriorityRequirements(reviewId: string, maxPriority: number = 2): Promise<CreatorApplicationRequirementEntity[]> {
+  async getHighPriorityRequirements(
+    reviewId: string,
+    maxPriority: number = 2
+  ): Promise<CreatorApplicationRequirementEntity[]> {
     try {
       const allRequirements = await this.findByReviewId(reviewId);
-      return allRequirements.filter(r => r.priority <= maxPriority && !r.isCompleted);
+      return allRequirements.filter((r) => r.priority <= maxPriority && !r.isCompleted);
     } catch (error: unknown) {
       this.logger.error('Failed to get high priority requirements', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -214,12 +217,12 @@ export class CreatorApplicationRequirementService {
   }
 
   async createBulkRequirements(
-    reviewId: string, 
+    reviewId: string,
     requirements: Omit<CreateRequirementDto, 'reviewId'>[]
   ): Promise<CreatorApplicationRequirementEntity[]> {
     try {
       const createdRequirements = [];
-      
+
       for (const req of requirements) {
         const created = await this.createRequirement({ ...req, reviewId });
         createdRequirements.push(created);
@@ -293,23 +296,23 @@ export class CreatorApplicationRequirementService {
     requirements: CreatorApplicationRequirementEntity[]
   ): Record<RequirementCategory, number> {
     const breakdown = {} as Record<RequirementCategory, number>;
-    
+
     for (const category of Object.values(RequirementCategory)) {
-      breakdown[category] = requirements.filter(r => r.category === category).length;
+      breakdown[category] = requirements.filter((r) => r.category === category).length;
     }
-    
+
     return breakdown;
   }
 
   private calculateAveragePriority(requirements: CreatorApplicationRequirementEntity[]): number {
     if (requirements.length === 0) return 0;
-    
+
     const totalPriority = requirements.reduce((sum, req) => sum + req.priority, 0);
     return Math.round((totalPriority / requirements.length) * 100) / 100;
   }
 
   private calculateEstimatedTotalDays(requirements: CreatorApplicationRequirementEntity[]): number {
-    const incompletedRequirements = requirements.filter(r => !r.isCompleted);
+    const incompletedRequirements = requirements.filter((r) => !r.isCompleted);
     return incompletedRequirements.reduce((sum, req) => sum + (req.estimatedDays || 1), 0);
   }
 }

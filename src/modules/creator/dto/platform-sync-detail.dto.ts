@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { Expose, Type } from 'class-transformer';
+
 import { VideoSyncStatus } from '@common/enums/index.js';
 
 export class PlatformSyncDetailDto {

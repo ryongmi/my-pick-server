@@ -79,8 +79,8 @@ export class PlatformApplicationController {
   @Get('my')
   @HttpCode(200)
   @SwaggerApiOperation({ summary: '내 플랫폼 신청 목록 조회' })
-  @SwaggerApiOkResponse({ 
-    status: 200, 
+  @SwaggerApiOkResponse({
+    status: 200,
     description: '플랫폼 신청 목록 조회 성공',
     dto: ApplicationDetailDto,
   })
@@ -91,13 +91,13 @@ export class PlatformApplicationController {
   @Serialize({ dto: ApplicationDetailDto })
   async getMyApplications(@CurrentUser() user: UserInfo): Promise<ApplicationDetailDto[]> {
     const applications = await this.platformApplicationService.findByUserId(user.id);
-    return applications.map(app => ({
+    return applications.map((app) => ({
       id: app.id,
       creatorId: app.creatorId,
       userId: app.userId,
       status: app.status,
-      platformData: app.platformData,
-      reviewData: app.reviewData,
+      platformType: app.platformType,
+      appliedAt: app.appliedAt,
       createdAt: app.createdAt,
       updatedAt: app.updatedAt,
       reviewedAt: app.reviewedAt,
@@ -113,8 +113,8 @@ export class PlatformApplicationController {
     description: '크리에이터 ID',
     type: String,
   })
-  @SwaggerApiOkResponse({ 
-    status: 200, 
+  @SwaggerApiOkResponse({
+    status: 200,
     description: '크리에이터별 플랫폼 신청 목록 조회 성공',
     dto: ApplicationDetailDto,
   })
@@ -128,17 +128,17 @@ export class PlatformApplicationController {
     @CurrentUser() user: UserInfo
   ): Promise<ApplicationDetailDto[]> {
     const applications = await this.platformApplicationService.findByCreatorId(creatorId);
-    
+
     // 본인의 신청만 필터링
-    const myApplications = applications.filter(app => app.userId === user.id);
-    
-    return myApplications.map(app => ({
+    const myApplications = applications.filter((app) => app.userId === user.id);
+
+    return myApplications.map((app) => ({
       id: app.id,
       creatorId: app.creatorId,
       userId: app.userId,
       status: app.status,
-      platformData: app.platformData,
-      reviewData: app.reviewData,
+      platformType: app.platformType,
+      appliedAt: app.appliedAt,
       createdAt: app.createdAt,
       updatedAt: app.updatedAt,
       reviewedAt: app.reviewedAt,
@@ -154,8 +154,8 @@ export class PlatformApplicationController {
     description: '플랫폼 신청 ID',
     type: String,
   })
-  @SwaggerApiOkResponse({ 
-    status: 200, 
+  @SwaggerApiOkResponse({
+    status: 200,
     description: '플랫폼 신청 상세 조회 성공',
     dto: ApplicationDetailDto,
   })
@@ -173,7 +173,7 @@ export class PlatformApplicationController {
     @CurrentUser() user: UserInfo
   ): Promise<ApplicationDetailDto> {
     const application = await this.platformApplicationService.findByIdOrFail(applicationId);
-    
+
     // 본인의 신청인지 확인
     if (application.userId !== user.id) {
       throw new ForbiddenException('해당 플랫폼 신청에 대한 접근 권한이 없습니다.');

@@ -22,13 +22,14 @@ export class CreatorCategoryStatisticsRepository extends BaseRepository<CreatorC
 
     return await this.find({
       where: {
-        creatorId: this.dataSource.createQueryBuilder()
+        creatorId: this.dataSource
+          .createQueryBuilder()
           .select()
           .from('creator_category_statistics', 'ccs')
           .where('ccs.creatorId IN (:...creatorIds)', { creatorIds })
-          .getQuery()
+          .getQuery(),
       },
-      order: { creatorId: 'ASC', category: 'ASC' }
+      order: { creatorId: 'ASC', category: 'ASC' },
     });
   }
 
@@ -38,29 +39,35 @@ export class CreatorCategoryStatisticsRepository extends BaseRepository<CreatorC
   async findByCreatorId(creatorId: string): Promise<CreatorCategoryStatisticsEntity[]> {
     return await this.find({
       where: { creatorId },
-      order: { contentCount: 'DESC' }
+      order: { contentCount: 'DESC' },
     });
   }
 
   /**
    * 특정 카테고리의 모든 크리에이터 통계 조회 (상위 N개)
    */
-  async findTopByCategory(category: string, limit = 100): Promise<CreatorCategoryStatisticsEntity[]> {
+  async findTopByCategory(
+    category: string,
+    limit = 100
+  ): Promise<CreatorCategoryStatisticsEntity[]> {
     return await this.find({
       where: { category },
       order: { viewCount: 'DESC' },
-      take: limit
+      take: limit,
     });
   }
 
   /**
    * 크리에이터의 주요 카테고리 조회 (콘텐츠 수 기준 상위 N개)
    */
-  async findTopCategoriesForCreator(creatorId: string, limit = 5): Promise<CreatorCategoryStatisticsEntity[]> {
+  async findTopCategoriesForCreator(
+    creatorId: string,
+    limit = 5
+  ): Promise<CreatorCategoryStatisticsEntity[]> {
     return await this.find({
       where: { creatorId },
       order: { contentCount: 'DESC' },
-      take: limit
+      take: limit,
     });
   }
 
@@ -81,7 +88,7 @@ export class CreatorCategoryStatisticsRepository extends BaseRepository<CreatorC
         'COUNT(*) AS totalCategories',
         'SUM(ccs.contentCount) AS totalCategoryContent',
         'SUM(ccs.viewCount) AS totalCategoryViews',
-        'AVG(ccs.averageViews) AS averageViewsPerCategory'
+        'AVG(ccs.averageViews) AS averageViewsPerCategory',
       ])
       .where('ccs.creatorId = :creatorId', { creatorId });
 
@@ -90,7 +97,7 @@ export class CreatorCategoryStatisticsRepository extends BaseRepository<CreatorC
     // 가장 많은 콘텐츠를 가진 카테고리 조회
     const topCategoryResult = await this.findOne({
       where: { creatorId },
-      order: { contentCount: 'DESC' }
+      order: { contentCount: 'DESC' },
     });
 
     return {
@@ -98,7 +105,7 @@ export class CreatorCategoryStatisticsRepository extends BaseRepository<CreatorC
       topCategory: topCategoryResult?.category || null,
       totalCategoryContent: parseInt(result?.totalCategoryContent || '0'),
       totalCategoryViews: parseInt(result?.totalCategoryViews || '0'),
-      averageViewsPerCategory: parseFloat(result?.averageViewsPerCategory || '0')
+      averageViewsPerCategory: parseFloat(result?.averageViewsPerCategory || '0'),
     };
   }
 
@@ -106,9 +113,11 @@ export class CreatorCategoryStatisticsRepository extends BaseRepository<CreatorC
    * 카테고리별 통계 업데이트 또는 생성
    */
   async upsertStatistics(
-    creatorId: string, 
-    category: string, 
-    stats: Partial<Omit<CreatorCategoryStatisticsEntity, 'creatorId' | 'category' | 'createdAt' | 'updatedAt'>>
+    creatorId: string,
+    category: string,
+    stats: Partial<
+      Omit<CreatorCategoryStatisticsEntity, 'creatorId' | 'category' | 'createdAt' | 'updatedAt'>
+    >
   ): Promise<void> {
     await this.createQueryBuilder()
       .insert()
@@ -117,40 +126,45 @@ export class CreatorCategoryStatisticsRepository extends BaseRepository<CreatorC
         creatorId,
         category,
         ...stats,
-        lastCalculatedAt: new Date()
+        lastCalculatedAt: new Date(),
       })
-      .orUpdate([
-        'contentCount', 
-        'viewCount', 
-        'averageViews', 
-        'totalLikes', 
-        'totalComments', 
-        'totalShares', 
-        'averageEngagementRate', 
-        'contentGrowthRate', 
-        'viewGrowthRate', 
-        'lastCalculatedAt'
-      ], ['creatorId', 'category'])
+      .orUpdate(
+        [
+          'contentCount',
+          'viewCount',
+          'averageViews',
+          'totalLikes',
+          'totalComments',
+          'totalShares',
+          'averageEngagementRate',
+          'contentGrowthRate',
+          'viewGrowthRate',
+          'lastCalculatedAt',
+        ],
+        ['creatorId', 'category']
+      )
       .execute();
   }
 
   /**
    * 카테고리별 글로벌 랭킹 (모든 크리에이터)
    */
-  async getGlobalCategoryRankings(limit = 50): Promise<{
-    category: string;
-    totalCreators: number;
-    totalContent: number;
-    totalViews: number;
-    averageEngagement: number;
-  }[]> {
+  async getGlobalCategoryRankings(limit = 50): Promise<
+    {
+      category: string;
+      totalCreators: number;
+      totalContent: number;
+      totalViews: number;
+      averageEngagement: number;
+    }[]
+  > {
     const queryBuilder = this.createQueryBuilder('ccs')
       .select([
         'ccs.category AS category',
         'COUNT(DISTINCT ccs.creatorId) AS totalCreators',
         'SUM(ccs.contentCount) AS totalContent',
         'SUM(ccs.viewCount) AS totalViews',
-        'AVG(ccs.averageEngagementRate) AS averageEngagement'
+        'AVG(ccs.averageEngagementRate) AS averageEngagement',
       ])
       .groupBy('ccs.category')
       .orderBy('totalViews', 'DESC')
@@ -158,12 +172,12 @@ export class CreatorCategoryStatisticsRepository extends BaseRepository<CreatorC
 
     const results = await queryBuilder.getRawMany();
 
-    return results.map(result => ({
+    return results.map((result) => ({
       category: result.category,
       totalCreators: parseInt(result.totalCreators),
       totalContent: parseInt(result.totalContent),
       totalViews: parseInt(result.totalViews),
-      averageEngagement: parseFloat(result.averageEngagement || '0')
+      averageEngagement: parseFloat(result.averageEngagement || '0'),
     }));
   }
 }

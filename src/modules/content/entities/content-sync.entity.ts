@@ -11,22 +11,22 @@ export class ContentSyncEntity {
   contentId!: string; // ContentEntity와 1:1 관계
 
   @Column({ nullable: true })
-  lastSyncedAt?: Date; // 마지막 동기화 시간
+  lastSyncedAt?: Date | null; // 마지막 동기화 시간
 
   @Column({ nullable: true })
-  expiresAt?: Date; // 데이터 만료 시간 (YouTube API 30일 정책)
+  expiresAt?: Date | null; // 데이터 만료 시간 (YouTube API 30일 정책)
 
   @Column({ default: false })
-  isAuthorizedData?: boolean; // 인증된 데이터 여부 (크리에이터 동의 기반)
+  isAuthorizedData?: boolean | null; // 인증된 데이터 여부 (크리에이터 동의 기반)
 
   @Column({ nullable: true })
-  syncError?: string; // 동기화 오류 메시지
+  syncError?: string | null; // 동기화 오류 메시지
 
   @Column({ default: 0 })
-  syncRetryCount?: number; // 동기화 재시도 횟수
+  syncRetryCount?: number | null; // 동기화 재시도 횟수
 
   @Column({ nullable: true })
-  nextSyncAt?: Date; // 다음 동기화 예정 시간
+  nextSyncAt?: Date | null; // 다음 동기화 예정 시간
 
   @Column({
     type: 'enum',
@@ -34,7 +34,6 @@ export class ContentSyncEntity {
     default: 'completed',
   })
   syncStatus!: 'pending' | 'syncing' | 'completed' | 'failed';
-
 
   @CreateDateColumn()
   createdAt!: Date;

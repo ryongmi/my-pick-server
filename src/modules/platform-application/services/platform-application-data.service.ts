@@ -1,4 +1,5 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
+
 import { EntityManager } from 'typeorm';
 
 import { PlatformApplicationDataRepository } from '../repositories/index.js';
@@ -66,12 +67,26 @@ export class PlatformApplicationDataService {
     transactionManager?: EntityManager
   ): Promise<void> {
     try {
-      const data = this.appDataRepo.create({
+      const data: any = {
         applicationId,
-        ...platformData,
-      });
+        type: platformData.type,
+        platformId: platformData.platformId,
+        url: platformData.url,
+        displayName: platformData.displayName,
+        verificationProofType: platformData.verificationProofType,
+        verificationProofUrl: platformData.verificationProofUrl,
+        verificationProofDescription: platformData.verificationProofDescription,
+      };
 
-      await this.appDataRepo.save(data);
+      if (platformData.description !== undefined) {
+        data.description = platformData.description;
+      }
+      if (platformData.followerCount !== undefined) {
+        data.followerCount = platformData.followerCount;
+      }
+
+      const dataEntity = this.appDataRepo.create(data) as unknown as PlatformApplicationDataEntity;
+      await this.appDataRepo.saveEntity(dataEntity, transactionManager);
 
       this.logger.log('Platform application data created', {
         applicationId,
@@ -109,10 +124,37 @@ export class PlatformApplicationDataService {
     transactionManager?: EntityManager
   ): Promise<void> {
     try {
-      const updateResult = await this.appDataRepo.update(
-        { applicationId },
-        platformData
-      );
+      const updateData: any = {};
+
+      if (platformData.type !== undefined) {
+        updateData.type = platformData.type;
+      }
+      if (platformData.platformId !== undefined) {
+        updateData.platformId = platformData.platformId;
+      }
+      if (platformData.url !== undefined) {
+        updateData.url = platformData.url;
+      }
+      if (platformData.displayName !== undefined) {
+        updateData.displayName = platformData.displayName;
+      }
+      if (platformData.description !== undefined) {
+        updateData.description = platformData.description;
+      }
+      if (platformData.followerCount !== undefined) {
+        updateData.followerCount = platformData.followerCount;
+      }
+      if (platformData.verificationProofType !== undefined) {
+        updateData.verificationProofType = platformData.verificationProofType;
+      }
+      if (platformData.verificationProofUrl !== undefined) {
+        updateData.verificationProofUrl = platformData.verificationProofUrl;
+      }
+      if (platformData.verificationProofDescription !== undefined) {
+        updateData.verificationProofDescription = platformData.verificationProofDescription;
+      }
+
+      const updateResult = await this.appDataRepo.update({ applicationId }, updateData);
 
       if (updateResult.affected === 0) {
         throw PlatformApplicationException.applicationNotFound();

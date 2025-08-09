@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { IsString, IsOptional, IsArray, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 export class CreateCreatorDto {

@@ -7,24 +7,24 @@ export class ReportReviewEntity {
   @PrimaryColumn({ comment: '외래키(reports.id)이자 기본키 - 1:1 관계 최적화' })
   reportId!: string;
 
-  @Column({ 
+  @Column({
     nullable: true,
-    comment: '검토자 ID (관리자)'
+    comment: '검토자 ID (관리자)',
   })
-  reviewerId?: string;
+  reviewerId?: string | null;
 
-  @Column({ 
+  @Column({
     nullable: true,
-    comment: '검토 처리 시간'
+    comment: '검토 처리 시간',
   })
-  reviewedAt?: Date;
+  reviewedAt?: Date | null;
 
-  @Column({ 
-    type: 'text', 
+  @Column({
+    type: 'text',
     nullable: true,
-    comment: '검토 의견/코멘트'
+    comment: '검토 의견/코멘트',
   })
-  reviewComment?: string;
+  reviewComment?: string | null;
 
   @CreateDateColumn()
   createdAt!: Date;

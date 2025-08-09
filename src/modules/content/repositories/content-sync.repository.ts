@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+
 import { DataSource, LessThan, MoreThan, In } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
@@ -110,8 +111,8 @@ export class ContentSyncRepository extends BaseRepository<ContentSyncEntity> {
   }
 
   async findNonConsentedCreatorSync(creatorId: string): Promise<ContentSyncEntity[]> {
-    const thirtyDaysAgo = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000));
-    
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
     return this.createQueryBuilder('sync')
       .leftJoin('content', 'content', 'content.id = sync.contentId')
       .where('content.creatorId = :creatorId', { creatorId })

@@ -1,6 +1,7 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { IsEnum, IsString, IsOptional, IsNumber, ValidateNested, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 import { ReportStatus } from '../enums/index.js';
 import { ReportActionType } from '../entities/index.js';
@@ -37,10 +38,20 @@ export class ReportActionDto {
 export class ReviewReportDto {
   @ApiProperty({
     description: '신고 처리 상태',
-    enum: [ReportStatus.RESOLVED, ReportStatus.REJECTED, ReportStatus.DISMISSED, ReportStatus.UNDER_REVIEW],
+    enum: [
+      ReportStatus.RESOLVED,
+      ReportStatus.REJECTED,
+      ReportStatus.DISMISSED,
+      ReportStatus.UNDER_REVIEW,
+    ],
     example: ReportStatus.RESOLVED,
   })
-  @IsEnum([ReportStatus.RESOLVED, ReportStatus.REJECTED, ReportStatus.DISMISSED, ReportStatus.UNDER_REVIEW])
+  @IsEnum([
+    ReportStatus.RESOLVED,
+    ReportStatus.REJECTED,
+    ReportStatus.DISMISSED,
+    ReportStatus.UNDER_REVIEW,
+  ])
   status!: ReportStatus;
 
   @ApiPropertyOptional({

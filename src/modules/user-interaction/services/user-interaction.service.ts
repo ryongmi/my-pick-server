@@ -1,5 +1,9 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
 
+import { EntityManager } from 'typeorm';
+
+import { CacheService } from '@database/redis/index.js';
+
 import { UserInteractionRepository } from '../repositories/index.js';
 import { UserInteractionEntity } from '../entities/index.js';
 import {
@@ -15,7 +19,10 @@ import { UserInteractionException } from '../exceptions/index.js';
 export class UserInteractionService {
   private readonly logger = new Logger(UserInteractionService.name);
 
-  constructor(private readonly userInteractionRepo: UserInteractionRepository) {}
+  constructor(
+    private readonly userInteractionRepo: UserInteractionRepository,
+    private readonly cacheService: CacheService
+  ) {}
 
   // ==================== 조회 메서드 (ID 목록 반환) ====================
 
@@ -45,7 +52,27 @@ export class UserInteractionService {
 
   async getBookmarkedContentIds(userId: string): Promise<string[]> {
     try {
-      return await this.userInteractionRepo.getBookmarkedContentIds(userId);
+      // 1. 캐시에서 구독 정보 조회 시도
+      const cached = await this.cacheService.getUserSubscriptions(userId);
+      if (cached && Array.isArray(cached)) {
+        this.logger.debug('Bookmarked content IDs served from cache', {
+          userId,
+          count: cached.length,
+        });
+        return cached;
+      }
+
+      // 2. 캐시 미스 시 DB에서 조회
+      const bookmarkedIds = await this.userInteractionRepo.getBookmarkedContentIds(userId);
+
+      // 3. 결과 캐싱
+      await this.cacheService.setUserSubscriptions(userId, bookmarkedIds);
+
+      this.logger.debug('Bookmarked content IDs fetched and cached', {
+        userId,
+        count: bookmarkedIds.length,
+      });
+      return bookmarkedIds;
     } catch (error: unknown) {
       this.logger.error('Get bookmarked content IDs failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -121,13 +148,17 @@ export class UserInteractionService {
 
   // ==================== 변경 메서드 ====================
 
-  async bookmarkContent(dto: BookmarkContentDto): Promise<void> {
+  async bookmarkContent(dto: BookmarkContentDto, transactionManager?: EntityManager): Promise<void> {
     try {
       const interaction = await this.userInteractionRepo.upsertInteraction(
         dto.userId,
         dto.contentId,
         { isBookmarked: true }
       );
+
+      // 캐시 무효화 (사용자 상호작용 캐시 및 북마크 목록 캐시 무효화)
+      await this.cacheService.deleteUserSubscriptionCache(dto.userId);
+      await this.cacheService.deleteUserInteractionCache(dto.userId);
 
       this.logger.log('Content bookmarked successfully', {
         userId: dto.userId,
@@ -145,7 +176,7 @@ export class UserInteractionService {
     }
   }
 
-  async removeBookmark(userId: string, contentId: string): Promise<void> {
+  async removeBookmark(userId: string, contentId: string, transactionManager?: EntityManager): Promise<void> {
     try {
       const interaction = await this.userInteractionRepo.findByUserAndContent(userId, contentId);
 
@@ -161,11 +192,15 @@ export class UserInteractionService {
       if (interaction.isLiked || interaction.watchedAt || interaction.rating) {
         // 북마크만 해제
         interaction.isBookmarked = false;
-        await this.userInteractionRepo.save(interaction);
+        await this.userInteractionRepo.saveEntity(interaction, transactionManager);
       } else {
         // 다른 상호작용이 없으면 완전 삭제
         await this.userInteractionRepo.delete({ userId, contentId });
       }
+
+      // 캐시 무효화 (사용자 상호작용 캐시 및 북마크 목록 캐시 무효화)
+      await this.cacheService.deleteUserSubscriptionCache(userId);
+      await this.cacheService.deleteUserInteractionCache(userId);
 
       this.logger.log('Bookmark removed successfully', {
         userId,
@@ -186,7 +221,7 @@ export class UserInteractionService {
     }
   }
 
-  async likeContent(dto: LikeContentDto): Promise<void> {
+  async likeContent(dto: LikeContentDto, transactionManager?: EntityManager): Promise<void> {
     try {
       const interaction = await this.userInteractionRepo.upsertInteraction(
         dto.userId,
@@ -210,7 +245,7 @@ export class UserInteractionService {
     }
   }
 
-  async removeLike(userId: string, contentId: string): Promise<void> {
+  async removeLike(userId: string, contentId: string, transactionManager?: EntityManager): Promise<void> {
     try {
       const interaction = await this.userInteractionRepo.findByUserAndContent(userId, contentId);
 
@@ -226,7 +261,7 @@ export class UserInteractionService {
       if (interaction.isBookmarked || interaction.watchedAt || interaction.rating) {
         // 좋아요만 해제
         interaction.isLiked = false;
-        await this.userInteractionRepo.save(interaction);
+        await this.userInteractionRepo.saveEntity(interaction, transactionManager);
       } else {
         // 다른 상호작용이 없으면 완전 삭제
         await this.userInteractionRepo.delete({ userId, contentId });
@@ -255,7 +290,7 @@ export class UserInteractionService {
     try {
       const watchUpdate = {
         watchedAt: new Date(),
-        ...(dto.watchDuration !== undefined && { watchDuration: dto.watchDuration })
+        ...(dto.watchDuration !== undefined && { watchDuration: dto.watchDuration }),
       };
 
       const interaction = await this.userInteractionRepo.upsertInteraction(
@@ -311,15 +346,16 @@ export class UserInteractionService {
 
   async toggleBookmark(userId: string, contentId: string): Promise<{ isBookmarked: boolean }> {
     try {
-      const currentInteraction = await this.userInteractionRepo.findByUserAndContent(userId, contentId);
+      const currentInteraction = await this.userInteractionRepo.findByUserAndContent(
+        userId,
+        contentId
+      );
       const currentState = currentInteraction?.isBookmarked || false;
       const newState = !currentState;
 
-      await this.userInteractionRepo.upsertInteraction(
-        userId,
-        contentId,
-        { isBookmarked: newState }
-      );
+      await this.userInteractionRepo.upsertInteraction(userId, contentId, {
+        isBookmarked: newState,
+      });
 
       this.logger.log('Bookmark toggled successfully', {
         userId,
@@ -341,15 +377,14 @@ export class UserInteractionService {
 
   async toggleLike(userId: string, contentId: string): Promise<{ isLiked: boolean }> {
     try {
-      const currentInteraction = await this.userInteractionRepo.findByUserAndContent(userId, contentId);
+      const currentInteraction = await this.userInteractionRepo.findByUserAndContent(
+        userId,
+        contentId
+      );
       const currentState = currentInteraction?.isLiked || false;
       const newState = !currentState;
 
-      await this.userInteractionRepo.upsertInteraction(
-        userId,
-        contentId,
-        { isLiked: newState }
-      );
+      await this.userInteractionRepo.upsertInteraction(userId, contentId, { isLiked: newState });
 
       this.logger.log('Like toggled successfully', {
         userId,
@@ -372,7 +407,7 @@ export class UserInteractionService {
   // ==================== 배치 조회 메서드 ====================
 
   async getContentInteractionsBatch(
-    contentIds: string[], 
+    contentIds: string[],
     userId: string
   ): Promise<Record<string, UserInteractionEntity>> {
     try {
@@ -543,4 +578,3 @@ export class UserInteractionService {
     }
   }
 }
-

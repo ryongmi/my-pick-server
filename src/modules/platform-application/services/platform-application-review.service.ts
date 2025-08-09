@@ -1,4 +1,5 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
+
 import { EntityManager } from 'typeorm';
 
 import { PlatformApplicationReviewRepository } from '../repositories/index.js';
@@ -14,7 +15,9 @@ export class PlatformApplicationReviewService {
 
   // ==================== PUBLIC METHODS ====================
 
-  async findByApplicationId(applicationId: string): Promise<PlatformApplicationReviewEntity | null> {
+  async findByApplicationId(
+    applicationId: string
+  ): Promise<PlatformApplicationReviewEntity | null> {
     try {
       return await this.reviewRepo.findByApplicationId(applicationId);
     } catch (error: unknown) {
@@ -40,12 +43,28 @@ export class PlatformApplicationReviewService {
     transactionManager?: EntityManager
   ): Promise<void> {
     try {
-      const review = this.reviewRepo.create({
+      const reviewObj: any = {
         applicationId,
-        ...reviewData,
-      });
+      };
 
-      await this.reviewRepo.save(review);
+      if (reviewData.reasons !== undefined) {
+        reviewObj.reasons = reviewData.reasons;
+      }
+      if (reviewData.customReason !== undefined) {
+        reviewObj.customReason = reviewData.customReason;
+      }
+      if (reviewData.comment !== undefined) {
+        reviewObj.comment = reviewData.comment;
+      }
+      if (reviewData.requirements !== undefined) {
+        reviewObj.requirements = reviewData.requirements;
+      }
+      if (reviewData.reason !== undefined) {
+        reviewObj.reason = reviewData.reason;
+      }
+
+      const review = this.reviewRepo.create(reviewObj) as unknown as PlatformApplicationReviewEntity;
+      await this.reviewRepo.saveEntity(review, transactionManager);
 
       this.logger.log('Platform application review created', {
         applicationId,
@@ -78,10 +97,25 @@ export class PlatformApplicationReviewService {
     transactionManager?: EntityManager
   ): Promise<void> {
     try {
-      const updateResult = await this.reviewRepo.update(
-        { applicationId },
-        reviewData
-      );
+      const updateObj: any = {};
+
+      if (reviewData.reasons !== undefined) {
+        updateObj.reasons = reviewData.reasons;
+      }
+      if (reviewData.customReason !== undefined) {
+        updateObj.customReason = reviewData.customReason;
+      }
+      if (reviewData.comment !== undefined) {
+        updateObj.comment = reviewData.comment;
+      }
+      if (reviewData.requirements !== undefined) {
+        updateObj.requirements = reviewData.requirements;
+      }
+      if (reviewData.reason !== undefined) {
+        updateObj.reason = reviewData.reason;
+      }
+
+      const updateResult = await this.reviewRepo.update({ applicationId }, updateObj);
 
       if (updateResult.affected === 0) {
         throw PlatformApplicationException.applicationNotFound();

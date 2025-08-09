@@ -87,6 +87,49 @@ export class CreatorPlatformService {
   }
 
   /**
+   * 플랫폼 타입별 조회 - findByType 별칭
+   */
+  async findByType(type: PlatformType, includeInactive = false): Promise<CreatorPlatformEntity[]> {
+    try {
+      const where = includeInactive ? { type } : { type, isActive: true };
+      return await this.platformRepo.find({
+        where,
+        order: { createdAt: 'DESC' },
+      });
+    } catch (error: unknown) {
+      this.logger.error('Platforms fetch by type failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        type,
+        includeInactive,
+      });
+      throw CreatorException.platformFetchError();
+    }
+  }
+
+  /**
+   * 크리에이터의 특정 플랫폼 타입 조회
+   */
+  async findByCreatorIdAndType(
+    creatorId: string,
+    type: PlatformType,
+    includeCreator = false
+  ): Promise<CreatorPlatformEntity | null> {
+    try {
+      return await this.platformRepo.findOne({
+        where: { creatorId, type },
+        relations: includeCreator ? ['creator'] : [],
+      });
+    } catch (error: unknown) {
+      this.logger.error('Platform fetch by creator and type failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+        type,
+      });
+      throw CreatorException.platformFetchError();
+    }
+  }
+
+  /**
    * 크리에이터의 플랫폼 존재 확인 (BaseRepository 직접 사용)
    */
   async hasActivePlatforms(creatorId: string): Promise<boolean> {
@@ -172,7 +215,10 @@ export class CreatorPlatformService {
 
   // ==================== 변경 메서드 ====================
 
-  async createPlatform(dto: CreatePlatformInternalDto, transactionManager?: EntityManager): Promise<void> {
+  async createPlatform(
+    dto: CreatePlatformInternalDto,
+    transactionManager?: EntityManager
+  ): Promise<void> {
     try {
       // 1. 사전 검증 (비즈니스 규칙)
       // 중복 체크 등의 로직 추가 가능
@@ -182,7 +228,7 @@ export class CreatorPlatformService {
       Object.assign(platformEntity, dto);
 
       // 3. Platform 저장
-      await this.platformRepo.save(platformEntity);
+      await this.platformRepo.saveEntity(platformEntity, transactionManager);
 
       // 4. 성공 로깅
       this.logger.log('Platform created successfully', {
@@ -220,7 +266,7 @@ export class CreatorPlatformService {
 
       // 업데이트할 필드만 변경
       Object.assign(platform, dto);
-      await this.platformRepo.save(platform);
+      await this.platformRepo.updateEntity(platform, transactionManager);
 
       this.logger.log('Platform updated successfully', {
         platformId,

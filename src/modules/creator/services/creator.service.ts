@@ -4,6 +4,8 @@ import { EntityManager, In, UpdateResult, Not } from 'typeorm';
 
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
+import { CacheService } from '@database/redis/index.js';
+
 import { CreatorRepository } from '../repositories/index.js';
 import { CreatorEntity, CreatorPlatformEntity, ConsentType } from '../entities/index.js';
 import { CreatorException } from '../exceptions/index.js';
@@ -25,7 +27,8 @@ export class CreatorService {
   constructor(
     private readonly creatorRepo: CreatorRepository,
     private readonly creatorPlatformService: CreatorPlatformService,
-    private readonly creatorConsentService: CreatorConsentService
+    private readonly creatorConsentService: CreatorConsentService,
+    private readonly cacheService: CacheService
   ) {}
 
   // ==================== PUBLIC METHODS ====================
@@ -52,6 +55,10 @@ export class CreatorService {
       where: { id: In(creatorIds) },
       order: { createdAt: 'DESC' },
     });
+  }
+
+  async findByUserId(userId: string): Promise<CreatorEntity | null> {
+    return this.creatorRepo.findOne({ where: { userId } });
   }
 
   async findByCategory(category: string): Promise<CreatorEntity[]> {
@@ -96,11 +103,30 @@ export class CreatorService {
 
   async getCreatorById(creatorId: string): Promise<CreatorDetailDto> {
     try {
+      // 1. 캐시에서 먼저 조회 시도
+      const cached = await this.cacheService.getCreatorDetail(creatorId);
+      if (cached) {
+        this.logger.debug('Creator detail served from cache', { creatorId });
+        return cached;
+      }
+
+      // 2. 캐시 미스 시 DB에서 조회
       const creator = await this.findByIdOrFail(creatorId);
-      const platformStats = await this.buildDetailedPlatformStats(creatorId);
+
+      // 3. 플랫폼 통계 조회 (캐시 적용)
+      let platformStats = await this.cacheService.getPlatformStats(creatorId);
+      if (!platformStats) {
+        platformStats = await this.buildDetailedPlatformStats(creatorId);
+        await this.cacheService.setPlatformStats(creatorId, platformStats);
+      }
+
+      // 4. DTO 생성
       const detailDto = this.buildCreatorDetail(creator, platformStats);
 
-      this.logger.debug('Creator detail fetched', {
+      // 5. 결과 캐싱
+      await this.cacheService.setCreatorDetail(creatorId, detailDto);
+
+      this.logger.debug('Creator detail fetched and cached', {
         creatorId,
         name: creator.name,
         platformCount: platformStats.platformCount,
@@ -122,7 +148,7 @@ export class CreatorService {
 
   // ==================== 변경 메서드 ====================
 
-  async createCreator(dto: CreateCreatorDto, transactionManager?: EntityManager): Promise<void> {
+  async createCreator(dto: CreateCreatorDto, transactionManager?: EntityManager): Promise<string> {
     try {
       // 1. 사전 검증 (비즈니스 규칙)
       if (dto.name && dto.category) {
@@ -144,14 +170,19 @@ export class CreatorService {
       Object.assign(creatorEntity, dto);
 
       // 3. Creator 저장
-      await this.creatorRepo.save(creatorEntity);
+      await this.creatorRepo.saveEntity(creatorEntity, transactionManager);
 
-      // 4. 성공 로깅
+      // 4. 캐시 무효화 (새로운 크리에이터이므로 관련 트렌딩, 검색 캐시 무효화)
+      await this.cacheService.invalidateCreatorRelatedCaches(creatorEntity.id);
+
+      // 5. 성공 로깅
       this.logger.log('Creator created successfully', {
         creatorId: creatorEntity.id,
         name: dto.name,
         category: dto.category,
       });
+
+      return creatorEntity.id;
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -180,11 +211,11 @@ export class CreatorService {
         throw CreatorException.creatorNotFound();
       }
 
-      // 이름 변경 시 중복 체크
-      if (dto.name && dto.name !== creator.name) {
+      // 표시명 변경 시 중복 체크
+      if (dto.displayName && dto.displayName !== creator.displayName) {
         const existingCreator = await this.creatorRepo.findOne({
           where: {
-            name: dto.name,
+            displayName: dto.displayName,
             category: creator.category,
             id: Not(creatorId),
           },
@@ -193,7 +224,7 @@ export class CreatorService {
         if (existingCreator) {
           this.logger.warn('Creator update failed: duplicate name', {
             creatorId,
-            newName: dto.name,
+            newDisplayName: dto.displayName,
             category: creator.category,
           });
           throw CreatorException.creatorAlreadyExists();
@@ -202,7 +233,10 @@ export class CreatorService {
 
       // 업데이트할 필드만 변경
       Object.assign(creator, dto);
-      await this.creatorRepo.save(creator);
+      await this.creatorRepo.updateEntity(creator, transactionManager);
+
+      // 캐시 무효화 (크리에이터 정보 변경시 관련 캐시 무효화)
+      await this.cacheService.invalidateCreatorRelatedCaches(creatorId);
 
       this.logger.log('Creator updated successfully', {
         creatorId,
@@ -240,6 +274,9 @@ export class CreatorService {
 
       // 소프트 삭제로 진행 (참조 무결성 유지)
       const result = await this.creatorRepo.softDelete(creatorId);
+
+      // 캐시 무효화 (삭제된 크리에이터 관련 모든 캐시 정리)
+      await this.cacheService.invalidateCreatorRelatedCaches(creatorId);
 
       this.logger.log('Creator deleted successfully', {
         creatorId,
@@ -360,16 +397,14 @@ export class CreatorService {
       platformCount: number;
     }
   ): CreatorDetailDto {
-    return {
+    const result: CreatorDetailDto = {
       id: creator.id,
-      userId: creator.userId,
       name: creator.name,
       displayName: creator.displayName,
-      avatar: creator.avatar,
-      description: creator.description,
       isVerified: creator.isVerified,
       category: creator.category,
-      tags: creator.tags,
+      status: creator.status,
+      verificationStatus: creator.verificationStatus,
       platformStats: {
         totalFollowers: platformStats.totalFollowers,
         totalContent: platformStats.totalContent,
@@ -379,6 +414,28 @@ export class CreatorService {
       createdAt: creator.createdAt,
       updatedAt: creator.updatedAt,
     };
+
+    // 조건부 할당 (exactOptionalPropertyTypes 준수)
+    if (creator.userId !== undefined && creator.userId !== null) {
+      result.userId = creator.userId;
+    }
+    if (creator.avatar !== undefined && creator.avatar !== null) {
+      result.avatar = creator.avatar;
+    }
+    if (creator.description !== undefined && creator.description !== null) {
+      result.description = creator.description;
+    }
+    if (creator.tags !== undefined && creator.tags !== null) {
+      result.tags = creator.tags;
+    }
+    if (creator.lastActivityAt !== undefined && creator.lastActivityAt !== null) {
+      result.lastActivityAt = creator.lastActivityAt;
+    }
+    if (creator.socialLinks !== undefined && creator.socialLinks !== null) {
+      result.socialLinks = creator.socialLinks;
+    }
+
+    return result;
   }
 
   private buildCreatorSearchResults(creators: Partial<CreatorEntity>[]): CreatorSearchResultDto[] {

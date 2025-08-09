@@ -1,6 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+
 import { IsOptional, IsEnum, IsDateString, IsInt, IsString, Min, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
+
 import { VideoSyncStatus } from '@common/enums/index.js';
 
 export class UpdatePlatformSyncDto {

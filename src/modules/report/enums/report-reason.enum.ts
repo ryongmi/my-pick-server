@@ -7,14 +7,14 @@ export enum ReportReason {
   MISINFORMATION = 'misinformation',
   VIOLENCE = 'violence',
   ADULT_CONTENT = 'adult_content',
-  
+
   // 사용자/크리에이터 관련
   HARASSMENT = 'harassment',
   IMPERSONATION = 'impersonation',
   FAKE_ACCOUNT = 'fake_account',
   SCAM = 'scam',
   PRIVACY_VIOLATION = 'privacy_violation',
-  
+
   // 기타
   OTHER = 'other',
 }

@@ -13,13 +13,13 @@ export class ContentSyncMetadataEntity {
   quotaUsed!: number;
 
   @Column({ nullable: true, comment: '쿼터 리셋 시간' })
-  lastQuotaReset?: Date;
+  lastQuotaReset?: Date | null;
 
   @Column('int', { nullable: true, comment: '동기화 소요 시간 (ms)' })
-  syncDuration?: number;
+  syncDuration?: number | null;
 
   @Column({ nullable: true, comment: '데이터 버전' })
-  dataVersion?: string;
+  dataVersion?: string | null;
 
   @UpdateDateColumn()
   updatedAt!: Date;

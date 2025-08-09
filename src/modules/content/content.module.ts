@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { RedisModule } from '@database/redis/index.js';
+
 import { UserInteractionModule } from '../user-interaction/user-interaction.module.js';
 
-import { 
-  ContentEntity, 
+import {
+  ContentEntity,
   ContentStatisticsEntity,
   ContentCategoryEntity,
   ContentTagEntity,
@@ -12,7 +14,7 @@ import {
   ContentSyncEntity,
   ContentSyncMetadataEntity,
 } from './entities/index.js';
-import { 
+import {
   ContentRepository,
   ContentCategoryRepository,
   ContentTagRepository,
@@ -20,7 +22,7 @@ import {
   ContentSyncRepository,
   ContentSyncMetadataRepository,
 } from './repositories/index.js';
-import { 
+import {
   ContentService,
   ContentCategoryService,
   ContentTagService,
@@ -40,7 +42,7 @@ import {
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      ContentEntity, 
+      ContentEntity,
       ContentStatisticsEntity,
       ContentCategoryEntity,
       ContentTagEntity,
@@ -48,6 +50,7 @@ import {
       ContentSyncEntity,
       ContentSyncMetadataEntity,
     ]),
+    RedisModule,
     UserInteractionModule,
   ],
   controllers: [
@@ -66,7 +69,7 @@ import {
     ContentInteractionRepository,
     ContentSyncRepository,
     ContentSyncMetadataRepository,
-    
+
     // Services
     ContentService,
     ContentCategoryService,

@@ -36,7 +36,10 @@ export class ContentTagService {
     }
   }
 
-  async getTrendingTags(days = 7, limit = 20): Promise<Array<{ tag: string; recentCount: number }>> {
+  async getTrendingTags(
+    days = 7,
+    limit = 20
+  ): Promise<Array<{ tag: string; recentCount: number }>> {
     try {
       return await this.tagRepo.getTrendingTags(days, limit);
     } catch (error: unknown) {
@@ -110,31 +113,36 @@ export class ContentTagService {
       await this.tagRepo.removeContentTags(contentId);
 
       // 태그 정규화 및 중복 제거
-      const uniqueTags = Array.from(new Set(tags.map(t => t.tag.toLowerCase().trim())))
-        .filter(tag => tag.length > 0)
-        .map(tag => {
-          const originalTag = tags.find(t => t.tag.toLowerCase().trim() === tag);
-          return {
+      const uniqueTags = Array.from(new Set(tags.map((t) => t.tag.toLowerCase().trim())))
+        .filter((tag) => tag.length > 0)
+        .map((tag) => {
+          const originalTag = tags.find((t) => t.tag.toLowerCase().trim() === tag);
+          const tagData: any = {
             contentId,
             tag: originalTag?.tag || tag,
-            source: originalTag?.source || 'platform' as const,
+            source: originalTag?.source || ('platform' as const),
             relevanceScore: originalTag?.relevanceScore || 1.0,
-            addedBy: originalTag?.addedBy,
             usageCount: 0,
           };
+
+          if (originalTag?.addedBy !== undefined) {
+            tagData.addedBy = originalTag.addedBy;
+          }
+
+          return tagData;
         });
 
       if (uniqueTags.length > 0) {
         await this.tagRepo.batchCreateTags(uniqueTags);
 
         // 태그 사용 횟수 증가
-        const tagNames = uniqueTags.map(t => t.tag);
+        const tagNames = uniqueTags.map((t) => t.tag);
         await this.tagRepo.incrementTagUsage(tagNames);
 
         this.logger.log('Tags assigned to content', {
           contentId,
           tagCount: uniqueTags.length,
-          sources: Array.from(new Set(uniqueTags.map(t => t.source))),
+          sources: Array.from(new Set(uniqueTags.map((t) => t.source))),
         });
       }
     } catch (error: unknown) {
@@ -219,9 +227,7 @@ export class ContentTagService {
   async getContentsByTag(tag: string, limit = 50): Promise<string[]> {
     try {
       const tags = await this.tagRepo.findByTag(tag);
-      return tags
-        .slice(0, limit)
-        .map(t => t.contentId);
+      return tags.slice(0, limit).map((t) => t.contentId);
     } catch (error: unknown) {
       this.logger.error('Failed to get contents by tag', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -254,19 +260,22 @@ export class ContentTagService {
 
   async batchProcessTagRelevance(
     contentIds: string[],
-    aiRelevanceModel?: (contentId: string, tags: string[]) => Promise<Array<{ tag: string; score: number }>>
+    aiRelevanceModel?: (
+      contentId: string,
+      tags: string[]
+    ) => Promise<Array<{ tag: string; score: number }>>
   ): Promise<void> {
     if (contentIds.length === 0 || !aiRelevanceModel) return;
 
     try {
       for (const contentId of contentIds) {
         const existingTags = await this.tagRepo.findByContentId(contentId);
-        const tagNames = existingTags.map(t => t.tag);
+        const tagNames = existingTags.map((t) => t.tag);
 
         if (tagNames.length > 0) {
           const relevanceScores = await aiRelevanceModel(contentId, tagNames);
-          
-          const updates = relevanceScores.map(score => ({
+
+          const updates = relevanceScores.map((score) => ({
             contentId,
             tag: score.tag,
             relevanceScore: score.score,

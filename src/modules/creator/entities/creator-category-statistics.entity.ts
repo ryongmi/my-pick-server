@@ -14,81 +14,81 @@ export class CreatorCategoryStatisticsEntity {
   @PrimaryColumn({ comment: '카테고리 (gaming, music, education 등)' })
   category!: string;
 
-  @Column({ 
+  @Column({
     default: 0,
-    comment: '해당 카테고리 콘텐츠 수'
+    comment: '해당 카테고리 콘텐츠 수',
   })
   contentCount!: number;
 
-  @Column({ 
-    type: 'bigint', 
+  @Column({
+    type: 'bigint',
     default: 0,
-    comment: '해당 카테고리 총 조회수'
+    comment: '해당 카테고리 총 조회수',
   })
   viewCount!: number;
 
-  @Column({ 
-    type: 'decimal', 
-    precision: 10, 
-    scale: 2, 
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
     default: 0,
-    comment: '해당 카테고리 평균 조회수'
+    comment: '해당 카테고리 평균 조회수',
   })
   averageViews!: number;
 
-  @Column({ 
-    type: 'bigint', 
+  @Column({
+    type: 'bigint',
     default: 0,
-    comment: '해당 카테고리 총 좋아요 수'
+    comment: '해당 카테고리 총 좋아요 수',
   })
   totalLikes!: number;
 
-  @Column({ 
-    type: 'bigint', 
+  @Column({
+    type: 'bigint',
     default: 0,
-    comment: '해당 카테고리 총 댓글 수'
+    comment: '해당 카테고리 총 댓글 수',
   })
   totalComments!: number;
 
-  @Column({ 
-    type: 'bigint', 
+  @Column({
+    type: 'bigint',
     default: 0,
-    comment: '해당 카테고리 총 공유 수'
+    comment: '해당 카테고리 총 공유 수',
   })
   totalShares!: number;
 
-  @Column({ 
-    type: 'decimal', 
-    precision: 5, 
-    scale: 2, 
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
     default: 0,
-    comment: '해당 카테고리 평균 참여율 (%)'
+    comment: '해당 카테고리 평균 참여율 (%)',
   })
   averageEngagementRate!: number;
 
-  @Column({ 
-    type: 'decimal', 
-    precision: 5, 
-    scale: 2, 
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
     default: 0,
-    comment: '해당 카테고리 콘텐츠 성장률 (월간 %)'
+    comment: '해당 카테고리 콘텐츠 성장률 (월간 %)',
   })
   contentGrowthRate!: number;
 
-  @Column({ 
-    type: 'decimal', 
-    precision: 5, 
-    scale: 2, 
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
     default: 0,
-    comment: '해당 카테고리 조회수 성장률 (월간 %)'
+    comment: '해당 카테고리 조회수 성장률 (월간 %)',
   })
   viewGrowthRate!: number;
 
-  @Column({ 
+  @Column({
     nullable: true,
-    comment: '해당 카테고리 통계 마지막 계산 시간'
+    comment: '해당 카테고리 통계 마지막 계산 시간',
   })
-  lastCalculatedAt?: Date;
+  lastCalculatedAt?: Date | null;
 
   @CreateDateColumn()
   createdAt!: Date;

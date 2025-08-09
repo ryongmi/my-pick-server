@@ -32,6 +32,8 @@ import {
 } from '@modules/user-interaction/index.js';
 
 import { ContentService } from '../services/index.js';
+import { WatchDurationDto } from '../dto/watch-duration.dto.js';
+import { RatingDto } from '../dto/rating.dto.js';
 
 @SwaggerApiTags({ tags: ['content-interaction'] })
 @Controller('content')
@@ -202,16 +204,7 @@ export class ContentInteractionController {
   })
   @SwaggerApiBody({
     description: '시청 정보',
-    schema: {
-      type: 'object',
-      properties: {
-        watchDuration: {
-          type: 'number',
-          description: '시청 시간 (초)',
-          example: 120,
-        },
-      },
-    },
+    dto: WatchDurationDto,
   })
   @SwaggerApiOkResponse({
     status: 204,
@@ -250,19 +243,7 @@ export class ContentInteractionController {
   })
   @SwaggerApiBody({
     description: '평점 정보',
-    schema: {
-      type: 'object',
-      properties: {
-        rating: {
-          type: 'number',
-          description: '평점 (1-5)',
-          minimum: 1,
-          maximum: 5,
-          example: 4.5,
-        },
-      },
-      required: ['rating'],
-    },
+    dto: RatingDto,
   })
   @SwaggerApiOkResponse({
     status: 204,

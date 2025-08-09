@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { Expose, Type } from 'class-transformer';
 
 import { CreatorPlatformDto } from './creator-platform.dto.js';
@@ -49,7 +50,7 @@ export class CreatorDetailDto {
     example: '123e4567-e89b-12d3-a456-426614174000',
   })
   @Expose()
-  userId?: string;
+  userId?: string | null;
 
   @ApiProperty({
     description: '크리에이터 실명',
@@ -70,14 +71,14 @@ export class CreatorDetailDto {
     example: 'https://example.com/avatar.jpg',
   })
   @Expose()
-  avatar?: string;
+  avatar?: string | null;
 
   @ApiPropertyOptional({
     description: '크리에이터 소개',
     example: 'Swedish YouTuber and gamer',
   })
   @Expose()
-  description?: string;
+  description?: string | null;
 
   @ApiProperty({
     description: '인증 여부',
@@ -99,7 +100,7 @@ export class CreatorDetailDto {
     type: [String],
   })
   @Expose()
-  tags?: string[];
+  tags?: string[] | null;
 
   // ==================== 기본 통계 정보 ====================
 
@@ -143,7 +144,7 @@ export class CreatorDetailDto {
       website: 'https://mrbeast.com',
       twitter: 'https://twitter.com/MrBeast',
       instagram: 'https://instagram.com/mrbeast',
-      youtube: 'https://youtube.com/@MrBeast'
+      youtube: 'https://youtube.com/@MrBeast',
     },
   })
   @Expose()
@@ -204,7 +205,7 @@ export class CreatorDetailDto {
       contentQualityScore: 92.3,
       activePlatformCount: 4,
       totalCategories: 3,
-      topCategory: 'gaming'
+      topCategory: 'gaming',
     },
   })
   @Expose()

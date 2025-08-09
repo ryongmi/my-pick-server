@@ -4,7 +4,11 @@ import { DataSource } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
 
-import { CreatorApplicationRequirementEntity, RequirementCategory, RequirementStatus } from '../entities/index.js';
+import {
+  CreatorApplicationRequirementEntity,
+  RequirementCategory,
+  RequirementStatus,
+} from '../entities/index.js';
 
 @Injectable()
 export class CreatorApplicationRequirementRepository extends BaseRepository<CreatorApplicationRequirementEntity> {
@@ -20,7 +24,7 @@ export class CreatorApplicationRequirementRepository extends BaseRepository<Crea
   }
 
   async findByReviewIdAndStatus(
-    reviewId: string, 
+    reviewId: string,
     status: RequirementStatus
   ): Promise<CreatorApplicationRequirementEntity[]> {
     return this.find({
@@ -30,7 +34,7 @@ export class CreatorApplicationRequirementRepository extends BaseRepository<Crea
   }
 
   async findByCategory(
-    reviewId: string, 
+    reviewId: string,
     category: RequirementCategory
   ): Promise<CreatorApplicationRequirementEntity[]> {
     return this.find({
@@ -67,7 +71,7 @@ export class CreatorApplicationRequirementRepository extends BaseRepository<Crea
 
   async updateStatus(requirementId: string, status: RequirementStatus): Promise<void> {
     const updateData: Partial<CreatorApplicationRequirementEntity> = { status };
-    
+
     if (status === RequirementStatus.COMPLETED) {
       updateData.isCompleted = true;
       updateData.completedAt = new Date();

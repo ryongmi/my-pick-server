@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import { CreatorApplicationReviewRepository } from '../repositories/index.js';
-import { CreatorApplicationReviewEntity, ReviewStatus, ReviewActionType } from '../entities/index.js';
+import {
+  CreatorApplicationReviewEntity,
+  ReviewStatus,
+  ReviewActionType,
+} from '../entities/index.js';
 
 export interface CreateReviewDto {
   applicationId: string;
@@ -39,9 +43,7 @@ export interface ReviewSummary {
 export class CreatorApplicationReviewService {
   private readonly logger = new Logger(CreatorApplicationReviewService.name);
 
-  constructor(
-    private readonly reviewRepo: CreatorApplicationReviewRepository
-  ) {}
+  constructor(private readonly reviewRepo: CreatorApplicationReviewRepository) {}
 
   // ==================== PUBLIC METHODS ====================
 
@@ -93,20 +95,23 @@ export class CreatorApplicationReviewService {
   }
 
   async approveApplication(
-    applicationId: string, 
-    reviewerId: string, 
+    applicationId: string,
+    reviewerId: string,
     comment?: string
   ): Promise<CreatorApplicationReviewEntity> {
     try {
-      const reviewDto: CreateReviewDto = {
+      const reviewDto: any = {
         applicationId,
         reviewerId,
         status: ReviewStatus.APPROVED,
         actionType: ReviewActionType.STATUS_CHANGE,
-        comment,
         isFinal: true,
         score: 100, // 승인은 만점
       };
+
+      if (comment) {
+        reviewDto.comment = comment;
+      }
 
       const review = await this.createReview(reviewDto);
 
@@ -128,22 +133,25 @@ export class CreatorApplicationReviewService {
   }
 
   async rejectApplication(
-    applicationId: string, 
-    reviewerId: string, 
+    applicationId: string,
+    reviewerId: string,
     reason: string,
     comment?: string
   ): Promise<CreatorApplicationReviewEntity> {
     try {
-      const reviewDto: CreateReviewDto = {
+      const reviewDto: any = {
         applicationId,
         reviewerId,
         status: ReviewStatus.REJECTED,
         actionType: ReviewActionType.STATUS_CHANGE,
         reason,
-        comment,
         isFinal: true,
         score: 0, // 거부는 0점
       };
+
+      if (comment) {
+        reviewDto.comment = comment;
+      }
 
       const review = await this.createReview(reviewDto);
 
@@ -173,15 +181,18 @@ export class CreatorApplicationReviewService {
     estimatedDays?: number
   ): Promise<CreatorApplicationReviewEntity> {
     try {
-      const reviewDto: CreateReviewDto = {
+      const reviewDto: any = {
         applicationId,
         reviewerId,
         status: ReviewStatus.REVISION_REQUIRED,
         actionType: ReviewActionType.STATUS_CHANGE,
         reason,
-        estimatedDays,
         isFinal: false,
       };
+
+      if (estimatedDays !== undefined) {
+        reviewDto.estimatedDays = estimatedDays;
+      }
 
       const review = await this.createReview(reviewDto);
 
@@ -244,19 +255,29 @@ export class CreatorApplicationReviewService {
       if (reviews.length === 0) return null;
 
       const latestReview = reviews[0]; // 최신 리뷰 (createdAt DESC 정렬)
-      const scores = reviews.filter(r => r.score !== null).map(r => r.score!);
-      const averageScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : undefined;
+      if (!latestReview) return null; // 추가 안전 검사
 
-      return {
+      const scores = reviews.filter((r) => r.score !== null).map((r) => r.score!);
+      const averageScore =
+        scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : undefined;
+
+      const summary: any = {
         applicationId,
         totalReviews: reviews.length,
         currentStatus: latestReview.status,
         lastReviewDate: latestReview.createdAt,
-        averageScore,
-        isCompleted: latestReview.isFinal && 
-          (latestReview.status === ReviewStatus.APPROVED || latestReview.status === ReviewStatus.REJECTED),
+        isCompleted:
+          latestReview.isFinal &&
+          (latestReview.status === ReviewStatus.APPROVED ||
+            latestReview.status === ReviewStatus.REJECTED),
         reviewHistory: reviews,
       };
+
+      if (averageScore !== undefined) {
+        summary.averageScore = averageScore;
+      }
+
+      return summary;
     } catch (error: unknown) {
       this.logger.error('Failed to get review summary', {
         error: error instanceof Error ? error.message : 'Unknown error',

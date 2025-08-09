@@ -20,10 +20,10 @@ export class PlatformApplicationDataEntity {
   displayName!: string; // 표시명
 
   @Column({ type: 'text', nullable: true })
-  description?: string; // 설명
+  description?: string | null; // 설명
 
   @Column({ nullable: true })
-  followerCount?: number; // 현재 팔로워 수
+  followerCount?: number | null; // 현재 팔로워 수
 
   @Column({ type: 'enum', enum: VerificationProofType })
   verificationProofType!: VerificationProofType;

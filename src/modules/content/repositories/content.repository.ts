@@ -6,22 +6,24 @@ import { BaseRepository } from '@krgeobuk/core/repositories';
 import { LimitType, SortOrderType } from '@krgeobuk/core/enum';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
+import { PlatformType } from '@common/enums/index.js';
+
 import { ContentEntity } from '../entities/index.js';
 import { ContentType } from '../enums/index.js';
 
 export interface ContentSearchOptions {
-  creatorId?: string;
-  creatorIds?: string[];
-  type?: ContentType;
-  platform?: string;
-  category?: string;
-  tags?: string[];
-  startDate?: Date;
-  endDate?: Date;
-  page?: number;
-  limit?: LimitType;
-  sortBy?: 'publishedAt' | 'views' | 'likes' | 'createdAt';
-  sortOrder?: SortOrderType;
+  creatorId?: string | undefined;
+  creatorIds?: string[] | undefined;
+  type?: ContentType | undefined;
+  platform?: string | undefined;
+  category?: string | undefined;
+  tags?: string[] | undefined;
+  startDate?: Date | undefined;
+  endDate?: Date | undefined;
+  page?: number | undefined;
+  limit?: number | undefined;
+  sortBy?: 'publishedAt' | 'views' | 'likes' | 'createdAt' | undefined;
+  sortOrder?: SortOrderType | undefined;
 }
 
 @Injectable()
@@ -107,11 +109,18 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
     // category와 tags는 이제 별도 엔티티로 관리됨
     // 필요시 ContentCategoryEntity, ContentTagEntity와 조인하여 검색
     if (category) {
-      qb.innerJoin('content_categories', 'cc', 'cc.contentId = content.id AND cc.category = :category', { category });
+      qb.innerJoin(
+        'content_categories',
+        'cc',
+        'cc.contentId = content.id AND cc.category = :category',
+        { category }
+      );
     }
 
     if (tags && tags.length > 0) {
-      qb.innerJoin('content_tags', 'ct', 'ct.contentId = content.id AND ct.tag IN (:...tags)', { tags });
+      qb.innerJoin('content_tags', 'ct', 'ct.contentId = content.id AND ct.tag IN (:...tags)', {
+        tags,
+      });
     }
 
     // 정렬 조건 - statistics 필드인 경우 JOIN된 테이블 사용
@@ -153,9 +162,13 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
     }));
 
     const totalPages = Math.ceil(total / limit);
+    const limitType = limit <= 15 ? LimitType.FIFTEEN : 
+                     limit <= 30 ? LimitType.THIRTY : 
+                     limit <= 50 ? LimitType.FIFTY : LimitType.HUNDRED;
+    
     const pageInfo = {
       page,
-      limit,
+      limit: limitType,
       totalItems: total,
       totalPages,
       hasPreviousPage: page > 1,
@@ -204,9 +217,7 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
     });
   }
 
-  async findByPlatformAndStatus(
-    platform: string
-  ): Promise<ContentEntity[]> {
+  async findByPlatformAndStatus(platform: PlatformType): Promise<ContentEntity[]> {
     return await this.find({
       where: { platform },
       order: { publishedAt: 'DESC' },
@@ -264,14 +275,14 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
   }> {
     const [totalContent, byPlatform, byType] = await Promise.all([
       this.count({ where: { creatorId } }),
-      
+
       this.createQueryBuilder('content')
         .select('content.platform', 'platform')
         .addSelect('COUNT(*)', 'count')
         .where('content.creatorId = :creatorId', { creatorId })
         .groupBy('content.platform')
         .getRawMany(),
-        
+
       this.createQueryBuilder('content')
         .select('content.type', 'type')
         .addSelect('COUNT(*)', 'count')
@@ -282,18 +293,20 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
 
     return {
       totalContent,
-      byPlatform: byPlatform.map(item => ({
+      byPlatform: byPlatform.map((item) => ({
         platform: item.platform,
         count: parseInt(item.count),
       })),
-      byType: byType.map(item => ({
+      byType: byType.map((item) => ({
         type: item.type,
         count: parseInt(item.count),
       })),
     };
   }
 
-  async getPlatformDistribution(): Promise<Array<{ platform: string; count: number; percentage: number }>> {
+  async getPlatformDistribution(): Promise<
+    Array<{ platform: string; count: number; percentage: number }>
+  > {
     const totalCount = await this.count();
     if (totalCount === 0) return [];
 
@@ -304,7 +317,7 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
       .orderBy('count', 'DESC')
       .getRawMany();
 
-    return results.map(result => ({
+    return results.map((result) => ({
       platform: result.platform,
       count: parseInt(result.count),
       percentage: Math.round((parseInt(result.count) / totalCount) * 100 * 100) / 100,
@@ -316,11 +329,11 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
     startDate.setDate(startDate.getDate() - days);
 
     return await this.createQueryBuilder('content')
-      .select("DATE(content.createdAt) as date")
-      .addSelect("COUNT(*) as count")
+      .select('DATE(content.createdAt) as date')
+      .addSelect('COUNT(*) as count')
       .where('content.createdAt >= :startDate', { startDate })
-      .groupBy("DATE(content.createdAt)")
-      .orderBy("date", "ASC")
+      .groupBy('DATE(content.createdAt)')
+      .orderBy('date', 'ASC')
       .getRawMany();
   }
 
@@ -331,8 +344,7 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
     maxViews?: number;
     maxEngagement?: number;
   }): Promise<ContentEntity[]> {
-    const queryBuilder = this.createQueryBuilder('content')
-      .leftJoin('content.statistics', 'stats');
+    const queryBuilder = this.createQueryBuilder('content').leftJoin('content.statistics', 'stats');
 
     if (criteria.minDuration) {
       queryBuilder.andWhere('(content.duration IS NULL OR content.duration < :minDuration)', {
@@ -347,17 +359,18 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
     }
 
     if (criteria.maxEngagement) {
-      queryBuilder.andWhere('(stats.engagementRate IS NULL OR stats.engagementRate < :maxEngagement)', {
-        maxEngagement: criteria.maxEngagement,
-      });
+      queryBuilder.andWhere(
+        '(stats.engagementRate IS NULL OR stats.engagementRate < :maxEngagement)',
+        {
+          maxEngagement: criteria.maxEngagement,
+        }
+      );
     }
 
-    return await queryBuilder
-      .orderBy('content.createdAt', 'DESC')
-      .getMany();
+    return await queryBuilder.orderBy('content.createdAt', 'DESC').getMany();
   }
 
-  async findDuplicateContent(platformId: string, platform: string): Promise<ContentEntity[]> {
+  async findDuplicateContent(platformId: string, platform: PlatformType): Promise<ContentEntity[]> {
     return await this.find({
       where: { platformId, platform },
       order: { createdAt: 'ASC' },

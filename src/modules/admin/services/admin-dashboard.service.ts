@@ -3,6 +3,8 @@ import { ClientProxy } from '@nestjs/microservices';
 
 import { plainToInstance } from 'class-transformer';
 
+import { LimitType } from '@krgeobuk/core/enum';
+
 import { CreatorService } from '../../creator/services/index.js';
 import { UserSubscriptionService } from '../../user-subscription/services/index.js';
 import { ContentService } from '../../content/services/index.js';
@@ -12,11 +14,11 @@ import {
   AdminDashboardOverviewDto,
 } from '../dto/index.js';
 import { AdminException } from '../exceptions/index.js';
-
-import { AdminCreatorService } from './admin-creator.service.js';
 import { CreatorApplicationService } from '../../creator-application/services/index.js';
 import { ReportService } from '../../report/services/index.js';
 import { UserInteractionService } from '../../user-interaction/services/index.js';
+
+import { AdminCreatorService } from './admin-creator.service.js';
 
 @Injectable()
 export class AdminDashboardService {
@@ -30,7 +32,7 @@ export class AdminDashboardService {
     private readonly creatorApplicationService: CreatorApplicationService,
     private readonly reportService: ReportService,
     private readonly userInteractionService: UserInteractionService,
-    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
+    @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy
   ) {}
 
   // ==================== PUBLIC METHODS ====================
@@ -46,14 +48,18 @@ export class AdminDashboardService {
         this.getSystemHealth(),
       ]);
 
-      const overview = plainToInstance(AdminDashboardOverviewDto, {
-        stats,
-        metrics,
-        recentActivities,
-        systemHealth,
-      }, {
-        excludeExtraneousValues: true,
-      });
+      const overview = plainToInstance(
+        AdminDashboardOverviewDto,
+        {
+          stats,
+          metrics,
+          recentActivities,
+          systemHealth,
+        },
+        {
+          excludeExtraneousValues: true,
+        }
+      );
 
       this.logger.log('Admin dashboard overview generated successfully');
       return overview;
@@ -86,31 +92,31 @@ export class AdminDashboardService {
       const totalSubscriptions = await this.getTotalSubscriptions();
 
       // 추가 통계 데이터 조회
-      const [
-        totalInteractions,
-        applicationStats,
-        reportStats,
-      ] = await Promise.all([
+      const [totalInteractions, applicationStats, reportStats] = await Promise.all([
         this.getTotalInteractions(),
         this.getApplicationStats(),
         this.getReportStats(),
       ]);
 
-      const stats = plainToInstance(AdminDashboardStatsDto, {
-        totalUsers,
-        totalCreators,
-        totalContent,
-        totalSubscriptions,
-        totalInteractions,
-        pendingApplications: applicationStats.pending,
-        approvedApplications: applicationStats.approved,
-        rejectedApplications: applicationStats.rejected,
-        totalReports: reportStats.totalReports,
-        pendingReports: reportStats.pendingReports,
-        resolvedReports: reportStats.resolvedReports,
-      }, {
-        excludeExtraneousValues: true,
-      });
+      const stats = plainToInstance(
+        AdminDashboardStatsDto,
+        {
+          totalUsers,
+          totalCreators,
+          totalContent,
+          totalSubscriptions,
+          totalInteractions,
+          pendingApplications: applicationStats.pending,
+          approvedApplications: applicationStats.approved,
+          rejectedApplications: applicationStats.rejected,
+          totalReports: reportStats.totalReports,
+          pendingReports: reportStats.pendingReports,
+          resolvedReports: reportStats.resolvedReports,
+        },
+        {
+          excludeExtraneousValues: true,
+        }
+      );
 
       this.logger.debug('Dashboard statistics fetched successfully', {
         totalUsers,
@@ -158,20 +164,24 @@ export class AdminDashboardService {
         this.getCategoryDistribution(),
       ]);
 
-      const metrics = plainToInstance(AdminDashboardMetricsDto, {
-        dailyActiveUsers,
-        weeklyActiveUsers,
-        monthlyActiveUsers,
-        dailyNewContent: contentCounts.dailyNewContent,
-        weeklyNewContent: contentCounts.weeklyNewContent,
-        monthlyNewContent: contentCounts.monthlyNewContent,
-        topCreatorsBySubscribers,
-        topContentByViews,
-        platformDistribution,
-        categoryDistribution,
-      }, {
-        excludeExtraneousValues: true,
-      });
+      const metrics = plainToInstance(
+        AdminDashboardMetricsDto,
+        {
+          dailyActiveUsers,
+          weeklyActiveUsers,
+          monthlyActiveUsers,
+          dailyNewContent: contentCounts.dailyNewContent,
+          weeklyNewContent: contentCounts.weeklyNewContent,
+          monthlyNewContent: contentCounts.monthlyNewContent,
+          topCreatorsBySubscribers,
+          topContentByViews,
+          platformDistribution,
+          categoryDistribution,
+        },
+        {
+          excludeExtraneousValues: true,
+        }
+      );
 
       this.logger.debug('Dashboard metrics fetched successfully');
       return metrics;
@@ -192,11 +202,11 @@ export class AdminDashboardService {
   private async getTotalUsersFromAuthService(): Promise<number> {
     try {
       const result = await this.authClient.send('user.count', {}).toPromise();
-      
+
       this.logger.debug('Total users fetched from auth service', {
         count: result?.count || 0,
       });
-      
+
       return result?.count || 0;
     } catch (error: unknown) {
       this.logger.warn('Failed to get total users from auth service', {
@@ -210,12 +220,12 @@ export class AdminDashboardService {
   private async getActiveUsersFromAuthService(days: number): Promise<number> {
     try {
       const result = await this.authClient.send('user.getActiveCount', { days }).toPromise();
-      
+
       this.logger.debug('Active users fetched from auth service', {
         count: result?.count || 0,
         days,
       });
-      
+
       return result?.count || 0;
     } catch (error: unknown) {
       this.logger.warn('Failed to get active users from auth service', {
@@ -238,7 +248,6 @@ export class AdminDashboardService {
     }
   }
 
-
   private async getTotalSubscriptions(): Promise<number> {
     try {
       return await this.userSubscriptionService.getTotalCount();
@@ -257,7 +266,7 @@ export class AdminDashboardService {
         page: 1,
         limit: 1, // 개수만 필요하므로 1개만 조회
       });
-      
+
       return result.pageInfo.totalItems;
     } catch (error: unknown) {
       this.logger.warn('Failed to get total content', {
@@ -267,25 +276,37 @@ export class AdminDashboardService {
     }
   }
 
-
-
-  private async getTopCreatorsBySubscribers(limit: number): Promise<Array<{
-    creatorId: string;
-    name: string;
-    subscriberCount: number;
-  }>> {
+  private async getTopCreatorsBySubscribers(limit: number): Promise<
+    Array<{
+      creatorId: string;
+      name: string;
+      subscriberCount: number;
+    }>
+  > {
     try {
       // 모든 크리에이터 조회
+      const requestLimit = limit * 2; // 여유있게 조회
+      const limitType: LimitType =
+        requestLimit <= 15
+          ? LimitType.FIFTEEN
+          : requestLimit <= 30
+            ? LimitType.THIRTY
+            : requestLimit <= 50
+              ? LimitType.FIFTY
+              : LimitType.HUNDRED;
+
       const creatorsResult = await this.creatorService.searchCreators({
         page: 1,
-        limit: limit * 2, // 여유있게 조회
+        limit: limitType,
       });
 
       // 각 크리에이터의 구독자 수 조회 및 정렬
       const creatorsWithSubscribers = await Promise.all(
         creatorsResult.items.map(async (creator: unknown) => {
           const creatorData = creator as { id: string; name?: string; displayName?: string };
-          const subscriberCount = await this.userSubscriptionService.getSubscriberCount(creatorData.id);
+          const subscriberCount = await this.userSubscriptionService.getSubscriberCount(
+            creatorData.id
+          );
           return {
             creatorId: creatorData.id,
             name: creatorData.name || creatorData.displayName || 'Unknown',
@@ -307,15 +328,14 @@ export class AdminDashboardService {
     }
   }
 
-
-
-
-  private async getRecentActivities(): Promise<Array<{
-    type: 'content_created' | 'creator_approved' | 'user_registered' | 'application_submitted';
-    description: string;
-    timestamp: Date;
-    relatedId?: string;
-  }>> {
+  private async getRecentActivities(): Promise<
+    Array<{
+      type: 'content_created' | 'creator_approved' | 'user_registered' | 'application_submitted';
+      description: string;
+      timestamp: Date;
+      relatedId?: string;
+    }>
+  > {
     try {
       const activities: Array<{
         type: 'content_created' | 'creator_approved' | 'user_registered' | 'application_submitted';
@@ -326,9 +346,11 @@ export class AdminDashboardService {
 
       // auth-service에서 최근 사용자 등록 조회 (최대 5개)
       try {
-        const recentUsersResult = await this.authClient.send('user.getRecent', { 
-          limit: 5 
-        }).toPromise();
+        const recentUsersResult = await this.authClient
+          .send('user.getRecent', {
+            limit: 5,
+          })
+          .toPromise();
 
         if (recentUsersResult?.users) {
           const userActivities = recentUsersResult.users.map((user: unknown) => {
@@ -350,9 +372,7 @@ export class AdminDashboardService {
       }
 
       // 시간순으로 정렬하여 최대 10개 반환
-      return activities
-        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-        .slice(0, 10);
+      return activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 10);
     } catch (error: unknown) {
       this.logger.warn('Failed to get recent activities', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -386,10 +406,10 @@ export class AdminDashboardService {
         if (dbError instanceof Error && dbError.message.includes('not found')) {
           checks.push({ name: 'Database', status: 'pass' });
         } else {
-          checks.push({ 
-            name: 'Database', 
-            status: 'fail', 
-            message: 'Database connection failed' 
+          checks.push({
+            name: 'Database',
+            status: 'fail',
+            message: 'Database connection failed',
           });
         }
       }
@@ -409,46 +429,44 @@ export class AdminDashboardService {
         if (healthCheck?.status === 'ok') {
           checks.push({ name: 'Auth Service', status: 'pass' });
         } else {
-          checks.push({ 
-            name: 'Auth Service', 
-            status: 'warning', 
-            message: 'Auth service responded but status unclear' 
+          checks.push({
+            name: 'Auth Service',
+            status: 'warning',
+            message: 'Auth service responded but status unclear',
           });
         }
       } catch (_authError: unknown) {
-        checks.push({ 
-          name: 'Auth Service', 
-          status: 'fail', 
-          message: 'Auth service unreachable' 
+        checks.push({
+          name: 'Auth Service',
+          status: 'fail',
+          message: 'Auth service unreachable',
         });
       }
 
       // 서비스별 데이터 상태 체크
       try {
-        const [totalCreators] = await Promise.all([
-          this.getTotalCreators(),
-        ]);
+        const [totalCreators] = await Promise.all([this.getTotalCreators()]);
 
         if (totalCreators > 0) {
           checks.push({ name: 'Data Integrity', status: 'pass' });
         } else {
-          checks.push({ 
-            name: 'Data Integrity', 
-            status: 'warning', 
-            message: 'No creators present in system' 
+          checks.push({
+            name: 'Data Integrity',
+            status: 'warning',
+            message: 'No creators present in system',
           });
         }
       } catch (_dataError: unknown) {
-        checks.push({ 
-          name: 'Data Integrity', 
-          status: 'fail', 
-          message: 'Data integrity check failed' 
+        checks.push({
+          name: 'Data Integrity',
+          status: 'fail',
+          message: 'Data integrity check failed',
         });
       }
 
       // 전체 시스템 상태 판단
-      const hasFailures = checks.some(check => check.status === 'fail');
-      const hasWarnings = checks.some(check => check.status === 'warning');
+      const hasFailures = checks.some((check) => check.status === 'fail');
+      const hasWarnings = checks.some((check) => check.status === 'warning');
 
       return {
         status: hasFailures ? 'critical' : hasWarnings ? 'warning' : 'healthy',
@@ -461,9 +479,7 @@ export class AdminDashboardService {
 
       return {
         status: 'critical',
-        checks: [
-          { name: 'Health Check', status: 'fail', message: 'System health check failed' },
-        ],
+        checks: [{ name: 'Health Check', status: 'fail', message: 'System health check failed' }],
       };
     }
   }
@@ -529,12 +545,14 @@ export class AdminDashboardService {
     }
   }
 
-  private async getTopContentByViews(limit: number): Promise<Array<{
-    contentId: string;
-    title: string;
-    views: number;
-    creatorName: string;
-  }>> {
+  private async getTopContentByViews(limit: number): Promise<
+    Array<{
+      contentId: string;
+      title: string;
+      views: number;
+      creatorName: string;
+    }>
+  > {
     try {
       return await this.contentService.getTopContentByViews(limit);
     } catch (error: unknown) {
@@ -546,11 +564,13 @@ export class AdminDashboardService {
     }
   }
 
-  private async getPlatformDistribution(): Promise<Array<{
-    platform: string;
-    contentCount: number;
-    percentage: number;
-  }>> {
+  private async getPlatformDistribution(): Promise<
+    Array<{
+      platform: string;
+      contentCount: number;
+      percentage: number;
+    }>
+  > {
     try {
       return await this.contentService.getPlatformDistribution();
     } catch (error: unknown) {
@@ -561,11 +581,13 @@ export class AdminDashboardService {
     }
   }
 
-  private async getCategoryDistribution(): Promise<Array<{
-    category: string;
-    contentCount: number;
-    percentage: number;
-  }>> {
+  private async getCategoryDistribution(): Promise<
+    Array<{
+      category: string;
+      contentCount: number;
+      percentage: number;
+    }>
+  > {
     try {
       return await this.contentService.getCategoryDistribution();
     } catch (error: unknown) {
@@ -575,5 +597,4 @@ export class AdminDashboardService {
       return [];
     }
   }
-
 }

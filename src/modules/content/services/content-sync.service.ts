@@ -60,7 +60,9 @@ export class ContentSyncService {
       const sync = new ContentSyncEntity();
       sync.contentId = contentId;
       sync.isAuthorizedData = options.isAuthorizedData || false;
-      sync.expiresAt = options.expiresAt;
+      if (options.expiresAt) {
+        sync.expiresAt = options.expiresAt;
+      }
       sync.syncStatus = 'completed';
       sync.lastSyncedAt = new Date();
 
@@ -156,7 +158,7 @@ export class ContentSyncService {
       sync.lastSyncedAt = now;
       sync.expiresAt = expiresAt || defaultExpiresAt;
       sync.syncStatus = 'completed';
-      sync.syncError = null; // 에러 초기화
+      delete sync.syncError; // 에러 초기화
 
       const repository = transactionManager
         ? transactionManager.getRepository(ContentSyncEntity)
@@ -342,7 +344,7 @@ export class ContentSyncService {
   ): Promise<void> {
     try {
       await this.syncMetadataRepo.updateSyncMetadata(contentId, metadata);
-      
+
       this.logger.debug('Sync metadata updated', {
         contentId,
         hasApiCallCount: metadata.apiCallCount !== undefined,
@@ -361,7 +363,7 @@ export class ContentSyncService {
   async incrementApiCallCount(contentId: string, increment = 1): Promise<void> {
     try {
       await this.syncMetadataRepo.incrementApiCallCount(contentId, increment);
-      
+
       this.logger.debug('API call count incremented', {
         contentId,
         increment,
@@ -487,7 +489,7 @@ export class ContentSyncService {
 
   async hasSyncData(contentId: string): Promise<boolean> {
     try {
-      return await this.contentSyncRepo.exists({ where: { contentId } });
+      return await this.contentSyncRepo.exists({ contentId });
     } catch (error: unknown) {
       this.logger.error('Failed to check sync data existence', {
         error: error instanceof Error ? error.message : 'Unknown error',

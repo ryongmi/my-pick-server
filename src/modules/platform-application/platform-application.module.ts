@@ -3,44 +3,40 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CreatorModule } from '@modules/creator/index.js';
 
-import { 
+import {
   PlatformApplicationEntity,
   PlatformApplicationDataEntity,
-  PlatformApplicationReviewEntity
+  PlatformApplicationReviewEntity,
 } from './entities/index.js';
-import { 
+import {
   PlatformApplicationRepository,
   PlatformApplicationDataRepository,
-  PlatformApplicationReviewRepository
+  PlatformApplicationReviewRepository,
 } from './repositories/index.js';
-import { 
+import {
   PlatformApplicationService,
   PlatformApplicationDataService,
-  PlatformApplicationReviewService
+  PlatformApplicationReviewService,
 } from './services/index.js';
-import {
-  PlatformApplicationController,
-} from './controllers/index.js';
+import { PlatformApplicationController } from './controllers/index.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       PlatformApplicationEntity,
       PlatformApplicationDataEntity,
-      PlatformApplicationReviewEntity
+      PlatformApplicationReviewEntity,
     ]),
     CreatorModule, // CreatorService 사용을 위해 필요
   ],
-  controllers: [
-    PlatformApplicationController,
-  ],
+  controllers: [PlatformApplicationController],
   providers: [
     PlatformApplicationRepository,
     PlatformApplicationDataRepository,
     PlatformApplicationReviewRepository,
     PlatformApplicationService,
     PlatformApplicationDataService,
-    PlatformApplicationReviewService
+    PlatformApplicationReviewService,
   ],
   exports: [
     PlatformApplicationService,
@@ -48,7 +44,7 @@ import {
     PlatformApplicationReviewService,
     PlatformApplicationRepository,
     PlatformApplicationDataRepository,
-    PlatformApplicationReviewRepository
+    PlatformApplicationReviewRepository,
   ],
 })
 export class PlatformApplicationModule {}

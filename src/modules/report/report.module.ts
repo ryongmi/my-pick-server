@@ -25,9 +25,7 @@ import { ReportController } from './controllers/index.js';
       ReportActionEntity,
     ]),
   ],
-  controllers: [
-    ReportController,
-  ],
+  controllers: [ReportController],
   providers: [
     ReportRepository,
     ReportEvidenceRepository,

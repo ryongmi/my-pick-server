@@ -28,14 +28,14 @@ export class CreatorConsentEntity extends BaseEntityUUID {
   grantedAt!: Date;
 
   @Column({ nullable: true })
-  revokedAt?: Date; // 동의 철회 시점
+  revokedAt?: Date | null; // 동의 철회 시점
 
   @Column({ nullable: true })
-  expiresAt?: Date; // 동의 만료 시점 (재확인 필요)
+  expiresAt?: Date | null; // 동의 만료 시점 (재확인 필요)
 
   @Column({ type: 'text', nullable: true })
-  consentData?: string; // 동의 시점의 추가 정보 (IP, User-Agent 등)
+  consentData?: string | null; // 동의 시점의 추가 정보 (IP, User-Agent 등)
 
   @Column({ nullable: true })
-  version?: string; // 동의한 약관/정책 버전
+  version?: string | null; // 동의한 약관/정책 버전
 }

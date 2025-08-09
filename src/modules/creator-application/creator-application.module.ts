@@ -3,17 +3,17 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CreatorModule } from '../creator/index.js';
 
-import { 
+import {
   CreatorApplicationEntity,
   CreatorApplicationChannelInfoEntity,
   CreatorApplicationSampleVideoEntity,
-  CreatorApplicationReviewEntity
+  CreatorApplicationReviewEntity,
 } from './entities/index.js';
-import { 
+import {
   CreatorApplicationRepository,
   CreatorApplicationChannelInfoRepository,
   CreatorApplicationSampleVideoRepository,
-  CreatorApplicationReviewRepository
+  CreatorApplicationReviewRepository,
 } from './repositories/index.js';
 import { CreatorApplicationService } from './services/index.js';
 import { CreatorApplicationController } from './controllers/index.js';
@@ -24,7 +24,7 @@ import { CreatorApplicationController } from './controllers/index.js';
       CreatorApplicationEntity,
       CreatorApplicationChannelInfoEntity,
       CreatorApplicationSampleVideoEntity,
-      CreatorApplicationReviewEntity
+      CreatorApplicationReviewEntity,
     ]),
     CreatorModule, // CreatorService 사용을 위해 필요
   ],
@@ -34,14 +34,14 @@ import { CreatorApplicationController } from './controllers/index.js';
     CreatorApplicationChannelInfoRepository,
     CreatorApplicationSampleVideoRepository,
     CreatorApplicationReviewRepository,
-    CreatorApplicationService
+    CreatorApplicationService,
   ],
   exports: [
     CreatorApplicationService,
     CreatorApplicationRepository,
     CreatorApplicationChannelInfoRepository,
     CreatorApplicationSampleVideoRepository,
-    CreatorApplicationReviewRepository
+    CreatorApplicationReviewRepository,
   ],
 })
 export class CreatorApplicationModule {}

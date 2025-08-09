@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+
 import { DataSource } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
@@ -11,7 +12,9 @@ export class PlatformApplicationReviewRepository extends BaseRepository<Platform
     super(PlatformApplicationReviewEntity, dataSource);
   }
 
-  async findByApplicationId(applicationId: string): Promise<PlatformApplicationReviewEntity | null> {
+  async findByApplicationId(
+    applicationId: string
+  ): Promise<PlatformApplicationReviewEntity | null> {
     return this.findOne({
       where: { applicationId },
     });

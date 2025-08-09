@@ -1,70 +1,62 @@
-# version: '3.8'
+version: '3.8'
 services:
-  # nginx:
-  #   build:
-  #     context: ./nginx
-  #     dockerfile: Dockerfile.dev
-  #   restart: always
-  #   ports:
-  #     - "3050:80"
-  #   depends_on:
-  #     - backend
-  #     - frontend
   mysql:
     image: mysql:8
-    container_name: auth-mysql
+    container_name: my-pick-mysql-prod
     restart: unless-stopped
     volumes:
       - ./data/mysqldata:/var/lib/mysql
-      # - ./config:/etc/mysql/conf.d # my.cnf 파일을 컨테이너에 복사
     command:
-      - --bind-address=0.0.0.0 # MySQL 시작 시 bind-address를 0.0.0.0으로 설정
+      - --bind-address=0.0.0.0
     ports: []
     env_file:
-      - ./envs/env.prod
-    # networks:
-    #   - network-auth
+      - ./envs/.env.prod
+    environment:
+      - MYSQL_CHARSET=utf8mb4
+      - MYSQL_COLLATION=utf8mb4_general_ci
+      - MYSQL_TIMEZONE=Asia/Seoul
+      - TZ=Asia/Seoul
+    networks:
+      - my-pick-network
 
   redis:
     image: redis:alpine
-    container_name: auth-redis
+    container_name: my-pick-redis-prod
     restart: unless-stopped
     volumes:
       - ./data/redisdata:/data
-      # - ./config/redis.conf:/usr/local/etc/redis/redis.conf
     env_file:
-      - ./envs/env.prod
-    # networks:
-    #   - network-auth
-    # command: ['redis-server', '--requirepass', '${REDIS_PASSWORD}']
-    # CMD [ "redis-server", "/usr/local/etc/redis/redis.conf" ]
+      - ./envs/.env.prod
     ports: []
     depends_on:
       - mysql
+    networks:
+      - my-pick-network
 
   server:
-    image: krgeobuk/auth-server:prod
-    container_name: auth-server
+    image: krgeobuk/my-pick-server:prod
+    container_name: my-pick-server-prod
     restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
-      target: prodution
+      target: production
     volumes:
-      - ./logs:/app/logs # Log 동기화
-    # networks:
-    #   - network-auth
+      - ./logs:/app/logs
     ports: []
     env_file:
-      - ./envs/env.prod
+      - ./envs/.env.prod
     environment:
       - TZ=Asia/Seoul
-    # depends_on:
-    #   - redis
-    #   - mysql
+    networks:
+      - my-pick-network
+      - msa-network
+    depends_on:
+      - redis
+      - mysql
 
 networks:
-  authz-network:
+  my-pick-network:
     driver: bridge
   msa-network:
     external: true

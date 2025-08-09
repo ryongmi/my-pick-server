@@ -1,11 +1,4 @@
-import {
-  Entity,
-  PrimaryColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  Index,
-} from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 @Entity('user_interactions')
 @Index(['userId']) // 사용자별 상호작용 조회 최적화
@@ -30,13 +23,13 @@ export class UserInteractionEntity {
   isLiked!: boolean;
 
   @Column({ nullable: true })
-  watchedAt?: Date;
+  watchedAt?: Date | null;
 
   @Column({ nullable: true })
-  watchDuration?: number;
+  watchDuration?: number | null;
 
   @Column({ type: 'decimal', precision: 2, scale: 1, nullable: true })
-  rating?: number;
+  rating?: number | null;
 
   @CreateDateColumn()
   createdAt!: Date;

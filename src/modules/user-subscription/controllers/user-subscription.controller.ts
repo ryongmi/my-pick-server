@@ -31,7 +31,6 @@ import { CreatorService } from '../../creator/services/index.js';
 import { SubscribeCreatorDto } from '../dto/index.js';
 import { CreatorSearchResultDto } from '../../creator/dto/index.js';
 
-
 @SwaggerApiTags({ tags: ['user-subscriptions'] })
 @SwaggerApiBearerAuth()
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
@@ -82,7 +81,7 @@ export class UserSubscriptionController {
   @SwaggerApiParam({ name: 'creatorId', type: String, description: '크리에이터 ID' })
   @SwaggerApiOkResponse({
     status: 200,
-    description: '구독 관계 존재 확인 성공'
+    description: '구독 관계 존재 확인 성공',
   })
   @SwaggerApiErrorResponse({
     status: 404,
@@ -103,7 +102,7 @@ export class UserSubscriptionController {
   @SwaggerApiParam({ name: 'creatorId', type: String, description: '크리에이터 ID' })
   @SwaggerApiBody({
     dto: SubscribeCreatorDto,
-    description: '구독 정보'
+    description: '구독 정보',
   })
   @SwaggerApiOkResponse({
     status: 201,
@@ -154,4 +153,3 @@ export class UserSubscriptionController {
     await this.userSubscriptionService.unsubscribeFromCreator(userId, creatorId);
   }
 }
-

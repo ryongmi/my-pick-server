@@ -1,11 +1,32 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { CreatorEntity, CreatorPlatformEntity, CreatorPlatformSyncEntity, CreatorConsentEntity, CreatorStatisticsEntity } from './entities/index.js';
-import { CreatorRepository, CreatorPlatformRepository, CreatorPlatformSyncRepository, CreatorConsentRepository, CreatorStatisticsRepository } from './repositories/index.js';
-import { CreatorService, CreatorPlatformService, CreatorPlatformSyncService, CreatorConsentService, CreatorStatisticsService } from './services/index.js';
-import { CreatorController } from './controllers/index.js';
+import { RedisModule } from '@database/redis/index.js';
+
 import { UserSubscriptionModule } from '../user-subscription/user-subscription.module.js';
+
+import {
+  CreatorEntity,
+  CreatorPlatformEntity,
+  CreatorPlatformSyncEntity,
+  CreatorConsentEntity,
+  CreatorStatisticsEntity,
+} from './entities/index.js';
+import {
+  CreatorRepository,
+  CreatorPlatformRepository,
+  CreatorPlatformSyncRepository,
+  CreatorConsentRepository,
+  CreatorStatisticsRepository,
+} from './repositories/index.js';
+import {
+  CreatorService,
+  CreatorPlatformService,
+  CreatorPlatformSyncService,
+  CreatorConsentService,
+  CreatorStatisticsService,
+} from './services/index.js';
+import { CreatorController } from './controllers/index.js';
 
 @Module({
   imports: [
@@ -16,6 +37,7 @@ import { UserSubscriptionModule } from '../user-subscription/user-subscription.m
       CreatorConsentEntity,
       CreatorStatisticsEntity,
     ]),
+    RedisModule,
     UserSubscriptionModule,
   ],
   controllers: [CreatorController],
@@ -26,7 +48,7 @@ import { UserSubscriptionModule } from '../user-subscription/user-subscription.m
     CreatorPlatformSyncRepository,
     CreatorConsentRepository,
     CreatorStatisticsRepository,
-    
+
     // Services
     CreatorService,
     CreatorPlatformService,

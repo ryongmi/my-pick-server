@@ -4,13 +4,17 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-
 import { CreatorModule } from '../creator/creator.module.js';
 import { ContentModule } from '../content/content.module.js';
 import { CreatorPlatformEntity } from '../creator/entities/index.js';
 
 import { ApiQuotaUsageEntity } from './entities/index.js';
-import { YouTubeApiService, TwitterApiService, ExternalApiSchedulerService, QuotaMonitorService } from './services/index.js';
+import {
+  YouTubeApiService,
+  TwitterApiService,
+  ExternalApiSchedulerService,
+  QuotaMonitorService,
+} from './services/index.js';
 import { ApiQuotaUsageRepository } from './repositories/index.js';
 
 @Module({
@@ -36,12 +40,11 @@ import { ApiQuotaUsageRepository } from './repositories/index.js';
   ],
   providers: [
     ApiQuotaUsageRepository,
-    YouTubeApiService, 
-    TwitterApiService, 
-    ExternalApiSchedulerService, 
-    QuotaMonitorService
+    YouTubeApiService,
+    TwitterApiService,
+    ExternalApiSchedulerService,
+    QuotaMonitorService,
   ],
   exports: [YouTubeApiService, TwitterApiService, ExternalApiSchedulerService, QuotaMonitorService],
 })
 export class ExternalApiModule {}
-

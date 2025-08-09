@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { Expose, Type } from 'class-transformer';
 
 class PlatformStatsDto {
@@ -44,14 +45,14 @@ export class CreatorSearchResultDto {
     example: 'https://example.com/avatar.jpg',
   })
   @Expose()
-  avatar?: string | undefined;
+  avatar?: string | null | undefined;
 
   @ApiPropertyOptional({
     description: '크리에이터 소개',
     example: 'Swedish YouTuber and gamer',
   })
   @Expose()
-  description?: string | undefined;
+  description?: string | null | undefined;
 
   @ApiProperty({
     description: '인증 여부',
@@ -73,7 +74,7 @@ export class CreatorSearchResultDto {
     type: [String],
   })
   @Expose()
-  tags?: string[] | undefined;
+  tags?: string[] | null | undefined;
 
   @ApiPropertyOptional({
     description: '플랫폼 통계 정보',

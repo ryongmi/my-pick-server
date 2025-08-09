@@ -25,18 +25,21 @@ export class UserInteractionRepository extends BaseRepository<UserInteractionEnt
     });
   }
 
-  async findByUserAndContent(userId: string, contentId: string): Promise<UserInteractionEntity | null> {
+  async findByUserAndContent(
+    userId: string,
+    contentId: string
+  ): Promise<UserInteractionEntity | null> {
     return super.findOne({
-      where: { userId, contentId }
+      where: { userId, contentId },
     });
   }
 
   async getBookmarkedContentIds(userId: string): Promise<string[]> {
     const result = await this.createQueryBuilder('ui')
       .select('ui.contentId')
-      .where('ui.userId = :userId AND ui.isBookmarked = :isBookmarked', { 
-        userId, 
-        isBookmarked: true 
+      .where('ui.userId = :userId AND ui.isBookmarked = :isBookmarked', {
+        userId,
+        isBookmarked: true,
       })
       .getRawMany();
 
@@ -46,9 +49,9 @@ export class UserInteractionRepository extends BaseRepository<UserInteractionEnt
   async getLikedContentIds(userId: string): Promise<string[]> {
     const result = await this.createQueryBuilder('ui')
       .select('ui.contentId')
-      .where('ui.userId = :userId AND ui.isLiked = :isLiked', { 
-        userId, 
-        isLiked: true 
+      .where('ui.userId = :userId AND ui.isLiked = :isLiked', {
+        userId,
+        isLiked: true,
       })
       .getRawMany();
 
@@ -175,15 +178,15 @@ export class UserInteractionRepository extends BaseRepository<UserInteractionEnt
    * 사용자별 상호작용 정보를 배치로 조회
    */
   async getContentInteractionsBatch(
-    contentIds: string[], 
+    contentIds: string[],
     userId: string
   ): Promise<Record<string, UserInteractionEntity>> {
     if (contentIds.length === 0) return {};
 
     const interactions = await this.find({
-      where: { 
-        userId, 
-        contentId: In(contentIds) 
+      where: {
+        userId,
+        contentId: In(contentIds),
       },
     });
 
@@ -199,12 +202,17 @@ export class UserInteractionRepository extends BaseRepository<UserInteractionEnt
    * 북마크/좋아요 상태 토글을 위한 upsert 메서드
    */
   async upsertInteraction(
-    userId: string, 
-    contentId: string, 
-    updates: Partial<Pick<UserInteractionEntity, 'isBookmarked' | 'isLiked' | 'rating' | 'watchedAt' | 'watchDuration'>>
+    userId: string,
+    contentId: string,
+    updates: Partial<
+      Pick<
+        UserInteractionEntity,
+        'isBookmarked' | 'isLiked' | 'rating' | 'watchedAt' | 'watchDuration'
+      >
+    >
   ): Promise<UserInteractionEntity> {
     let interaction = await this.findByUserAndContent(userId, contentId);
-    
+
     if (!interaction) {
       interaction = this.create({
         userId,

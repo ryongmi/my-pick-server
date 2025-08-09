@@ -6,6 +6,15 @@ const defaultConfigSchema = {
   CORS_ORIGINS: Joi.string().required(),
 };
 
+const clientConfigSchema = {
+  AUTH_SERVICE_HOST: Joi.string().default('auth-server'),
+  AUTH_SERVICE_PORT: Joi.number().default(8010),
+  AUTHZ_SERVICE_HOST: Joi.string().default('authz-server'),
+  AUTHZ_SERVICE_PORT: Joi.number().default(8110),
+  PORTAL_SERVICE_HOST: Joi.string().default('portal-server'),
+  PORTAL_SERVICE_PORT: Joi.number().default(8210),
+};
+
 const mysqlConfigSchema = {
   MYSQL_HOST: Joi.string().required(),
   MYSQL_PORT: Joi.number().required(),
@@ -20,13 +29,19 @@ const redisConfigSchema = {
   REDIS_PASSWORD: Joi.string().required(),
 };
 
+const youtubeConfigSchema = {
+  YOUTUBE_API_KEY: Joi.string().required(),
+};
+
 const jwtConfigSchema = {
   JWT_ACCESS_PUBLIC_KEY_PATH: Joi.string().required(),
 };
 
 export const validationSchema = Joi.object({
   ...defaultConfigSchema,
+  ...clientConfigSchema,
   ...mysqlConfigSchema,
   ...redisConfigSchema,
+  ...youtubeConfigSchema,
   ...jwtConfigSchema,
 });

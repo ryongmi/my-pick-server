@@ -35,14 +35,12 @@ import { AdminException } from '../exceptions/index.js';
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
 @RequireRole('superAdmin')
 export class AdminContentController {
-  constructor(
-    private readonly contentService: ContentService,
-  ) {}
+  constructor(private readonly contentService: ContentService) {}
 
   @Get()
   @RequirePermission('content:read')
   async getContentList(
-    @Query() query: AdminContentSearchQueryDto,
+    @Query() query: AdminContentSearchQueryDto
     // @CurrentUser() admin: UserInfo,
   ): Promise<PaginatedResult<AdminContentListItemDto>> {
     try {
@@ -63,11 +61,73 @@ export class AdminContentController {
       const adminItems = result.items.map((content) => {
         // TODO: ReportService 구현 후 신고 수 조회 로직 추가
 
-        return plainToInstance(AdminContentListItemDto, {
+        return plainToInstance(
+          AdminContentListItemDto,
+          {
+            id: content.id,
+            type: content.type,
+            title: content.title,
+            platform: content.platform,
+            status: ContentStatus.ACTIVE, // TODO: content entity에 status 필드 추가
+            publishedAt: content.publishedAt,
+            createdAt: content.createdAt,
+            creator: {
+              id: content.creatorId,
+              name: `Creator ${content.creatorId}`, // TODO: creator 정보 조회
+              displayName: `Creator ${content.creatorId}`,
+            },
+            statistics: {
+              views: 0, // TODO: content statistics 조회
+              likes: 0,
+              comments: 0,
+            },
+            flagCount: 0, // TODO: ReportService 구현 후 추가
+            lastModeratedAt: undefined, // TODO: moderation 기능 구현 후 추가
+            moderatedBy: undefined,
+          },
+          {
+            excludeExtraneousValues: true,
+          }
+        );
+      });
+
+      return {
+        items: adminItems,
+        pageInfo: {
+          page: result.pageInfo.page,
+          limit: result.pageInfo.limit,
+          totalItems: result.pageInfo.totalItems,
+          totalPages: result.pageInfo.totalPages,
+          hasPreviousPage: result.pageInfo.hasPreviousPage,
+          hasNextPage: result.pageInfo.hasNextPage,
+        },
+      } as PaginatedResult<AdminContentListItemDto>;
+    } catch (_error: unknown) {
+      throw AdminException.contentDataFetchError();
+    }
+  }
+
+  @Get(':id')
+  // @UseGuards(AuthGuard)
+  @RequirePermission('content:read')
+  async getContentDetail(
+    @Param('id', ParseUUIDPipe) contentId: string
+  ): Promise<AdminContentDetailDto> {
+    try {
+      const content = await this.contentService.getContentById(contentId);
+
+      return plainToInstance(
+        AdminContentDetailDto,
+        {
           id: content.id,
           type: content.type,
           title: content.title,
+          description: content.description,
+          thumbnail: content.thumbnail,
+          url: content.url,
           platform: content.platform,
+          platformId: content.platformId,
+          duration: content.duration,
           status: ContentStatus.ACTIVE, // TODO: content entity에 status 필드 추가
           publishedAt: content.publishedAt,
           createdAt: content.createdAt,
@@ -81,69 +141,15 @@ export class AdminContentController {
             likes: 0,
             comments: 0,
           },
+          // metadata: content.metadata, // TODO: Add metadata field to ContentDetailDto
           flagCount: 0, // TODO: ReportService 구현 후 추가
-          lastModeratedAt: undefined, // TODO: moderation 기능 구현 후 추가
-          moderatedBy: undefined,
-        }, {
+          flags: [], // TODO: ReportService 구현 후 신고 목록 추가
+          moderationHistory: [], // TODO: moderation 기능 구현 후 추가
+        },
+        {
           excludeExtraneousValues: true,
-        });
-      });
-
-      return {
-        items: adminItems,
-        pageInfo: {
-          page: result.pageInfo.page,
-          limit: result.pageInfo.limit,
-          totalItems: result.pageInfo.totalItems,
-          totalPages: result.pageInfo.totalPages,
-          hasPreviousPage: result.pageInfo.hasPreviousPage,
-          hasNextPage: result.pageInfo.hasNextPage
         }
-      } as PaginatedResult<AdminContentListItemDto>;
-    } catch (_error: unknown) {
-      throw AdminException.contentDataFetchError();
-    }
-  }
-
-  @Get(':id')
-  // @UseGuards(AuthGuard)
-  @RequirePermission('content:read')
-  async getContentDetail(
-    @Param('id', ParseUUIDPipe) contentId: string,
-  ): Promise<AdminContentDetailDto> {
-    try {
-      const content = await this.contentService.getContentById(contentId);
-
-      return plainToInstance(AdminContentDetailDto, {
-        id: content.id,
-        type: content.type,
-        title: content.title,
-        description: content.description,
-        thumbnail: content.thumbnail,
-        url: content.url,
-        platform: content.platform,
-        platformId: content.platformId,
-        duration: content.duration,
-        status: ContentStatus.ACTIVE, // TODO: content entity에 status 필드 추가
-        publishedAt: content.publishedAt,
-        createdAt: content.createdAt,
-        creator: {
-          id: content.creatorId,
-          name: `Creator ${content.creatorId}`, // TODO: creator 정보 조회
-          displayName: `Creator ${content.creatorId}`,
-        },
-        statistics: {
-          views: 0, // TODO: content statistics 조회
-          likes: 0,
-          comments: 0,
-        },
-        metadata: content.metadata,
-        flagCount: 0, // TODO: ReportService 구현 후 추가
-        flags: [], // TODO: ReportService 구현 후 신고 목록 추가
-        moderationHistory: [], // TODO: moderation 기능 구현 후 추가
-      }, {
-        excludeExtraneousValues: true,
-      });
+      );
     } catch (_error: unknown) {
       throw AdminException.contentDataFetchError();
     }
@@ -156,7 +162,7 @@ export class AdminContentController {
   async updateContentStatus(
     @Param('id', ParseUUIDPipe) contentId: string,
     @Body() _dto: UpdateContentStatusDto,
-    @CurrentJwt() { id: _id }: JwtPayload,
+    @CurrentJwt() { id: _id }: JwtPayload
   ): Promise<void> {
     try {
       // TODO: ContentService에 updateContentStatus 메서드 구현 필요
@@ -166,7 +172,7 @@ export class AdminContentController {
       //   id, // JWT에서 추출한 관리자 ID
       //   dto.reason,
       // );
-      
+
       // 임시로 콘텐츠 존재 여부만 확인
       await this.contentService.findByIdOrFail(contentId);
     } catch (_error: unknown) {
@@ -179,13 +185,13 @@ export class AdminContentController {
   // @UseGuards(AuthGuard)
   @RequirePermission('content:delete')
   async deleteContent(
-    @Param('id', ParseUUIDPipe) contentId: string,
+    @Param('id', ParseUUIDPipe) contentId: string
     // @CurrentUser() admin: UserInfo,
   ): Promise<void> {
     try {
       // TODO: ContentService에 deleteContent 메서드 구현 필요
       // await this.contentService.deleteContent(contentId);
-      
+
       // 임시로 콘텐츠 존재 여부만 확인
       await this.contentService.findByIdOrFail(contentId);
     } catch (_error: unknown) {
@@ -196,9 +202,7 @@ export class AdminContentController {
   @Get(':id/flags')
   // @UseGuards(AuthGuard)
   @RequirePermission('content:read')
-  async getContentFlags(
-    @Param('id', ParseUUIDPipe) contentId: string,
-  ): Promise<{
+  async getContentFlags(@Param('id', ParseUUIDPipe) contentId: string): Promise<{
     flags: Array<{
       id: string;
       reason: string;
@@ -211,7 +215,7 @@ export class AdminContentController {
     try {
       // TODO: ReportService 구현 후 콘텐츠 신고 목록 조회
       await this.contentService.findByIdOrFail(contentId);
-      
+
       return { flags: [] };
     } catch (_error: unknown) {
       throw AdminException.contentDataFetchError();
@@ -226,12 +230,12 @@ export class AdminContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @Param('flagId', ParseUUIDPipe) flagId: string,
     @Body() body: { action: 'dismiss' | 'approve'; reason?: string },
-    @CurrentJwt() { id: _id }: JwtPayload,
+    @CurrentJwt() { id: _id }: JwtPayload
   ): Promise<void> {
     try {
       // TODO: ReportService 구현 후 신고 처리 로직 구현
       await this.contentService.findByIdOrFail(contentId);
-      
+
       // 임시로 로직 구현 (실제로는 신고 처리)
       if (body.action === 'approve') {
         // TODO: 콘텐츠 상태 변경 및 신고 승인 처리
@@ -258,7 +262,7 @@ export class AdminContentController {
     try {
       // TODO: ContentService에 통계 메서드 구현 필요
       // const statusStats = await this.contentService.getContentStatusStatistics();
-      
+
       // 임시로 기본 값 반환
       return {
         totalContent: 0,

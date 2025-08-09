@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { DataSource, In, MoreThan, LessThan } from 'typeorm';
+import { DataSource, In, MoreThan, LessThan, And, Between } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
 import { LimitType, SortOrderType } from '@krgeobuk/core/enum';
@@ -193,8 +193,7 @@ export class ContentStatisticsRepository extends BaseRepository<ContentStatistic
   async getContentCountByViewRange(minViews: number, maxViews: number): Promise<number> {
     return this.count({
       where: {
-        views: MoreThan(minViews),
-        views: LessThan(maxViews),
+        views: Between(minViews, maxViews),
       },
     });
   }
@@ -213,8 +212,7 @@ export class ContentStatisticsRepository extends BaseRepository<ContentStatistic
         range: range.label,
         count: await this.count({
           where: {
-            engagementRate: MoreThan(range.min),
-            engagementRate: LessThan(range.max),
+            engagementRate: Between(range.min, range.max),
           },
         }),
       }))

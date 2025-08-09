@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  Query,
-  UseGuards,
-  HttpCode,
-} from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, HttpCode } from '@nestjs/common';
 
 import { plainToInstance } from 'class-transformer';
 

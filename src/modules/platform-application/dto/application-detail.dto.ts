@@ -1,7 +1,11 @@
-import { Expose, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+import { Expose, Type } from 'class-transformer';
+
+import { PlatformType } from '@common/enums/index.js';
+
 import { ApplicationStatus } from '../enums/index.js';
+
 import { PlatformDataDto } from './platform-data.dto.js';
 import { ReviewDataDto } from './review-data.dto.js';
 
@@ -28,6 +32,22 @@ export class ApplicationDetailDto {
   userId!: string;
 
   @ApiProperty({
+    description: '플랫폼 타입',
+    enum: PlatformType,
+    example: PlatformType.YOUTUBE,
+  })
+  @Expose()
+  platformType!: PlatformType;
+
+  @ApiProperty({
+    description: '신청일시',
+    example: '2023-12-01T09:00:00Z',
+  })
+  @Expose()
+  @Type(() => Date)
+  appliedAt!: Date;
+
+  @ApiProperty({
     description: '신청 상태',
     enum: ApplicationStatus,
     example: ApplicationStatus.PENDING,
@@ -35,13 +55,13 @@ export class ApplicationDetailDto {
   @Expose()
   status!: ApplicationStatus;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: '플랫폼 데이터',
     type: PlatformDataDto,
   })
   @Expose()
   @Type(() => PlatformDataDto)
-  platformData!: PlatformDataDto;
+  platformData?: PlatformDataDto;
 
   @ApiPropertyOptional({
     description: '검토 완료일시',
@@ -49,14 +69,14 @@ export class ApplicationDetailDto {
   })
   @Expose()
   @Type(() => Date)
-  reviewedAt?: Date;
+  reviewedAt?: Date | null | undefined;
 
   @ApiPropertyOptional({
     description: '검토자 ID',
     example: '456b7890-1234-5678-9abc-def123456789',
   })
   @Expose()
-  reviewerId?: string;
+  reviewerId?: string | null | undefined;
 
   @ApiPropertyOptional({
     description: '검토 데이터',

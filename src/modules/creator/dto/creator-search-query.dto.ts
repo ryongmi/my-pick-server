@@ -1,6 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+
 import { Type, Transform } from 'class-transformer';
 import { IsOptional, IsString, IsBoolean, IsArray, IsInt, Min, Max, IsEnum } from 'class-validator';
+
 import { LimitType, SortOrderType } from '@krgeobuk/core/enum';
 
 export class CreatorSearchQueryDto {
@@ -43,7 +45,7 @@ export class CreatorSearchQueryDto {
   @IsString({ each: true })
   @Transform(({ value }) => {
     if (typeof value === 'string') {
-      return value.split(',').map(tag => tag.trim());
+      return value.split(',').map((tag) => tag.trim());
     }
     return value;
   })

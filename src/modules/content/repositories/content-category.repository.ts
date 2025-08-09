@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+
 import { DataSource, Repository } from 'typeorm';
 
 import { ContentCategoryEntity } from '../entities/index.js';
@@ -72,7 +73,7 @@ export class ContentCategoryRepository extends Repository<ContentCategoryEntity>
       .orderBy('count', 'DESC')
       .getRawMany();
 
-    return results.map(result => ({
+    return results.map((result) => ({
       category: result.category,
       count: parseInt(result.count),
       percentage: Math.round((parseInt(result.count) / totalCount) * 100 * 100) / 100,
@@ -91,7 +92,9 @@ export class ContentCategoryRepository extends Repository<ContentCategoryEntity>
 
   // ==================== 배치 처리 메서드 ====================
 
-  async batchCreateCategories(categories: Omit<ContentCategoryEntity, 'createdAt' | 'updatedAt'>[]): Promise<void> {
+  async batchCreateCategories(
+    categories: Omit<ContentCategoryEntity, 'createdAt' | 'updatedAt'>[]
+  ): Promise<void> {
     if (categories.length === 0) return;
 
     await this.createQueryBuilder()
@@ -106,11 +109,12 @@ export class ContentCategoryRepository extends Repository<ContentCategoryEntity>
     await this.delete({ contentId });
   }
 
-  async updateCategoryConfidence(contentId: string, category: string, confidence: number): Promise<void> {
-    await this.update(
-      { contentId, category },
-      { confidence, updatedAt: new Date() }
-    );
+  async updateCategoryConfidence(
+    contentId: string,
+    category: string,
+    confidence: number
+  ): Promise<void> {
+    await this.update({ contentId, category }, { confidence, updatedAt: new Date() });
   }
 
   // ==================== AI 분류 관련 메서드 ====================
@@ -131,9 +135,9 @@ export class ContentCategoryRepository extends Repository<ContentCategoryEntity>
 
     const queryBuilder = this.createQueryBuilder()
       .update(ContentCategoryEntity)
-      .set({ 
+      .set({
         confidence: () => 'VALUES(confidence)',
-        updatedAt: new Date()
+        updatedAt: new Date(),
       });
 
     for (const update of updates) {

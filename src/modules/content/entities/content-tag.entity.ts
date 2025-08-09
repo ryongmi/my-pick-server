@@ -1,10 +1,4 @@
-import {
-  Entity,
-  PrimaryColumn,
-  Column,
-  CreateDateColumn,
-  Index,
-} from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, Index } from 'typeorm';
 
 @Entity('content_tags')
 @Index(['contentId'])
@@ -25,7 +19,7 @@ export class ContentTagEntity {
   relevanceScore!: number; // 관련성 점수 (0.0-1.0)
 
   @Column({ nullable: true })
-  addedBy?: string; // 태그 추가자 ID
+  addedBy?: string | null; // 태그 추가자 ID
 
   @Column({ default: 0 })
   usageCount!: number; // 이 태그가 사용된 횟수 (전체 콘텐츠 기준)

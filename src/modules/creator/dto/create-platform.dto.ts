@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { IsString, IsOptional, IsEnum, IsUrl, MaxLength, MinLength } from 'class-validator';
+
 import { PlatformType } from '@common/enums/index.js';
 
 export class CreatePlatformDto {

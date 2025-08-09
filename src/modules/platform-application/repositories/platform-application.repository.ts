@@ -65,9 +65,7 @@ export class PlatformApplicationRepository extends BaseRepository<PlatformApplic
   /**
    * 관리자용 신청 목록 검색
    */
-  async searchApplications(
-    query: PlatformApplicationSearchQueryDto
-  ): Promise<{
+  async searchApplications(query: PlatformApplicationSearchQueryDto): Promise<{
     items: PlatformApplicationEntity[];
     total: number;
   }> {
@@ -106,7 +104,11 @@ export class PlatformApplicationRepository extends BaseRepository<PlatformApplic
     }
 
     if (query.type) {
-      queryBuilder.innerJoin('platform_application_data', 'data', 'data.applicationId = application.id');
+      queryBuilder.innerJoin(
+        'platform_application_data',
+        'data',
+        'data.applicationId = application.id'
+      );
       queryBuilder.andWhere('data.type = :type', {
         type: query.type,
       });

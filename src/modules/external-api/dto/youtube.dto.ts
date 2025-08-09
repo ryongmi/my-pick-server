@@ -7,17 +7,17 @@ export class YouTubeChannelThumbnailsDto {
   @Expose()
   @IsOptional()
   @IsString()
-  default?: string | undefined;
+  default?: string | null;
 
   @Expose()
   @IsOptional()
   @IsString()
-  medium?: string | undefined;
+  medium?: string | null;
 
   @Expose()
   @IsOptional()
   @IsString()
-  high?: string | undefined;
+  high?: string | null;
 }
 
 export class YouTubeChannelStatisticsDto {
@@ -269,7 +269,6 @@ export class YouTubeSearchResultDto {
 
 // ==================== API 응답 검증용 DTO ====================
 
-
 export class YouTubeChannelBasicDto {
   @Expose()
   @IsString()
@@ -394,7 +393,6 @@ export class YouTubeSearchIdDto {
   videoId!: string;
 }
 
-
 export class YouTubeSearchItemDto {
   @Expose()
   @ValidateNested()
@@ -452,4 +450,3 @@ export class YouTubeChannelFullApiResponseDto {
   @Type(() => YouTubeChannelFullDto)
   items!: YouTubeChannelFullDto[];
 }
-

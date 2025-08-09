@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { EntityManager } from 'typeorm';
 import { Between, LessThan } from 'typeorm';
 
 import { ApiQuotaUsageEntity } from '../entities/index.js';
@@ -49,9 +50,7 @@ export class QuotaMonitorService {
     },
   };
 
-  constructor(
-    private readonly quotaUsageRepo: ApiQuotaUsageRepository
-  ) {}
+  constructor(private readonly quotaUsageRepo: ApiQuotaUsageRepository) {}
 
   // ==================== 쿼터 사용량 기록 ====================
 
@@ -64,7 +63,8 @@ export class QuotaMonitorService {
     quotaUnits?: number,
     requestDetails?: Record<string, unknown>,
     responseStatus?: string,
-    errorMessage?: string
+    errorMessage?: string,
+    transactionManager?: EntityManager
   ): Promise<void> {
     try {
       // 작업별 기본 쿼터 단위 사용
@@ -79,7 +79,7 @@ export class QuotaMonitorService {
       usage.errorMessage = errorMessage || '';
       // date 필드 제거 - createdAt에서 날짜 추출
 
-      await this.quotaUsageRepo.save(usage);
+      await this.quotaUsageRepo.saveEntity(usage, transactionManager);
 
       this.logger.debug('Quota usage recorded', {
         apiProvider,
@@ -270,10 +270,7 @@ export class QuotaMonitorService {
   /**
    * 쿼터 임계값 체크 및 경고
    */
-  private async checkQuotaThresholds(
-    apiProvider: ApiProvider,
-    date: string
-  ): Promise<void> {
+  private async checkQuotaThresholds(apiProvider: ApiProvider, date: string): Promise<void> {
     try {
       const usage = await this.getDailyQuotaUsage(apiProvider, date);
 
@@ -468,4 +465,3 @@ export class QuotaMonitorService {
     }
   }
 }
-

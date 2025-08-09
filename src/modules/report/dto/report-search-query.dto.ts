@@ -1,6 +1,7 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+
 import { IsOptional, IsEnum, IsString, IsNumber, IsDateString, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ApiPropertyOptional } from '@nestjs/swagger';
 
 import { ReportStatus, ReportTargetType } from '../enums/index.js';
 

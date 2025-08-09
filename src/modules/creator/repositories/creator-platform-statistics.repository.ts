@@ -22,13 +22,14 @@ export class CreatorPlatformStatisticsRepository extends BaseRepository<CreatorP
 
     return await this.find({
       where: {
-        creatorId: this.dataSource.createQueryBuilder()
+        creatorId: this.dataSource
+          .createQueryBuilder()
           .select()
           .from('creator_platform_statistics', 'cps')
           .where('cps.creatorId IN (:...creatorIds)', { creatorIds })
-          .getQuery()
+          .getQuery(),
       },
-      order: { creatorId: 'ASC', platform: 'ASC' }
+      order: { creatorId: 'ASC', platform: 'ASC' },
     });
   }
 
@@ -38,18 +39,21 @@ export class CreatorPlatformStatisticsRepository extends BaseRepository<CreatorP
   async findByCreatorId(creatorId: string): Promise<CreatorPlatformStatisticsEntity[]> {
     return await this.find({
       where: { creatorId },
-      order: { platform: 'ASC' }
+      order: { platform: 'ASC' },
     });
   }
 
   /**
    * 특정 플랫폼의 모든 크리에이터 통계 조회 (상위 N개)
    */
-  async findTopByPlatform(platform: string, limit = 100): Promise<CreatorPlatformStatisticsEntity[]> {
+  async findTopByPlatform(
+    platform: string,
+    limit = 100
+  ): Promise<CreatorPlatformStatisticsEntity[]> {
     return await this.find({
       where: { platform },
       order: { followers: 'DESC' },
-      take: limit
+      take: limit,
     });
   }
 
@@ -71,13 +75,13 @@ export class CreatorPlatformStatisticsRepository extends BaseRepository<CreatorP
     const queryBuilder = this.createQueryBuilder('cps')
       .select([
         'SUM(cps.followers) AS totalFollowers',
-        'SUM(cps.content) AS totalContent', 
+        'SUM(cps.content) AS totalContent',
         'SUM(cps.views) AS totalViews',
         'SUM(cps.likes) AS totalLikes',
         'SUM(cps.comments) AS totalComments',
         'SUM(cps.shares) AS totalShares',
         'AVG(cps.engagementRate) AS averageEngagementRate',
-        'COUNT(*) AS activePlatformCount'
+        'COUNT(*) AS activePlatformCount',
       ])
       .where('cps.creatorId = :creatorId', { creatorId });
 
@@ -91,7 +95,7 @@ export class CreatorPlatformStatisticsRepository extends BaseRepository<CreatorP
       totalComments: parseInt(result?.totalComments || '0'),
       totalShares: parseInt(result?.totalShares || '0'),
       averageEngagementRate: parseFloat(result?.averageEngagementRate || '0'),
-      activePlatformCount: parseInt(result?.activePlatformCount || '0')
+      activePlatformCount: parseInt(result?.activePlatformCount || '0'),
     };
   }
 
@@ -99,9 +103,11 @@ export class CreatorPlatformStatisticsRepository extends BaseRepository<CreatorP
    * 플랫폼별 통계 업데이트 또는 생성
    */
   async upsertStatistics(
-    creatorId: string, 
-    platform: string, 
-    stats: Partial<Omit<CreatorPlatformStatisticsEntity, 'creatorId' | 'platform' | 'createdAt' | 'updatedAt'>>
+    creatorId: string,
+    platform: string,
+    stats: Partial<
+      Omit<CreatorPlatformStatisticsEntity, 'creatorId' | 'platform' | 'createdAt' | 'updatedAt'>
+    >
   ): Promise<void> {
     await this.createQueryBuilder()
       .insert()
@@ -110,9 +116,22 @@ export class CreatorPlatformStatisticsRepository extends BaseRepository<CreatorP
         creatorId,
         platform,
         ...stats,
-        lastCalculatedAt: new Date()
+        lastCalculatedAt: new Date(),
       })
-      .orUpdate(['followers', 'content', 'views', 'likes', 'comments', 'shares', 'engagementRate', 'averageViews', 'lastCalculatedAt'], ['creatorId', 'platform'])
+      .orUpdate(
+        [
+          'followers',
+          'content',
+          'views',
+          'likes',
+          'comments',
+          'shares',
+          'engagementRate',
+          'averageViews',
+          'lastCalculatedAt',
+        ],
+        ['creatorId', 'platform']
+      )
       .execute();
   }
 }

@@ -26,7 +26,7 @@ export class ContentEntity extends BaseEntityUUID {
   title!: string;
 
   @Column({ type: 'text', nullable: true })
-  description?: string;
+  description?: string | null;
 
   @Column()
   thumbnail!: string;
@@ -41,7 +41,7 @@ export class ContentEntity extends BaseEntityUUID {
   platformId!: string;
 
   @Column({ nullable: true })
-  duration?: number;
+  duration?: number | null;
 
   @Column()
   publishedAt!: Date;
@@ -53,7 +53,7 @@ export class ContentEntity extends BaseEntityUUID {
   // tags, category는 별도 엔티티(ContentTagEntity, ContentCategoryEntity)로 분리됨
 
   @Column({ nullable: true, comment: '콘텐츠 언어 (ISO 639-1)' })
-  language?: string;
+  language?: string | null;
 
   @Column({ default: false, comment: '실시간 방송 여부' })
   isLive!: boolean;
@@ -64,7 +64,7 @@ export class ContentEntity extends BaseEntityUUID {
     nullable: true,
     comment: '영상 품질',
   })
-  quality?: 'sd' | 'hd' | '4k';
+  quality?: 'sd' | 'hd' | '4k' | null;
 
   @Column({ default: false, comment: '연령 제한 콘텐츠 여부' })
   ageRestriction!: boolean;

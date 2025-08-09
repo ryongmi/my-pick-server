@@ -68,22 +68,32 @@ export class ContentCategoryService {
       await this.categoryRepo.removeContentCategories(contentId);
 
       // 새 카테고리 배치 생성
-      const categoryEntities = categories.map(cat => ({
-        contentId,
-        category: cat.category,
-        isPrimary: cat.isPrimary || false,
-        subcategory: cat.subcategory,
-        confidence: cat.confidence || 1.0,
-        source: cat.source || 'platform' as const,
-        classifiedBy: cat.classifiedBy,
-      }));
+      const categoryEntities = categories.map((cat) => {
+        const entity: any = {
+          contentId,
+          category: cat.category,
+          isPrimary: cat.isPrimary || false,
+          confidence: cat.confidence || 1.0,
+          source: cat.source || ('platform' as const),
+        };
+
+        if (cat.subcategory) {
+          entity.subcategory = cat.subcategory;
+        }
+
+        if (cat.classifiedBy) {
+          entity.classifiedBy = cat.classifiedBy;
+        }
+
+        return entity;
+      });
 
       await this.categoryRepo.batchCreateCategories(categoryEntities);
 
       this.logger.log('Categories assigned to content', {
         contentId,
         categoryCount: categories.length,
-        primaryCount: categories.filter(c => c.isPrimary).length,
+        primaryCount: categories.filter((c) => c.isPrimary).length,
       });
     } catch (error: unknown) {
       this.logger.error('Failed to assign categories to content', {
@@ -175,7 +185,9 @@ export class ContentCategoryService {
 
   // ==================== 통계 및 분석 메서드 ====================
 
-  async getCategoryDistribution(): Promise<Array<{ category: string; count: number; percentage: number }>> {
+  async getCategoryDistribution(): Promise<
+    Array<{ category: string; count: number; percentage: number }>
+  > {
     try {
       return await this.categoryRepo.getCategoryDistribution();
     } catch (error: unknown) {
@@ -189,9 +201,7 @@ export class ContentCategoryService {
   async getContentsByCategory(category: string, limit = 50): Promise<string[]> {
     try {
       const categories = await this.categoryRepo.findByCategory(category);
-      return categories
-        .slice(0, limit)
-        .map(c => c.contentId);
+      return categories.slice(0, limit).map((c) => c.contentId);
     } catch (error: unknown) {
       this.logger.error('Failed to get contents by category', {
         error: error instanceof Error ? error.message : 'Unknown error',

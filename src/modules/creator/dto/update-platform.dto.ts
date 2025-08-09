@@ -1,6 +1,17 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsBoolean, IsInt, IsEnum, IsDateString, Min, MaxLength } from 'class-validator';
+
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsInt,
+  IsEnum,
+  IsDateString,
+  Min,
+  MaxLength,
+} from 'class-validator';
 import { Type } from 'class-transformer';
+
 import { SyncStatus } from '@common/enums/index.js';
 
 export class UpdatePlatformDto {

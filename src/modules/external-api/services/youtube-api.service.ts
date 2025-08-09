@@ -6,6 +6,8 @@ import { lastValueFrom, map } from 'rxjs';
 
 import { transformAndValidate } from '@krgeobuk/core/utils';
 
+import { YouTubeConfig } from '@common/interfaces/config.interfaces.js';
+
 import { ExternalApiException } from '../exceptions/index.js';
 import { ApiProvider, ApiOperation } from '../enums/index.js';
 import {
@@ -63,7 +65,7 @@ export class YouTubeApiService {
     private readonly configService: ConfigService,
     private readonly quotaMonitorService: QuotaMonitorService
   ) {
-    this.apiKey = this.configService.get<string>('YOUTUBE_API_KEY') || '';
+    this.apiKey = this.configService.get<YouTubeConfig['youtubeApiKey']>('youtubeApiKey')!;
 
     if (!this.apiKey) {
       this.logger.error('YouTube API key not configured');
@@ -144,9 +146,9 @@ export class YouTubeApiService {
         customUrl: channel.snippet.customUrl || undefined,
         publishedAt: new Date(channel.snippet.publishedAt),
         thumbnails: {
-          default: channel.snippet.thumbnails.default?.url,
-          medium: channel.snippet.thumbnails.medium?.url,
-          high: channel.snippet.thumbnails.high?.url,
+          default: channel.snippet.thumbnails.default?.url || null,
+          medium: channel.snippet.thumbnails.medium?.url || null,
+          high: channel.snippet.thumbnails.high?.url || null,
         },
         statistics: {
           viewCount: parseInt(channel.statistics.viewCount || '0'),
@@ -278,7 +280,10 @@ export class YouTubeApiService {
 
       // 쿼터 사용량 계산 (playlistItems 1 + videos 1 = 총 2 유닛)
       const totalQuotaUnits = 2;
-      const quotaCheck = await this.quotaMonitorService.canUseQuota(ApiProvider.YOUTUBE, totalQuotaUnits);
+      const quotaCheck = await this.quotaMonitorService.canUseQuota(
+        ApiProvider.YOUTUBE,
+        totalQuotaUnits
+      );
       if (!quotaCheck.canUse) {
         this.logger.warn('YouTube API quota limit reached for channel videos', {
           channelId,
@@ -752,4 +757,3 @@ export class YouTubeApiService {
     return hours * 3600 + minutes * 60 + seconds;
   }
 }
-

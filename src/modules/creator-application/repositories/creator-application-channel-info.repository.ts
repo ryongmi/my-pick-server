@@ -12,7 +12,9 @@ export class CreatorApplicationChannelInfoRepository extends BaseRepository<Crea
     super(CreatorApplicationChannelInfoEntity, dataSource);
   }
 
-  async findByApplicationId(applicationId: string): Promise<CreatorApplicationChannelInfoEntity | null> {
+  async findByApplicationId(
+    applicationId: string
+  ): Promise<CreatorApplicationChannelInfoEntity | null> {
     return this.findOne({ where: { applicationId } });
   }
 }

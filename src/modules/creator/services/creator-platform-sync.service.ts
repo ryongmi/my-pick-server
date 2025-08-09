@@ -123,11 +123,16 @@ export class CreatorPlatformSyncService {
           estimatedTimeRemaining = Math.round((estimatedTotalMs - elapsedMs) / 1000); // 초 단위
         }
 
-        result.push({
+        const progressData: any = {
           platformId,
           progressPercentage,
-          estimatedTimeRemaining,
-        });
+        };
+
+        if (estimatedTimeRemaining !== undefined) {
+          progressData.estimatedTimeRemaining = estimatedTimeRemaining;
+        }
+
+        result.push(progressData);
       });
 
       return result;
@@ -141,7 +146,6 @@ export class CreatorPlatformSyncService {
       return platformIds.map((platformId) => ({
         platformId,
         progressPercentage: 0,
-        estimatedTimeRemaining: undefined,
       }));
     }
   }
@@ -236,6 +240,9 @@ export class CreatorPlatformSyncService {
       // 에러 시 기본값 반환
       return {
         [VideoSyncStatus.NEVER_SYNCED]: 0,
+        [VideoSyncStatus.INITIAL_SYNCING]: 0,
+        [VideoSyncStatus.INCREMENTAL]: 0,
+        [VideoSyncStatus.CONSENT_CHANGED]: 0,
         [VideoSyncStatus.IN_PROGRESS]: 0,
         [VideoSyncStatus.COMPLETED]: 0,
         [VideoSyncStatus.FAILED]: 0,
@@ -280,21 +287,28 @@ export class CreatorPlatformSyncService {
       let syncEntity = await this.findByPlatformId(platformId);
 
       if (!syncEntity) {
-        syncEntity = this.platformSyncRepo.create({
+        const syncEntityData: any = {
           platformId,
           videoSyncStatus: VideoSyncStatus.IN_PROGRESS,
           syncStartedAt: new Date(),
           lastVideoSyncAt: new Date(),
-          totalVideoCount,
           syncedVideoCount: 0,
           failedVideoCount: 0,
-        });
+        };
+
+        if (totalVideoCount !== undefined) {
+          syncEntityData.totalVideoCount = totalVideoCount;
+        }
+
+        syncEntity = this.platformSyncRepo.create(
+          syncEntityData
+        ) as unknown as CreatorPlatformSyncEntity;
       } else {
         // 기존 동기화 정보 업데이트
         syncEntity.videoSyncStatus = VideoSyncStatus.IN_PROGRESS;
         syncEntity.syncStartedAt = new Date();
         syncEntity.lastVideoSyncAt = new Date();
-        syncEntity.lastSyncError = undefined; // 이전 에러 클리어
+        // 이전 에러 클리어 (optional property이므로 undefined로 설정)
         syncEntity.syncedVideoCount = 0;
         syncEntity.failedVideoCount = 0;
 
@@ -303,13 +317,15 @@ export class CreatorPlatformSyncService {
         }
       }
 
-      await this.platformSyncRepo.save(syncEntity);
+      if (syncEntity) {
+        await this.platformSyncRepo.saveEntity(syncEntity, transactionManager);
 
-      this.logger.log('Video sync started', {
-        platformId,
-        syncId: syncEntity.id,
-        totalVideoCount: syncEntity.totalVideoCount,
-      });
+        this.logger.log('Video sync started', {
+          platformId,
+          syncId: syncEntity.platformId,
+          totalVideoCount: syncEntity.totalVideoCount,
+        });
+      }
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -341,11 +357,11 @@ export class CreatorPlatformSyncService {
       syncEntity.failedVideoCount = failedCount;
       syncEntity.lastVideoSyncAt = new Date();
 
-      await this.platformSyncRepo.save(syncEntity);
+      await this.platformSyncRepo.saveEntity(syncEntity, transactionManager);
 
       this.logger.debug('Sync progress updated', {
         platformId,
-        syncId: syncEntity.id,
+        syncId: syncEntity.platformId,
         syncedCount,
         failedCount,
         progress: syncEntity.getSyncProgress(),
@@ -388,7 +404,7 @@ export class CreatorPlatformSyncService {
       syncEntity.lastVideoSyncAt = new Date();
       syncEntity.syncedVideoCount = syncData.syncedVideoCount;
       syncEntity.failedVideoCount = syncData.failedVideoCount;
-      syncEntity.lastSyncError = undefined; // 성공 시 에러 메시지 초기화
+      // 성공 시 에러 메시지 초기화 (optional property이므로 undefined로 설정)
 
       if (syncData.totalVideoCount !== undefined) {
         syncEntity.totalVideoCount = syncData.totalVideoCount;
@@ -398,11 +414,11 @@ export class CreatorPlatformSyncService {
         syncEntity.syncMetadata = syncData.syncMetadata;
       }
 
-      await this.platformSyncRepo.save(syncEntity);
+      await this.platformSyncRepo.saveEntity(syncEntity, transactionManager);
 
       this.logger.log('Video sync completed', {
         platformId,
-        syncId: syncEntity.id,
+        syncId: syncEntity.platformId,
         totalVideos: syncEntity.totalVideoCount,
         syncedVideos: syncData.syncedVideoCount,
         failedVideos: syncData.failedVideoCount,
@@ -448,11 +464,11 @@ export class CreatorPlatformSyncService {
         syncEntity.failedVideoCount = partialFailedCount;
       }
 
-      await this.platformSyncRepo.save(syncEntity);
+      await this.platformSyncRepo.saveEntity(syncEntity, transactionManager);
 
       this.logger.log('Video sync failed and recorded', {
         platformId,
-        syncId: syncEntity.id,
+        syncId: syncEntity.platformId,
         errorMessage,
         partialSyncedCount,
         partialFailedCount,
@@ -521,11 +537,11 @@ export class CreatorPlatformSyncService {
         videoSyncStatus: VideoSyncStatus.NEVER_SYNCED,
       });
 
-      const result = await this.platformSyncRepo.save(syncEntity);
+      const result = await this.platformSyncRepo.saveEntity(syncEntity, transactionManager);
 
       this.logger.log('Platform sync initialized', {
         platformId,
-        syncId: result.id,
+        syncId: result.platformId,
       });
       return result;
     } catch (error: unknown) {
@@ -551,20 +567,20 @@ export class CreatorPlatformSyncService {
 
       // 모든 동기화 정보 초기화
       syncEntity.videoSyncStatus = VideoSyncStatus.NEVER_SYNCED;
-      syncEntity.syncStartedAt = undefined;
-      syncEntity.syncCompletedAt = undefined;
-      syncEntity.lastVideoSyncAt = undefined;
-      syncEntity.totalVideoCount = undefined;
-      syncEntity.syncedVideoCount = undefined;
-      syncEntity.failedVideoCount = undefined;
-      syncEntity.lastSyncError = undefined;
-      syncEntity.syncMetadata = undefined;
+      delete syncEntity.syncStartedAt;
+      delete syncEntity.syncCompletedAt;
+      delete syncEntity.lastVideoSyncAt;
+      delete syncEntity.totalVideoCount;
+      delete syncEntity.syncedVideoCount;
+      delete syncEntity.failedVideoCount;
+      delete syncEntity.lastSyncError;
+      delete syncEntity.syncMetadata;
 
-      await this.platformSyncRepo.save(syncEntity);
+      await this.platformSyncRepo.saveEntity(syncEntity, transactionManager);
 
       this.logger.log('Platform sync reset', {
         platformId,
-        syncId: syncEntity.id,
+        syncId: syncEntity.platformId,
       });
     } catch (error: unknown) {
       if (error instanceof HttpException) {

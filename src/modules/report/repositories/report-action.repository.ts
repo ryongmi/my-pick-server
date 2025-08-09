@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+
 import { DataSource, Repository, MoreThan } from 'typeorm';
 
 import { ReportActionEntity, ReportActionType } from '../entities/index.js';
@@ -13,34 +14,48 @@ export class ReportActionRepository extends Repository<ReportActionEntity> {
     return this.findOne({ where: { reportId } });
   }
 
-  async saveAction(reportId: string, actionData: {
-    actionType: ReportActionType;
-    duration?: number;
-    reason?: string;
-    executedAt?: Date;
-    executedBy?: string;
-    executionStatus?: 'pending' | 'executed' | 'failed';
-  }): Promise<void> {
+  async saveAction(
+    reportId: string,
+    actionData: {
+      actionType: ReportActionType;
+      duration?: number;
+      reason?: string;
+      executedAt?: Date;
+      executedBy?: string;
+      executionStatus?: 'pending' | 'executed' | 'failed';
+    }
+  ): Promise<void> {
     const action = new ReportActionEntity();
     action.reportId = reportId;
     action.actionType = actionData.actionType;
-    action.duration = actionData.duration;
-    action.reason = actionData.reason;
-    action.executedAt = actionData.executedAt;
-    action.executedBy = actionData.executedBy;
+    if (actionData.duration !== undefined) {
+      action.duration = actionData.duration;
+    }
+    if (actionData.reason !== undefined) {
+      action.reason = actionData.reason;
+    }
+    if (actionData.executedAt !== undefined) {
+      action.executedAt = actionData.executedAt;
+    }
+    if (actionData.executedBy !== undefined) {
+      action.executedBy = actionData.executedBy;
+    }
     action.executionStatus = actionData.executionStatus || 'pending';
 
     await this.save(action);
   }
 
-  async updateAction(reportId: string, actionData: Partial<{
-    actionType: ReportActionType;
-    duration: number;
-    reason: string;
-    executedAt: Date;
-    executedBy: string;
-    executionStatus: 'pending' | 'executed' | 'failed';
-  }>): Promise<void> {
+  async updateAction(
+    reportId: string,
+    actionData: Partial<{
+      actionType: ReportActionType;
+      duration: number;
+      reason: string;
+      executedAt: Date;
+      executedBy: string;
+      executionStatus: 'pending' | 'executed' | 'failed';
+    }>
+  ): Promise<void> {
     await this.update({ reportId }, actionData);
   }
 
@@ -51,7 +66,10 @@ export class ReportActionRepository extends Repository<ReportActionEntity> {
     });
   }
 
-  async findActionsByType(actionType: ReportActionType, limit = 100): Promise<ReportActionEntity[]> {
+  async findActionsByType(
+    actionType: ReportActionType,
+    limit = 100
+  ): Promise<ReportActionEntity[]> {
     return this.find({
       where: { actionType },
       order: { executedAt: 'DESC' },
@@ -61,10 +79,10 @@ export class ReportActionRepository extends Repository<ReportActionEntity> {
 
   async findActiveActions(): Promise<ReportActionEntity[]> {
     const now = new Date();
-    
+
     return this.createQueryBuilder('action')
-      .where('action.actionType IN (:...types)', { 
-        types: [ReportActionType.SUSPENSION, ReportActionType.BAN] 
+      .where('action.actionType IN (:...types)', {
+        types: [ReportActionType.SUSPENSION, ReportActionType.BAN],
       })
       .andWhere('action.executionStatus = :status', { status: 'executed' })
       .andWhere(
@@ -104,11 +122,11 @@ export class ReportActionRepository extends Repository<ReportActionEntity> {
 
     return {
       totalActions,
-      actionsByType: actionsByType.map(item => ({
+      actionsByType: actionsByType.map((item) => ({
         actionType: item.actionType as ReportActionType,
         count: parseInt(item.count, 10),
       })),
-      actionsByStatus: actionsByStatus.map(item => ({
+      actionsByStatus: actionsByStatus.map((item) => ({
         status: item.status,
         count: parseInt(item.count, 10),
       })),

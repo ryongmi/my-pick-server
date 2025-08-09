@@ -81,7 +81,7 @@ export class CreatorRepository extends BaseRepository<CreatorEntity> {
       createdAt: 'created_at', // snake_case로 매핑
     };
     const dbSortBy = sortByMapping[sortBy] || 'created_at';
-    
+
     queryBuilder.orderBy(`${creatorAlias}.${dbSortBy}`, sortOrder);
 
     queryBuilder.offset(skip).limit(limit);
@@ -100,5 +100,4 @@ export class CreatorRepository extends BaseRepository<CreatorEntity> {
 
     return { items, pageInfo };
   }
-
 }

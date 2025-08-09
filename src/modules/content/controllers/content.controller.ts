@@ -38,11 +38,11 @@ import {
   RateContentDto,
 } from '@modules/user-interaction/index.js';
 
-import { 
+import {
   ContentService,
   ContentCategoryService,
   ContentTagService,
-  ContentInteractionService
+  ContentInteractionService,
 } from '../services/index.js';
 import { ContentSearchQueryDto, ContentSearchResultDto, ContentDetailDto } from '../dto/index.js';
 
@@ -54,7 +54,7 @@ export class ContentController {
     private readonly userInteractionService: UserInteractionService,
     private readonly contentCategoryService: ContentCategoryService,
     private readonly contentTagService: ContentTagService,
-    private readonly contentInteractionService: ContentInteractionService,
+    private readonly contentInteractionService: ContentInteractionService
   ) {}
 
   @Get()
@@ -159,7 +159,6 @@ export class ContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-
     await this.contentService.findByIdOrFail(contentId);
 
     const dto: BookmarkContentDto = {
@@ -189,7 +188,6 @@ export class ContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-
     // 콘텐츠 존재 확인
     await this.contentService.findByIdOrFail(contentId);
 
@@ -221,7 +219,6 @@ export class ContentController {
     @Body() body: { watchDuration?: number } = {},
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-
     // 콘텐츠 존재 확인
     await this.contentService.findByIdOrFail(contentId);
 
@@ -243,7 +240,6 @@ export class ContentController {
     @Body() body: { rating: number },
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-
     // 콘텐츠 존재 확인
     await this.contentService.findByIdOrFail(contentId);
 
@@ -316,7 +312,7 @@ export class ContentController {
     @Param('id', ParseUUIDPipe) contentId: string
   ): Promise<Array<{ category: string; isPrimary: boolean; confidence: number }>> {
     const categories = await this.contentCategoryService.findByContentId(contentId);
-    return categories.map(cat => ({
+    return categories.map((cat) => ({
       category: cat.category,
       isPrimary: cat.isPrimary,
       confidence: cat.confidence,
@@ -331,7 +327,7 @@ export class ContentController {
     @Param('id', ParseUUIDPipe) contentId: string
   ): Promise<Array<{ tag: string; source: string; relevanceScore: number }>> {
     const tags = await this.contentTagService.findByContentId(contentId);
-    return tags.map(tag => ({
+    return tags.map((tag) => ({
       tag: tag.tag,
       source: tag.source,
       relevanceScore: tag.relevanceScore,
@@ -342,9 +338,7 @@ export class ContentController {
   @SwaggerApiOperation({ summary: '콘텐츠 성과 조회' })
   @SwaggerApiParam({ name: 'id', description: '콘텐츠 ID', type: String })
   @SwaggerApiOkResponse({ description: '콘텐츠 성과 정보', status: 200 })
-  async getContentPerformance(
-    @Param('id', ParseUUIDPipe) contentId: string
-  ): Promise<{
+  async getContentPerformance(@Param('id', ParseUUIDPipe) contentId: string): Promise<{
     viewCount: number;
     likeCount: number;
     bookmarkCount: number;
@@ -365,7 +359,13 @@ export class ContentController {
   @SwaggerApiOperation({ summary: '콘텐츠 시청 기록' })
   async recordView(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @Body() body: { watchDuration?: number; watchPercentage?: number; deviceType?: string; referrer?: string },
+    @Body()
+    body: {
+      watchDuration?: number;
+      watchPercentage?: number;
+      deviceType?: string;
+      referrer?: string;
+    },
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
     await this.contentService.findByIdOrFail(contentId);
@@ -442,7 +442,6 @@ export class ContentBookmarkController {
     @Query('limit') limit: number = 20,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<ContentSearchResultDto[]> {
-
     const bookmarkedContentIds = await this.userInteractionService.getBookmarkedContentIds(id);
 
     if (bookmarkedContentIds.length === 0) {
@@ -597,7 +596,9 @@ export class ContentCategoryController {
   @Get('distribution')
   @SwaggerApiOperation({ summary: '카테고리 분포 조회' })
   @SwaggerApiOkResponse({ description: '카테고리 분포 정보', status: 200 })
-  async getCategoryDistribution(): Promise<Array<{ category: string; count: number; percentage: number }>> {
+  async getCategoryDistribution(): Promise<
+    Array<{ category: string; count: number; percentage: number }>
+  > {
     return await this.contentCategoryService.getCategoryDistribution();
   }
 
@@ -695,31 +696,31 @@ export class ContentAnalyticsController {
   @Get('top-performing')
   @SwaggerApiOperation({ summary: '최고 성과 콘텐츠 조회' })
   @SwaggerApiOkResponse({ description: '최고 성과 콘텐츠 목록', status: 200 })
-  async getTopPerformingContent(
-    @Query('limit') limit = 20
-  ): Promise<Array<{
-    contentId: string;
-    viewCount: number;
-    likeCount: number;
-    bookmarkCount: number;
-    shareCount: number;
-    avgWatchPercentage: number;
-    avgRating: number;
-  }>> {
+  async getTopPerformingContent(@Query('limit') limit = 20): Promise<
+    Array<{
+      contentId: string;
+      viewCount: number;
+      likeCount: number;
+      bookmarkCount: number;
+      shareCount: number;
+      avgWatchPercentage: number;
+      avgRating: number;
+    }>
+  > {
     return await this.contentInteractionService.getTopPerformingContent(limit);
   }
 
   @Get('engagement/users')
   @SwaggerApiOperation({ summary: '가장 활발한 사용자 조회' })
   @SwaggerApiOkResponse({ description: '활발한 사용자 목록', status: 200 })
-  async getMostEngagedUsers(
-    @Query('limit') limit = 50
-  ): Promise<Array<{
-    userId: string;
-    interactionCount: number;
-    avgWatchPercentage: number;
-    lastInteractionAt: Date;
-  }>> {
+  async getMostEngagedUsers(@Query('limit') limit = 50): Promise<
+    Array<{
+      userId: string;
+      interactionCount: number;
+      avgWatchPercentage: number;
+      lastInteractionAt: Date;
+    }>
+  > {
     return await this.contentInteractionService.getMostEngagedUsers(limit);
   }
 
@@ -749,4 +750,3 @@ export class ContentAnalyticsController {
     return await this.contentInteractionService.getInteractionsByDevice(contentId);
   }
 }
-

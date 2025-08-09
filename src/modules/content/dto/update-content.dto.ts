@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsNumber, Min, IsBoolean, IsEnum, IsArray, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  Min,
+  IsBoolean,
+  IsEnum,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 class UpdateContentCategoryDto {
@@ -56,7 +65,7 @@ export class UpdateContentDto {
   duration?: number;
 
   // ==================== 메타데이터 필드 업데이트 ====================
-  
+
   @IsOptional()
   @IsString()
   language?: string;
@@ -74,7 +83,7 @@ export class UpdateContentDto {
   ageRestriction?: boolean;
 
   // ==================== 분리된 엔티티 데이터 업데이트 ====================
-  
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

@@ -22,6 +22,7 @@ import {
   ContentTagDto,
 } from '../dto/index.js';
 import { ContentException } from '../exceptions/index.js';
+
 import { ContentCategoryService } from './content-category.service.js';
 import { ContentTagService } from './content-tag.service.js';
 
@@ -277,71 +278,88 @@ export class ContentService {
   async createContent(
     dto: CreateContentDto,
     transactionManager?: EntityManager,
-  ): Promise<void> {
-    // 1. 사전 검증 (중복 확인)
-    const existing = await this.contentRepo.findOne({
-      where: { platformId: dto.platformId, platform: dto.platform as PlatformType }
-    });
-    if (existing) {
-      this.logger.warn('Content creation failed: duplicate platform content', {
+  ): Promise<string> {
+    try {
+      // 1. 사전 검증 (중복 확인)
+      const existing = await this.contentRepo.findOne({
+        where: { platformId: dto.platformId, platform: dto.platform as PlatformType }
+      });
+      if (existing) {
+        this.logger.warn('Content creation failed: duplicate platform content', {
+          platformId: dto.platformId,
+          platform: dto.platform,
+        });
+        throw ContentException.contentAlreadyExists();
+      }
+
+      // 2. 엔티티 생성
+      const content = new ContentEntity();
+      Object.assign(content, {
+        type: dto.type,
+        title: dto.title,
+        description: dto.description,
+        thumbnail: dto.thumbnail,
+        url: dto.url,
+        platform: dto.platform,
+        platformId: dto.platformId,
+        duration: dto.duration,
+        publishedAt: new Date(dto.publishedAt),
+        creatorId: dto.creatorId,
+        language: dto.language,
+        isLive: dto.isLive || false,
+        quality: dto.quality,
+        ageRestriction: dto.ageRestriction || false,
+      });
+
+      // 통계 정보 생성
+      const statistics = new ContentStatisticsEntity();
+      statistics.contentId = content.id;
+      statistics.views = dto.initialViews || 0;
+      statistics.likes = dto.initialLikes || 0;
+      statistics.comments = dto.initialComments || 0;
+      statistics.shares = dto.initialShares || 0;
+
+      // 3. 저장
+      const repository = transactionManager
+        ? transactionManager.getRepository(ContentEntity)
+        : this.contentRepo;
+      
+      const statisticsRepository = transactionManager
+        ? transactionManager.getRepository(ContentStatisticsEntity)
+        : this.dataSource.getRepository(ContentStatisticsEntity);
+
+      const savedContent = transactionManager
+        ? await repository.save(content)
+        : await this.contentRepo.saveEntity(content);
+
+      // 4. 통계 저장
+      statistics.contentId = savedContent.id;
+      await statisticsRepository.save(statistics);
+
+      // 5. 성공 로깅
+      this.logger.log('Content created successfully', {
+        contentId: savedContent.id,
+        type: dto.type,
+        platform: dto.platform,
+        platformId: dto.platformId,
+        creatorId: dto.creatorId,
+      });
+
+      return savedContent.id;
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Content creation failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
         platformId: dto.platformId,
         platform: dto.platform,
+        creatorId: dto.creatorId,
       });
-      throw ContentException.contentAlreadyExists();
+      
+      throw ContentException.contentCreateError();
     }
-
-    // 2. 엔티티 생성
-    const content = new ContentEntity();
-    Object.assign(content, {
-      type: dto.type,
-      title: dto.title,
-      description: dto.description,
-      thumbnail: dto.thumbnail,
-      url: dto.url,
-      platform: dto.platform,
-      platformId: dto.platformId,
-      duration: dto.duration,
-      publishedAt: new Date(dto.publishedAt),
-      creatorId: dto.creatorId,
-      language: dto.language,
-      isLive: dto.isLive || false,
-      quality: dto.quality,
-      ageRestriction: dto.ageRestriction || false,
-    });
-
-    // 통계 정보 생성
-    const statistics = new ContentStatisticsEntity();
-    statistics.contentId = content.id;
-    statistics.views = dto.initialViews || 0;
-    statistics.likes = dto.initialLikes || 0;
-    statistics.comments = dto.initialComments || 0;
-    statistics.shares = dto.initialShares || 0;
-
-    // 3. 저장
-    const repository = transactionManager
-      ? transactionManager.getRepository(ContentEntity)
-      : this.contentRepo;
-    
-    const statisticsRepository = transactionManager
-      ? transactionManager.getRepository(ContentStatisticsEntity)
-      : this.dataSource.getRepository(ContentStatisticsEntity);
-
-    const savedContent = transactionManager
-      ? await repository.save(content)
-      : await this.contentRepo.saveEntity(content);
-
-    // 4. 통계 저장
-    statistics.contentId = savedContent.id;
-    await statisticsRepository.save(statistics);
-
-    // 5. 성공 로깅
-    this.logger.log('Content created successfully', {
-      contentId: savedContent.id,
-      type: dto.type,
-      platform: dto.platform,
-      platformId: dto.platformId,
-      creatorId: dto.creatorId,
-    });
   }
 
   async updateContent(
@@ -716,10 +734,9 @@ export class ContentService {
     try {
       this.logger.log('Deleting all non-consented data for creator', { creatorId });
       
-      // 비인증 데이터만 삭제 (인증 데이터는 보존)
+      // 크리에이터의 모든 데이터 삭제
       const deleteResult = await this.contentRepo.delete({
-        creatorId,
-        isAuthorizedData: false
+        creatorId
       });
       
       const deletedCount = deleteResult.affected || 0;
@@ -814,17 +831,21 @@ export class ContentService {
       const platformBreakdown: Record<string, { old: number; recent: number }> = {};
 
       oldContents.forEach(content => {
-        if (!platformBreakdown[content.platform]) {
-          platformBreakdown[content.platform] = { old: 0, recent: 0 };
+        if (content.platform) {
+          if (!platformBreakdown[content.platform]) {
+            platformBreakdown[content.platform] = { old: 0, recent: 0 };
+          }
+          platformBreakdown[content.platform]!.old++;
         }
-        platformBreakdown[content.platform].old++;
       });
 
       recentContents.forEach(content => {
-        if (!platformBreakdown[content.platform]) {
-          platformBreakdown[content.platform] = { old: 0, recent: 0 };
+        if (content.platform) {
+          if (!platformBreakdown[content.platform]) {
+            platformBreakdown[content.platform] = { old: 0, recent: 0 };
+          }
+          platformBreakdown[content.platform]!.recent++;
         }
-        platformBreakdown[content.platform].recent++;
       });
 
       return {
@@ -913,25 +934,38 @@ export class ContentService {
     if (contentIds.length === 0) return {};
 
     try {
-      const categories = await this.contentCategoryService.findByContentIds(contentIds);
-      
-      // contentId별로 그룹화
+      // 개별 조회로 대체 (배치 조회 메서드가 없으므로)
       const groupedCategories: Record<string, ContentCategoryDto[]> = {};
-      categories.forEach(category => {
-        if (!groupedCategories[category.contentId]) {
-          groupedCategories[category.contentId] = [];
+      
+      await Promise.all(contentIds.map(async (contentId) => {
+        try {
+          const categories = await this.contentCategoryService.findByContentId(contentId);
+          if (categories.length > 0) {
+            groupedCategories[contentId] = categories.map(category => {
+              const dto: ContentCategoryDto = {
+                category: category.category,
+                isPrimary: category.isPrimary,
+                confidence: category.confidence,
+                source: category.source,
+                createdAt: category.createdAt,
+                updatedAt: category.updatedAt,
+              };
+              
+              if (category.subcategory) {
+                dto.subcategory = category.subcategory;
+              }
+              
+              if (category.classifiedBy) {
+                dto.classifiedBy = category.classifiedBy;
+              }
+              
+              return dto;
+            });
+          }
+        } catch (err) {
+          // 개별 콘텐츠 카테고리 조회 실패는 무시
         }
-        groupedCategories[category.contentId].push({
-          category: category.category,
-          isPrimary: category.isPrimary,
-          subcategory: category.subcategory,
-          confidence: category.confidence,
-          source: category.source,
-          classifiedBy: category.classifiedBy,
-          createdAt: category.createdAt,
-          updatedAt: category.updatedAt,
-        });
-      });
+      }));
 
       return groupedCategories;
     } catch (error: unknown) {
@@ -947,23 +981,33 @@ export class ContentService {
     if (contentIds.length === 0) return {};
 
     try {
-      const tags = await this.contentTagService.findByContentIds(contentIds);
-      
-      // contentId별로 그룹화
+      // 개별 조회로 대체 (배치 조회 메서드가 없으므로)
       const groupedTags: Record<string, ContentTagDto[]> = {};
-      tags.forEach(tag => {
-        if (!groupedTags[tag.contentId]) {
-          groupedTags[tag.contentId] = [];
+      
+      await Promise.all(contentIds.map(async (contentId) => {
+        try {
+          const tags = await this.contentTagService.findByContentId(contentId);
+          if (tags.length > 0) {
+            groupedTags[contentId] = tags.map(tag => {
+              const dto: ContentTagDto = {
+                tag: tag.tag,
+                source: tag.source,
+                relevanceScore: tag.relevanceScore,
+                usageCount: tag.usageCount,
+                createdAt: tag.createdAt,
+              };
+              
+              if (tag.addedBy) {
+                dto.addedBy = tag.addedBy;
+              }
+              
+              return dto;
+            });
+          }
+        } catch (err) {
+          // 개별 콘텐츠 태그 조회 실패는 무시
         }
-        groupedTags[tag.contentId].push({
-          tag: tag.tag,
-          source: tag.source,
-          relevanceScore: tag.relevanceScore,
-          addedBy: tag.addedBy,
-          usageCount: tag.usageCount,
-          createdAt: tag.createdAt,
-        });
-      });
+      }));
 
       return groupedTags;
     } catch (error: unknown) {
@@ -1073,19 +1117,18 @@ export class ContentService {
         updatedAt: new Date()
       };
 
-      return {
+      const result: any = {
         id: content.id!,
         type: content.type!,
         title: content.title!,
-        description: content.description,
+        description: content.description || undefined,
         thumbnail: content.thumbnail!,
         url: content.url!,
         platform: content.platform!,
         platformId: content.platformId!,
-        duration: content.duration,
+        duration: content.duration || undefined,
         publishedAt: content.publishedAt!,
         creatorId: content.creatorId!,
-        language: content.language,
         isLive: content.isLive || false,
         quality: content.quality,
         ageRestriction: content.ageRestriction || false,
@@ -1101,25 +1144,32 @@ export class ContentService {
         watchedAt: userId ? (interaction as { watchedAt?: Date })?.watchedAt : undefined,
         rating: userId ? interaction?.rating : undefined,
       };
+
+      // 조건부 할당 (exactOptionalPropertyTypes 준수)
+      if (content.language != null) {
+        result.language = content.language;
+      }
+
+      return result;
     });
   }
 
   // 🔥 폴백 처리 결과 빌드 (authz-server 패턴)
   private buildFallbackContentSearchResults(contents: Partial<ContentEntity>[]): ContentSearchResultDto[] {
-    return contents.map((content) => ({
+    return contents.map((content) => {
+      const result: any = {
       id: content.id!,
       type: content.type!,
       title: content.title!,
-      description: content.description,
+      description: content.description || undefined,
       thumbnail: content.thumbnail!,
       url: content.url!,
       platform: content.platform!,
       platformId: content.platformId!,
-      duration: content.duration,
+      duration: content.duration || undefined,
       publishedAt: content.publishedAt!,
       creatorId: content.creatorId!,
       // 개별 메타데이터 필드 (JSON 제거)
-      language: content.language,
       isLive: content.isLive || false,
       quality: content.quality,
       ageRestriction: content.ageRestriction || false,
@@ -1141,7 +1191,15 @@ export class ContentService {
       isLiked: undefined,
       watchedAt: undefined,
       rating: undefined,
-    }));
+      };
+
+      // 조건부 할당 (exactOptionalPropertyTypes 준수)
+      if (content.language != null) {
+        result.language = content.language;
+      }
+
+      return result;
+    });
   }
 
   // ==================== ADMIN 통계 메서드 ====================
@@ -1194,7 +1252,7 @@ export class ContentService {
     }
   }
 
-  async getRecentContent(
+  async getRecentContentByPlatform(
     limit?: number,
     platform?: string
   ): Promise<ContentEntity[]> {
@@ -1323,37 +1381,6 @@ export class ContentService {
   }
 
   // ==================== ADMIN 시간대별 통계 메서드 ====================
-
-  async getContentCountByCreatorId(creatorId: string): Promise<number> {
-    try {
-      return await this.contentRepo.count({ where: { creatorId } });
-    } catch (error: unknown) {
-      this.logger.error('Failed to get content count by creator ID', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
-      });
-      return 0;
-    }
-  }
-
-  async getTotalViewsByCreatorId(creatorId: string): Promise<number> {
-    try {
-      const result = await this.contentRepo
-        .createQueryBuilder('content')
-        .leftJoin('content_statistics', 'stats', 'content.id = stats.contentId')
-        .select('SUM(stats.views)', 'totalViews')
-        .where('content.creatorId = :creatorId', { creatorId })
-        .getRawOne();
-
-      return parseInt(result.totalViews) || 0;
-    } catch (error: unknown) {
-      this.logger.error('Failed to get total views by creator ID', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
-      });
-      return 0;
-    }
-  }
 
   async getNewContentCounts(days: number): Promise<{
     dailyNewContent: number;

@@ -16,7 +16,10 @@ export class ContentSyncMetadataRepository extends BaseRepository<ContentSyncMet
     return this.findOneById(contentId);
   }
 
-  async updateSyncMetadata(contentId: string, metadata: Partial<Omit<ContentSyncMetadataEntity, 'contentId' | 'updatedAt'>>): Promise<void> {
+  async updateSyncMetadata(
+    contentId: string,
+    metadata: Partial<Omit<ContentSyncMetadataEntity, 'contentId' | 'updatedAt'>>
+  ): Promise<void> {
     await this.upsert(
       {
         contentId,

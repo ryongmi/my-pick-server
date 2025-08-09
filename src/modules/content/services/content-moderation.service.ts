@@ -1,10 +1,15 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
+
 import { EntityManager, In } from 'typeorm';
 
-import { ContentModerationRepository, ContentModerationSearchOptions } from '../repositories/content-moderation.repository.js';
+import type { PaginatedResult } from '@krgeobuk/core/interfaces';
+
+import {
+  ContentModerationRepository,
+  ContentModerationSearchOptions,
+} from '../repositories/content-moderation.repository.js';
 import { ContentModerationEntity } from '../entities/content-moderation.entity.js';
 import { ContentException } from '../exceptions/content.exception.js';
-import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
 @Injectable()
 export class ContentModerationService {
@@ -37,7 +42,9 @@ export class ContentModerationService {
   }
 
   // 복합 조회 메서드들
-  async searchModerations(options: ContentModerationSearchOptions): Promise<PaginatedResult<ContentModerationEntity>> {
+  async searchModerations(
+    options: ContentModerationSearchOptions
+  ): Promise<PaginatedResult<ContentModerationEntity>> {
     try {
       return await this.moderationRepo.searchModerations(options);
     } catch (error: unknown) {
@@ -97,7 +104,9 @@ export class ContentModerationService {
         ? transactionManager.getRepository(ContentModerationEntity)
         : this.moderationRepo;
 
-      await (transactionManager ? repository.save(moderation) : this.moderationRepo.saveEntity(moderation));
+      await (transactionManager
+        ? repository.save(moderation)
+        : this.moderationRepo.saveEntity(moderation));
 
       this.logger.log('Content moderation record created', {
         contentId,
@@ -125,15 +134,21 @@ export class ContentModerationService {
       const moderation = await this.findByContentIdOrFail(contentId);
 
       moderation.moderationStatus = status;
-      moderation.moderatorId = options.moderatorId;
-      moderation.reason = options.reason;
+      if (options.moderatorId) {
+        moderation.moderatorId = options.moderatorId;
+      }
+      if (options.reason) {
+        moderation.reason = options.reason;
+      }
       moderation.moderatedAt = new Date();
 
       const repository = transactionManager
         ? transactionManager.getRepository(ContentModerationEntity)
         : this.moderationRepo;
 
-      await (transactionManager ? repository.save(moderation) : this.moderationRepo.saveEntity(moderation));
+      await (transactionManager
+        ? repository.save(moderation)
+        : this.moderationRepo.saveEntity(moderation));
 
       this.logger.log('Content moderation status updated', {
         contentId,
@@ -191,7 +206,7 @@ export class ContentModerationService {
   async deleteModerationRecord(contentId: string): Promise<void> {
     try {
       const result = await this.moderationRepo.delete({ contentId });
-      
+
       if (result.affected === 0) {
         this.logger.warn('No moderation record found to delete', { contentId });
         return;
@@ -286,7 +301,7 @@ export class ContentModerationService {
 
   async hasModeration(contentId: string): Promise<boolean> {
     try {
-      return await this.moderationRepo.exists({ where: { contentId } });
+      return await this.moderationRepo.exists({ contentId });
     } catch (error: unknown) {
       this.logger.error('Failed to check moderation existence', {
         error: error instanceof Error ? error.message : 'Unknown error',

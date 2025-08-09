@@ -36,17 +36,16 @@ export class CreatorApplicationReviewEntity extends BaseEntityUUID {
   actionType!: ReviewActionType;
 
   @Column({ type: 'text', nullable: true, comment: '검토 의견' })
-  comment?: string;
+  comment?: string | null;
 
   @Column({ type: 'text', nullable: true, comment: '거부/수정 사유' })
-  reason?: string;
-
+  reason?: string | null;
 
   @Column('int', { nullable: true, comment: '점수 (1-100)' })
-  score?: number;
+  score?: number | null;
 
   @Column({ nullable: true, comment: '예상 처리 시간 (일)' })
-  estimatedDays?: number;
+  estimatedDays?: number | null;
 
   @Column({ default: false, comment: '최종 검토 여부' })
   isFinal!: boolean;

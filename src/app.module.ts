@@ -21,6 +21,7 @@ import {
   ReportModule,
   CreatorApplicationModule,
   UserInteractionModule,
+  HealthModule,
 } from '@modules/index.js';
 
 @Module({
@@ -35,6 +36,8 @@ import {
     JwtModule,
     DatabaseModule,
     RedisModule,
+    // Health Check
+    HealthModule,
     // Phase 1: Creator Management System
     CreatorModule,
     UserSubscriptionModule,

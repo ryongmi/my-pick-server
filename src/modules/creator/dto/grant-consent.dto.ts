@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
 import { IsEnum, IsOptional, IsString, IsDateString, MaxLength } from 'class-validator';
+
 import { ConsentType } from '../entities/creator-consent.entity.js';
 
 export class GrantConsentDto {

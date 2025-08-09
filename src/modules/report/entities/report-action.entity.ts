@@ -15,44 +15,44 @@ export class ReportActionEntity {
   @PrimaryColumn({ comment: '외래키(reports.id)이자 기본키 - 1:1 관계 최적화' })
   reportId!: string;
 
-  @Column({ 
-    type: 'enum', 
-    enum: ReportActionType, 
+  @Column({
+    type: 'enum',
+    enum: ReportActionType,
     default: ReportActionType.NONE,
-    comment: '조치 타입'
+    comment: '조치 타입',
   })
   actionType!: ReportActionType;
 
-  @Column({ 
+  @Column({
     nullable: true,
-    comment: '정지 기간 (일 단위)'
+    comment: '정지 기간 (일 단위)',
   })
-  duration?: number;
+  duration?: number | null;
 
-  @Column({ 
-    type: 'text', 
+  @Column({
+    type: 'text',
     nullable: true,
-    comment: '조치 사유'
+    comment: '조치 사유',
   })
-  reason?: string;
+  reason?: string | null;
 
-  @Column({ 
+  @Column({
     nullable: true,
-    comment: '조치 실행 시간'
+    comment: '조치 실행 시간',
   })
-  executedAt?: Date;
+  executedAt?: Date | null;
 
-  @Column({ 
+  @Column({
     nullable: true,
-    comment: '조치 실행자 ID'
+    comment: '조치 실행자 ID',
   })
-  executedBy?: string;
+  executedBy?: string | null;
 
-  @Column({ 
+  @Column({
     type: 'enum',
     enum: ['pending', 'executed', 'failed'],
     default: 'pending',
-    comment: '조치 실행 상태'
+    comment: '조치 실행 상태',
   })
   executionStatus!: 'pending' | 'executed' | 'failed';
 

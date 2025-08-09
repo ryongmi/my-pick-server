@@ -1,5 +1,6 @@
 import { Injectable, Logger, HttpException, Inject } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+import { EntityManager } from 'typeorm';
 
 import { plainToInstance } from 'class-transformer';
 
@@ -8,19 +9,19 @@ import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
 import { PlatformType } from '@common/enums/index.js';
 
-import { 
+import {
   CreatorApplicationRepository,
   CreatorApplicationChannelInfoRepository,
   CreatorApplicationSampleVideoRepository,
-  CreatorApplicationReviewRepository
+  CreatorApplicationReviewRepository,
 } from '../repositories/index.js';
 import { CreatorApplicationEntity } from '../entities/index.js';
 import { ApplicationStatus } from '../enums/index.js';
-import { 
-  CreateApplicationDto, 
-  ReviewApplicationDto, 
+import {
+  CreateApplicationDto,
+  ReviewApplicationDto,
   ApplicationDetailDto,
-  NormalizedApplicationDetailDto 
+  NormalizedApplicationDetailDto,
 } from '../dto/index.js';
 import { CreatorApplicationException } from '../exceptions/index.js';
 import { CreatorService } from '../../creator/services/index.js';
@@ -158,14 +159,18 @@ export class CreatorApplicationService {
         this.reviewRepo.findByApplicationId(applicationId),
       ]);
 
-      const detailDto = plainToInstance(NormalizedApplicationDetailDto, {
-        ...application,
-        channelInfo,
-        sampleVideos,
-        review,
-      }, {
-        excludeExtraneousValues: true,
-      });
+      const detailDto = plainToInstance(
+        NormalizedApplicationDetailDto,
+        {
+          ...application,
+          channelInfo,
+          sampleVideos,
+          review,
+        },
+        {
+          excludeExtraneousValues: true,
+        }
+      );
 
       this.logger.debug('Normalized application detail fetched', {
         applicationId,
@@ -366,8 +371,9 @@ export class CreatorApplicationService {
   // ==================== PRIVATE HELPER METHODS ====================
 
   private async saveNormalizedApplicationData(
-    applicationId: string, 
-    dto: CreateApplicationDto
+    applicationId: string,
+    dto: CreateApplicationDto,
+    transactionManager?: EntityManager
   ): Promise<void> {
     // 채널 정보 저장
     const channelInfo = this.channelInfoRepo.create({
@@ -379,11 +385,11 @@ export class CreatorApplicationService {
       contentCategory: dto.contentCategory,
       description: dto.description,
     });
-    await this.channelInfoRepo.save(channelInfo);
+    await this.channelInfoRepo.saveEntity(channelInfo, transactionManager);
 
     // 샘플 영상 저장
     if (dto.sampleVideos && dto.sampleVideos.length > 0) {
-      const sampleVideos = dto.sampleVideos.map((video, index) => 
+      const sampleVideos = dto.sampleVideos.map((video, index) =>
         this.sampleVideoRepo.create({
           applicationId,
           title: video.title,
@@ -392,21 +398,26 @@ export class CreatorApplicationService {
           sortOrder: index + 1,
         })
       );
-      await this.sampleVideoRepo.save(sampleVideos);
+      for (const sampleVideo of sampleVideos) {
+        await this.sampleVideoRepo.saveEntity(sampleVideo, transactionManager);
+      }
     }
   }
 
-  private async saveReviewData(
-    applicationId: string, 
-    dto: ReviewApplicationDto
-  ): Promise<void> {
+  private async saveReviewData(applicationId: string, dto: ReviewApplicationDto, transactionManager?: EntityManager): Promise<void> {
     const reviewData = this.reviewRepo.create({
       applicationId,
-      reason: dto.reason,
-      comment: dto.comment,
-      requirements: dto.requirements,
     });
-    await this.reviewRepo.save(reviewData);
+
+    // 조건부 할당 (exactOptionalPropertyTypes 준수)
+    if (dto.reason !== undefined) {
+      reviewData.reason = dto.reason;
+    }
+    if (dto.comment !== undefined) {
+      reviewData.comment = dto.comment;
+    }
+
+    await this.reviewRepo.saveEntity(reviewData, transactionManager);
   }
 
   private async createCreatorFromApplication(applicationId: string): Promise<void> {
@@ -419,7 +430,7 @@ export class CreatorApplicationService {
 
       const application = await this.findByIdOrFail(applicationId);
 
-      // Creator 생성을 위한 DTO 구성
+      // Creator 생성을 위한 DTO 구성 (플랫폼 정보 제외)
       const createCreatorDto: CreateCreatorDto = {
         userId: application.userId,
         name: channelInfo.channelId,
@@ -427,18 +438,20 @@ export class CreatorApplicationService {
         description: channelInfo.description,
         category: channelInfo.contentCategory,
         tags: [],
-        platforms: [
-          {
-            type: channelInfo.platform as PlatformType,
-            platformId: channelInfo.channelId,
-            url: channelInfo.channelUrl,
-            followerCount: channelInfo.subscriberCount,
-          },
-        ],
       };
 
       // Creator 엔티티 생성
-      await this.creatorService.createCreator(createCreatorDto);
+      const creatorId = await this.creatorService.createCreator(createCreatorDto);
+
+      // TODO: CreatorPlatformService를 통해 플랫폼 정보 별도 생성
+      // const platformDto = {
+      //   creatorId,
+      //   type: channelInfo.platform as PlatformType,
+      //   platformId: channelInfo.channelId,
+      //   url: channelInfo.channelUrl,
+      //   followerCount: channelInfo.subscriberCount,
+      // };
+      // await this.creatorPlatformService.createPlatform(platformDto);
 
       this.logger.log('Creator created successfully from approved application', {
         applicationId,
@@ -460,4 +473,3 @@ export class CreatorApplicationService {
     }
   }
 }
-
