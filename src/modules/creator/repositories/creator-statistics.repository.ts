@@ -26,8 +26,19 @@ export class CreatorStatisticsRepository extends Repository<CreatorStatisticsEnt
       totalLikes?: number;
       totalComments?: number;
       totalShares?: number;
-      platformStats?: Record<string, any>;
-      categoryStats?: Record<string, any>;
+      platformStats?: Record<string, {
+        followers: number;
+        content: number;
+        views: number;
+        averageEngagementRate: number;
+      }>;
+      categoryStats?: Record<string, {
+        contentCount: number;
+        viewCount: number;
+        likeCount: number;
+        commentCount: number;
+        shareCount: number;
+      }>;
       monthlyAverageViews?: number;
       contentQualityScore?: number;
       activePlatformCount?: number;
@@ -70,8 +81,19 @@ export class CreatorStatisticsRepository extends Repository<CreatorStatisticsEnt
       totalLikes: number;
       totalComments: number;
       totalShares: number;
-      platformStats: Record<string, any>;
-      categoryStats: Record<string, any>;
+      platformStats: Record<string, {
+        followers: number;
+        content: number;
+        views: number;
+        averageEngagementRate: number;
+      }>;
+      categoryStats: Record<string, {
+        contentCount: number;
+        viewCount: number;
+        likeCount: number;
+        commentCount: number;
+        shareCount: number;
+      }>;
       monthlyAverageViews: number;
       contentQualityScore: number;
       activePlatformCount: number;

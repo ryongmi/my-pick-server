@@ -4,7 +4,6 @@ import { DataSource, In } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
 
-import { PlatformType } from '@common/enums/index.js';
 
 import { CreatorPlatformEntity } from '../entities/index.js';
 
@@ -114,7 +113,13 @@ export class CreatorPlatformRepository extends BaseRepository<CreatorPlatformEnt
   async getStatsByCreatorIds(creatorIds: string[]): Promise<Record<string, PlatformStats>> {
     if (creatorIds.length === 0) return {};
 
-    const results = await this.createQueryBuilder('platform')
+    const results: Array<{
+      creatorId: string;
+      totalFollowers: string;
+      totalContent: string;
+      totalViews: string;
+      platformCount: string;
+    }> = await this.createQueryBuilder('platform')
       .select([
         'platform.creatorId as creatorId',
         'SUM(platform.followerCount) as totalFollowers',

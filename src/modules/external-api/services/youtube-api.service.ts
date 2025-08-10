@@ -13,7 +13,6 @@ import { ApiProvider, ApiOperation } from '../enums/index.js';
 import {
   YouTubeChannelDto,
   YouTubeVideoDto,
-  YouTubePlaylistDto,
   YouTubeSearchResultDto,
   YouTubeChannelsApiResponseDto,
   YouTubeChannelContentApiResponseDto,

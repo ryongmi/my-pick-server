@@ -43,7 +43,7 @@ export class PlatformApplicationReviewService {
     transactionManager?: EntityManager
   ): Promise<void> {
     try {
-      const reviewObj: any = {
+      const reviewObj: Partial<PlatformApplicationReviewEntity> = {
         applicationId,
       };
 
@@ -94,10 +94,10 @@ export class PlatformApplicationReviewService {
       requirements: string[];
       reason: string;
     }>,
-    transactionManager?: EntityManager
+    _transactionManager?: EntityManager
   ): Promise<void> {
     try {
-      const updateObj: any = {};
+      const updateObj: Partial<PlatformApplicationReviewEntity> = {};
 
       if (reviewData.reasons !== undefined) {
         updateObj.reasons = reviewData.reasons;

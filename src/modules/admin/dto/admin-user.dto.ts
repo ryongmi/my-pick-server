@@ -1,4 +1,4 @@
-import { Exclude, Expose } from 'class-transformer';
+import { Expose } from 'class-transformer';
 import { IsOptional, IsEnum, IsString, IsNumber, IsDateString, Min } from 'class-validator';
 
 export enum UserStatus {

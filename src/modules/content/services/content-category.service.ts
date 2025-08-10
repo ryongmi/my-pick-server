@@ -69,7 +69,15 @@ export class ContentCategoryService {
 
       // 새 카테고리 배치 생성
       const categoryEntities = categories.map((cat) => {
-        const entity: any = {
+        const entity: {
+          contentId: string;
+          category: string;
+          isPrimary: boolean;
+          confidence: number;
+          source: 'manual' | 'ai' | 'platform';
+          subcategory?: string;
+          classifiedBy?: string;
+        } = {
           contentId,
           category: cat.category,
           isPrimary: cat.isPrimary || false,

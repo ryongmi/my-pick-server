@@ -1,7 +1,7 @@
 import { Injectable, Logger, Inject, HttpException } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 
-import { EntityManager, UpdateResult, In, FindOptionsWhere, LessThan, MoreThan, And, DataSource } from 'typeorm';
+import { EntityManager, UpdateResult, In, LessThan, MoreThan, DataSource, FindManyOptions } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
 
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
@@ -376,9 +376,11 @@ export class ContentService {
       ? transactionManager.getRepository(ContentEntity)
       : this.contentRepo;
 
-    transactionManager
-      ? await repository.save(content)
-      : await this.contentRepo.saveEntity(content);
+    if (transactionManager) {
+      await repository.save(content);
+    } else {
+      await this.contentRepo.saveEntity(content);
+    }
 
     this.logger.log('Content updated successfully', {
       contentId,
@@ -962,7 +964,7 @@ export class ContentService {
               return dto;
             });
           }
-        } catch (err) {
+        } catch (_err) {
           // 개별 콘텐츠 카테고리 조회 실패는 무시
         }
       }));
@@ -1004,7 +1006,7 @@ export class ContentService {
               return dto;
             });
           }
-        } catch (err) {
+        } catch (_err) {
           // 개별 콘텐츠 태그 조회 실패는 무시
         }
       }));
@@ -1117,20 +1119,20 @@ export class ContentService {
         updatedAt: new Date()
       };
 
-      const result: any = {
+      const result: ContentSearchResultDto = {
         id: content.id!,
         type: content.type!,
         title: content.title!,
-        description: content.description || undefined,
+        description: content.description ?? null,
         thumbnail: content.thumbnail!,
         url: content.url!,
         platform: content.platform!,
         platformId: content.platformId!,
-        duration: content.duration || undefined,
+        duration: content.duration ?? null,
         publishedAt: content.publishedAt!,
         creatorId: content.creatorId!,
         isLive: content.isLive || false,
-        quality: content.quality,
+        quality: content.quality ?? null,
         ageRestriction: content.ageRestriction || false,
         // 🔥 분리된 엔티티 데이터 포함
         categories: contentCategories[content.id!] || [],
@@ -1157,21 +1159,21 @@ export class ContentService {
   // 🔥 폴백 처리 결과 빌드 (authz-server 패턴)
   private buildFallbackContentSearchResults(contents: Partial<ContentEntity>[]): ContentSearchResultDto[] {
     return contents.map((content) => {
-      const result: any = {
+      const result: ContentSearchResultDto = {
       id: content.id!,
       type: content.type!,
       title: content.title!,
-      description: content.description || undefined,
+      description: content.description ?? null,
       thumbnail: content.thumbnail!,
       url: content.url!,
       platform: content.platform!,
       platformId: content.platformId!,
-      duration: content.duration || undefined,
+      duration: content.duration ?? null,
       publishedAt: content.publishedAt!,
       creatorId: content.creatorId!,
       // 개별 메타데이터 필드 (JSON 제거)
       isLive: content.isLive || false,
-      quality: content.quality,
+      quality: content.quality ?? null,
       ageRestriction: content.ageRestriction || false,
       // 🔥 분리된 엔티티 데이터 (폴백 시 빈 배열)
       categories: [],
@@ -1257,12 +1259,12 @@ export class ContentService {
     platform?: string
   ): Promise<ContentEntity[]> {
     try {
-      const queryOptions: any = {
+      const queryOptions: FindManyOptions<ContentEntity> = {
         order: { publishedAt: 'DESC' },
       };
 
       if (platform) {
-        queryOptions.where = { platform };
+        queryOptions.where = { platform: platform as PlatformType };
       }
 
       if (limit) {

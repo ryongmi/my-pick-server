@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { DataSource, In, LessThan, MoreThan } from 'typeorm';
+import { DataSource, In } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
 
@@ -39,7 +39,7 @@ export class CreatorPlatformSyncRepository extends BaseRepository<CreatorPlatfor
    */
   async findByPlatformIds(
     platformIds: string[]
-  ): Promise<Record<string, CreatorPlatformSyncEntity>> {
+  ): Promise<Record<string, CreatorPlatformSyncEntity | null>> {
     if (platformIds.length === 0) return {};
 
     const syncs = await this.find({
@@ -47,11 +47,11 @@ export class CreatorPlatformSyncRepository extends BaseRepository<CreatorPlatfor
       order: { lastVideoSyncAt: 'DESC' },
     });
 
-    const syncMap: Record<string, CreatorPlatformSyncEntity> = {};
+    const syncMap: Record<string, CreatorPlatformSyncEntity | null> = {};
 
     // 모든 플랫폼에 대해 기본값 설정
     platformIds.forEach((platformId) => {
-      syncMap[platformId] = null as any; // null로 초기화하여 동기화 정보가 없음을 표시
+      syncMap[platformId] = null; // null로 초기화하여 동기화 정보가 없음을 표시
     });
 
     // 실제 동기화 데이터 매핑

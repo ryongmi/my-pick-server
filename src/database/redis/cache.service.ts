@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { CreatorDetailDto, DetailedPlatformStatsDto } from '@modules/creator/dto/creator-detail.dto.js';
+import { ContentDetailDto } from '@modules/content/dto/content-detail.dto.js';
+import { TrendingContentDto } from '@modules/content/dto/trending-content.dto.js';
+import { UpdateInteractionDto } from '@modules/user-interaction/dto/interaction.dto.js';
+
 import { RedisService } from './redis.service.js';
 
 // 캐시 키 생성을 위한 enum
@@ -82,12 +87,12 @@ export class CacheService {
 
   // ==================== 크리에이터 캐시 메서드 ====================
 
-  async getCreatorDetail(creatorId: string): Promise<any | null> {
+  async getCreatorDetail(creatorId: string): Promise<CreatorDetailDto | null> {
     const key = this.generateKey(CacheKeyType.CREATOR, creatorId, 'detail');
     return this.get(key);
   }
 
-  async setCreatorDetail(creatorId: string, data: any): Promise<void> {
+  async setCreatorDetail(creatorId: string, data: CreatorDetailDto): Promise<void> {
     const key = this.generateKey(CacheKeyType.CREATOR, creatorId, 'detail');
     await this.set(key, data, CacheTTL.MEDIUM);
   }
@@ -103,41 +108,41 @@ export class CacheService {
 
   // ==================== 콘텐츠 캐시 메서드 ====================
 
-  async getContentDetail(contentId: string): Promise<any | null> {
+  async getContentDetail(contentId: string): Promise<ContentDetailDto | null> {
     const key = this.generateKey(CacheKeyType.CONTENT, contentId, 'detail');
     return this.get(key);
   }
 
-  async setContentDetail(contentId: string, data: any): Promise<void> {
+  async setContentDetail(contentId: string, data: ContentDetailDto): Promise<void> {
     const key = this.generateKey(CacheKeyType.CONTENT, contentId, 'detail');
     await this.set(key, data, CacheTTL.MEDIUM);
   }
 
-  async getTrendingContent(hours: number = 24): Promise<any | null> {
+  async getTrendingContent(hours: number = 24): Promise<TrendingContentDto[] | null> {
     const key = this.generateKey(CacheKeyType.TRENDING_CONTENT, `${hours}h`);
     return this.get(key);
   }
 
-  async setTrendingContent(hours: number, data: any): Promise<void> {
+  async setTrendingContent(hours: number, data: TrendingContentDto[]): Promise<void> {
     const key = this.generateKey(CacheKeyType.TRENDING_CONTENT, `${hours}h`);
     await this.set(key, data, CacheTTL.SHORT); // 트렌딩 콘텐츠는 짧은 TTL
   }
 
   // ==================== 플랫폼 통계 캐시 메서드 ====================
 
-  async getPlatformStats(creatorId: string): Promise<any | null> {
+  async getPlatformStats(creatorId: string): Promise<DetailedPlatformStatsDto | null> {
     const key = this.generateKey(CacheKeyType.PLATFORM_STATS, creatorId);
     return this.get(key);
   }
 
-  async setPlatformStats(creatorId: string, data: any): Promise<void> {
+  async setPlatformStats(creatorId: string, data: DetailedPlatformStatsDto): Promise<void> {
     const key = this.generateKey(CacheKeyType.PLATFORM_STATS, creatorId);
     await this.set(key, data, CacheTTL.LONG); // 통계는 긴 TTL
   }
 
   // ==================== 사용자 상호작용 캐시 메서드 ====================
 
-  async getUserInteractions(userId: string, contentIds: string[]): Promise<any | null> {
+  async getUserInteractions(userId: string, contentIds: string[]): Promise<Record<string, UpdateInteractionDto> | null> {
     const key = this.generateKey(
       CacheKeyType.USER_INTERACTION,
       userId,
@@ -146,7 +151,7 @@ export class CacheService {
     return this.get(key);
   }
 
-  async setUserInteractions(userId: string, contentIds: string[], data: any): Promise<void> {
+  async setUserInteractions(userId: string, contentIds: string[], data: Record<string, UpdateInteractionDto>): Promise<void> {
     const key = this.generateKey(
       CacheKeyType.USER_INTERACTION,
       userId,

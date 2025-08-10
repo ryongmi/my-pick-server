@@ -100,7 +100,15 @@ export class CreatorApplicationReviewService {
     comment?: string
   ): Promise<CreatorApplicationReviewEntity> {
     try {
-      const reviewDto: any = {
+      const reviewDto: {
+        applicationId: string;
+        reviewerId: string;
+        status: ReviewStatus;
+        actionType: ReviewActionType;
+        isFinal: boolean;
+        score: number;
+        comment?: string;
+      } = {
         applicationId,
         reviewerId,
         status: ReviewStatus.APPROVED,
@@ -139,7 +147,16 @@ export class CreatorApplicationReviewService {
     comment?: string
   ): Promise<CreatorApplicationReviewEntity> {
     try {
-      const reviewDto: any = {
+      const reviewDto: {
+        applicationId: string;
+        reviewerId: string;
+        status: ReviewStatus;
+        actionType: ReviewActionType;
+        reason: string;
+        isFinal: boolean;
+        score: number;
+        comment?: string;
+      } = {
         applicationId,
         reviewerId,
         status: ReviewStatus.REJECTED,
@@ -181,7 +198,15 @@ export class CreatorApplicationReviewService {
     estimatedDays?: number
   ): Promise<CreatorApplicationReviewEntity> {
     try {
-      const reviewDto: any = {
+      const reviewDto: {
+        applicationId: string;
+        reviewerId: string;
+        status: ReviewStatus;
+        actionType: ReviewActionType;
+        reason: string;
+        isFinal: boolean;
+        estimatedDays?: number;
+      } = {
         applicationId,
         reviewerId,
         status: ReviewStatus.REVISION_REQUIRED,
@@ -261,7 +286,7 @@ export class CreatorApplicationReviewService {
       const averageScore =
         scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : undefined;
 
-      const summary: any = {
+      const summary: ReviewSummary = {
         applicationId,
         totalReviews: reviews.length,
         currentStatus: latestReview.status,

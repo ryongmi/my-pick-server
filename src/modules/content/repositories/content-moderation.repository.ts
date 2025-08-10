@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { DataSource, In, LessThan, MoreThan, Between, IsNull } from 'typeorm';
+import { DataSource, In, LessThan, MoreThan, Between, IsNull, FindOptionsWhere } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
 import { LimitType, SortOrderType } from '@krgeobuk/core/enum';
@@ -97,7 +97,7 @@ export class ContentModerationRepository extends BaseRepository<ContentModeratio
     moderatedAfter?: Date,
     moderatedBefore?: Date
   ): Promise<ContentModerationEntity[]> {
-    const where: any = { moderatorId };
+    const where: FindOptionsWhere<ContentModerationEntity> = { moderatorId };
 
     if (moderatedAfter && moderatedBefore) {
       where.moderatedAt = Between(moderatedAfter, moderatedBefore);
@@ -124,7 +124,11 @@ export class ContentModerationRepository extends BaseRepository<ContentModeratio
   }
 
   async findFlaggedContent(limit?: number): Promise<ContentModerationEntity[]> {
-    const queryOptions: any = {
+    const queryOptions: {
+      where: { moderationStatus: 'flagged' };
+      order: { moderatedAt: 'DESC' };
+      take?: number;
+    } = {
       where: { moderationStatus: 'flagged' },
       order: { moderatedAt: 'DESC' },
     };

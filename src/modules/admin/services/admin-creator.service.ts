@@ -1,12 +1,12 @@
-import { Injectable, Logger, HttpException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
-import { UpdateResult } from 'typeorm';
+// import { UpdateResult } from 'typeorm';
 
 import { CreatorRepository } from '../../creator/repositories/index.js';
 import { CreatorPlatformService } from '../../creator/services/creator-platform.service.js';
 import { ContentService } from '../../content/services/index.js';
 import { CreatePlatformDto, UpdatePlatformDto } from '../../creator/dto/index.js';
-import { CreatorException } from '../../creator/exceptions/index.js';
+// import { CreatorException } from '../../creator/exceptions/index.js';
 
 import { AdminPlatformService } from './admin-platform.service.js';
 

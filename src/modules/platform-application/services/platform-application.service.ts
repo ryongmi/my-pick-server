@@ -5,17 +5,16 @@ import { EntityManager } from 'typeorm';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import { LimitType } from '@krgeobuk/core/enum';
 
-import { SyncStatus, PlatformType } from '@common/enums/index.js';
+import { PlatformType } from '@common/enums/index.js';
 
 import {
   PlatformApplicationRepository,
-  PlatformApplicationDataRepository,
-  PlatformApplicationReviewRepository,
 } from '../repositories/index.js';
 import { CreatorService } from '../../creator/services/creator.service.js';
 import { CreatorPlatformService } from '../../creator/services/creator-platform.service.js';
+import { CreatePlatformInternalDto } from '../../creator/dto/create-platform-internal.dto.js';
 import { PlatformApplicationEntity } from '../entities/index.js';
-import { ApplicationStatus, VerificationProofType } from '../enums/index.js';
+import { ApplicationStatus, RejectionReason, PlatformType as LocalPlatformType, VerificationProofType } from '../enums/index.js';
 import {
   CreatePlatformApplicationDto,
   UpdatePlatformApplicationDto,
@@ -24,6 +23,8 @@ import {
   RejectApplicationDto,
   PlatformApplicationSearchQueryDto,
   ApplicationStatsDto,
+  PlatformDataDto,
+  ReviewDataDto,
 } from '../dto/index.js';
 import { PlatformApplicationException } from '../exceptions/index.js';
 
@@ -106,52 +107,40 @@ export class PlatformApplicationService {
       status: application.status,
       platformType: application.platformType,
       appliedAt: application.appliedAt,
-      platformData: platformData
-        ? (() => {
-            const platformObj: any = {
-              type: platformData.type,
-              platformId: platformData.platformId,
-              url: platformData.url,
-              displayName: platformData.displayName,
-              verificationProof: {
-                type: platformData.verificationProofType,
-                url: platformData.verificationProofUrl,
-                description: platformData.verificationProofDescription,
-              },
-            };
-            if (platformData.description !== undefined) {
-              platformObj.description = platformData.description;
-            }
-            if (platformData.followerCount !== undefined) {
-              platformObj.followerCount = platformData.followerCount;
-            }
-            return platformObj;
-          })()
-        : undefined,
-      reviewData: reviewData
-        ? (() => {
-            const reviewObj: any = {};
-            if (reviewData.reasons !== undefined) {
-              reviewObj.reasons = reviewData.reasons;
-            }
-            if (reviewData.customReason !== undefined) {
-              reviewObj.customReason = reviewData.customReason;
-            }
-            if (reviewData.comment !== undefined) {
-              reviewObj.comment = reviewData.comment;
-            }
-            if (reviewData.requirements !== undefined) {
-              reviewObj.requirements = reviewData.requirements;
-            }
-            if (reviewData.reason !== undefined) {
-              reviewObj.reason = reviewData.reason;
-            }
-            return reviewObj;
-          })()
-        : undefined,
       createdAt: application.createdAt,
       updatedAt: application.updatedAt,
     };
+
+    // 조건부 할당 (exactOptionalPropertyTypes 준수)
+    if (platformData) {
+      result.platformData = {
+        type: platformData.type,
+        platformId: platformData.platformId,
+        url: platformData.url,
+        displayName: platformData.displayName,
+        description: platformData.description,
+        followerCount: platformData.followerCount,
+        verificationProof: {
+          type: platformData.verificationProofType,
+          url: platformData.verificationProofUrl,
+          description: platformData.verificationProofDescription,
+        },
+        createdAt: platformData.createdAt,
+        updatedAt: platformData.updatedAt,
+      } as PlatformDataDto;
+    }
+
+    if (reviewData) {
+      result.reviewData = {
+        reasons: reviewData.reasons,
+        customReason: reviewData.customReason,
+        comment: reviewData.comment,
+        requirements: reviewData.requirements,
+        reason: reviewData.reason,
+        createdAt: reviewData.createdAt,
+        updatedAt: reviewData.updatedAt,
+      } as ReviewDataDto;
+    }
 
     // 조건부 할당 (exactOptionalPropertyTypes 준수)
     if (application.reviewedAt !== undefined && application.reviewedAt !== null) {
@@ -265,7 +254,17 @@ export class PlatformApplicationService {
         const savedApplication = await txManager.save(application);
 
         // 플랫폼 데이터 저장
-        const platformDataForCreation: any = {
+        const platformDataForCreation: {
+          type: LocalPlatformType;
+          platformId: string;
+          url: string;
+          displayName: string;
+          description?: string;
+          followerCount?: number;
+          verificationProofType: VerificationProofType;
+          verificationProofUrl: string;
+          verificationProofDescription: string;
+        } = {
           type: dto.platformData.type,
           platformId: dto.platformData.platformId,
           url: dto.platformData.url,
@@ -274,7 +273,7 @@ export class PlatformApplicationService {
           verificationProofUrl: dto.platformData.verificationProof.url,
           verificationProofDescription: dto.platformData.verificationProof.description,
         };
-
+        
         if (dto.platformData.description !== undefined) {
           platformDataForCreation.description = dto.platformData.description;
         }
@@ -482,7 +481,13 @@ export class PlatformApplicationService {
         await txManager.save(application);
 
         // 4. 리뷰 데이터 저장
-        const reviewData: any = {};
+        const reviewData: {
+          reasons?: RejectionReason[];
+          customReason?: string;
+          comment?: string;
+          requirements?: string[];
+          reason?: string;
+        } = {};
         if (dto.comment !== undefined) {
           reviewData.comment = dto.comment;
         }
@@ -555,10 +560,16 @@ export class PlatformApplicationService {
         await txManager.save(application);
 
         // 리뷰 데이터 저장
-        const rejectReviewData: any = {
+        const rejectReviewData: {
+          reasons?: RejectionReason[];
+          customReason?: string;
+          comment?: string;
+          requirements?: string[];
+          reason?: string;
+        } = {
           reasons: dto.reasons,
         };
-
+        
         if (dto.customReason !== undefined) {
           rejectReviewData.customReason = dto.customReason;
         }
@@ -622,52 +633,40 @@ export class PlatformApplicationService {
       status: application.status,
       platformType: application.platformType,
       appliedAt: application.appliedAt,
-      platformData: platformData
-        ? (() => {
-            const platformObj: any = {
-              type: platformData.type,
-              platformId: platformData.platformId,
-              url: platformData.url,
-              displayName: platformData.displayName,
-              verificationProof: {
-                type: platformData.verificationProofType,
-                url: platformData.verificationProofUrl,
-                description: platformData.verificationProofDescription,
-              },
-            };
-            if (platformData.description !== undefined) {
-              platformObj.description = platformData.description;
-            }
-            if (platformData.followerCount !== undefined) {
-              platformObj.followerCount = platformData.followerCount;
-            }
-            return platformObj;
-          })()
-        : undefined,
-      reviewData: reviewData
-        ? (() => {
-            const reviewObj: any = {};
-            if (reviewData.reasons !== undefined) {
-              reviewObj.reasons = reviewData.reasons;
-            }
-            if (reviewData.customReason !== undefined) {
-              reviewObj.customReason = reviewData.customReason;
-            }
-            if (reviewData.comment !== undefined) {
-              reviewObj.comment = reviewData.comment;
-            }
-            if (reviewData.requirements !== undefined) {
-              reviewObj.requirements = reviewData.requirements;
-            }
-            if (reviewData.reason !== undefined) {
-              reviewObj.reason = reviewData.reason;
-            }
-            return reviewObj;
-          })()
-        : undefined,
       createdAt: application.createdAt,
       updatedAt: application.updatedAt,
     };
+
+    // 조건부 할당 (exactOptionalPropertyTypes 준수)
+    if (platformData) {
+      result.platformData = {
+        type: platformData.type,
+        platformId: platformData.platformId,
+        url: platformData.url,
+        displayName: platformData.displayName,
+        description: platformData.description,
+        followerCount: platformData.followerCount,
+        verificationProof: {
+          type: platformData.verificationProofType,
+          url: platformData.verificationProofUrl,
+          description: platformData.verificationProofDescription,
+        },
+        createdAt: platformData.createdAt,
+        updatedAt: platformData.updatedAt,
+      } as PlatformDataDto;
+    }
+
+    if (reviewData) {
+      result.reviewData = {
+        reasons: reviewData.reasons,
+        customReason: reviewData.customReason,
+        comment: reviewData.comment,
+        requirements: reviewData.requirements,
+        reason: reviewData.reason,
+        createdAt: reviewData.createdAt,
+        updatedAt: reviewData.updatedAt,
+      } as ReviewDataDto;
+    }
 
     // 조건부 할당 (exactOptionalPropertyTypes 준수)
     if (application.reviewedAt !== undefined && application.reviewedAt !== null) {
@@ -694,7 +693,7 @@ export class PlatformApplicationService {
       }
 
       // CreatorPlatformService를 통해 플랫폼 생성
-      const createPlatformData: any = {
+      const createPlatformData: CreatePlatformInternalDto = {
         creatorId: application.creatorId,
         type: platformData.type as PlatformType,
         platformId: platformData.platformId,

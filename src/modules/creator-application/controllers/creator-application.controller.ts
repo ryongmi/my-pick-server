@@ -4,7 +4,6 @@ import {
   Post,
   Body,
   Param,
-  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -12,25 +11,21 @@ import {
 } from '@nestjs/common';
 
 import { Serialize } from '@krgeobuk/core/decorators';
-import { PaginatedResult } from '@krgeobuk/core/interfaces';
 import {
   SwaggerApiTags,
   SwaggerApiOperation,
   SwaggerApiBearerAuth,
   SwaggerApiParam,
   SwaggerApiOkResponse,
-  SwaggerApiPaginatedResponse,
   SwaggerApiBody,
   SwaggerApiErrorResponse,
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { JwtPayload } from '@krgeobuk/jwt/interfaces';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
-import { RequirePermission } from '@krgeobuk/authorization/decorators';
 
 import { CreatorApplicationService } from '../services/index.js';
-import { CreateApplicationDto, ReviewApplicationDto, ApplicationDetailDto } from '../dto/index.js';
-import { ApplicationStatus } from '../enums/index.js';
+import { CreateApplicationDto, ApplicationDetailDto } from '../dto/index.js';
 
 @SwaggerApiTags({ tags: ['creator-application'] })
 @SwaggerApiBearerAuth()

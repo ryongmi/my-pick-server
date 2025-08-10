@@ -5,7 +5,7 @@ import { DataSource, Between, LessThan } from 'typeorm';
 import { BaseRepository } from '@krgeobuk/core/repositories';
 
 import { ApiQuotaUsageEntity } from '../entities/index.js';
-import { ApiProvider, ApiOperation } from '../enums/index.js';
+import { ApiProvider } from '../enums/index.js';
 
 @Injectable()
 export class ApiQuotaUsageRepository extends BaseRepository<ApiQuotaUsageEntity> {

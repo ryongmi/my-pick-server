@@ -1,5 +1,5 @@
 import { CreatorEntity } from '../../creator/entities/index.js';
 
-export interface ICreatorService {
+export interface CreatorServiceInterface {
   findByIds(creatorIds: string[]): Promise<CreatorEntity[]>;
 }

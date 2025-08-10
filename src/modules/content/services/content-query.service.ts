@@ -11,6 +11,7 @@ import { UserInteractionService } from '@modules/user-interaction/index.js';
 import { ContentRepository } from '../repositories/index.js';
 import { ContentEntity } from '../entities/index.js';
 import { ContentException } from '../exceptions/index.js';
+import { UserInteractionEntity } from '../../user-interaction/entities/index.js';
 import {
   ContentSearchQueryDto,
   ContentSearchResultDto,
@@ -60,7 +61,7 @@ export class ContentQueryService {
       }
 
       // 사용자별 상호작용 데이터 조회
-      let userInteractions: Record<string, any> = {};
+      let userInteractions: Record<string, UserInteractionEntity> = {};
       if (userId) {
         const contentIds = result.items.map((item) => item.id!);
         userInteractions = await this.userInteractionService.getContentInteractionsBatch(
@@ -107,7 +108,19 @@ export class ContentQueryService {
       // 2. 사용자별 상호작용 데이터 추가
       if (userId) {
         const userInteraction = await this.userInteractionService.getInteractionDetail(userId, contentId);
-        cached.userInteraction = userInteraction;
+        if (userInteraction) {
+          cached.isBookmarked = userInteraction.isBookmarked;
+          cached.isLiked = userInteraction.isLiked;
+          if (userInteraction.watchedAt) {
+            cached.watchedAt = userInteraction.watchedAt;
+          }
+          if (userInteraction.watchDuration !== null && userInteraction.watchDuration !== undefined) {
+            cached.watchDuration = userInteraction.watchDuration;
+          }
+          if (userInteraction.rating !== null && userInteraction.rating !== undefined) {
+            cached.rating = userInteraction.rating;
+          }
+        }
       }
 
       this.logger.debug('Content detail fetched', {
@@ -188,7 +201,7 @@ export class ContentQueryService {
 
       const items = await this.contentRepo.getRecentContent(creatorIds, limit);
 
-      let userInteractions: Record<string, any> = {};
+      let userInteractions: Record<string, UserInteractionEntity> = {};
       if (userId && items.length > 0) {
         const contentIds = items.map((item) => item.id);
         userInteractions = await this.userInteractionService.getContentInteractionsBatch(
@@ -254,12 +267,23 @@ export class ContentQueryService {
 
   private buildContentSearchResults(
     content: Partial<ContentEntity>[],
-    userInteractions: Record<string, any> = {}
+    userInteractions: Record<string, UserInteractionEntity> = {}
   ): ContentSearchResultDto[] {
-    return content.map((item) =>
-      plainToInstance(ContentSearchResultDto, {
+    return content.map((item) => {
+      const contentWithStats = item as Partial<ContentEntity> & { 
+        statistics?: {
+          views: number;
+          likes: number;
+          comments: number;
+          shares: number;
+          engagementRate: number;
+          updatedAt: Date;
+        };
+      };
+      
+      return plainToInstance(ContentSearchResultDto, {
         ...item,
-        statistics: (item as any).statistics || {
+        statistics: contentWithStats.statistics || {
           views: 0,
           likes: 0,
           comments: 0,
@@ -270,8 +294,8 @@ export class ContentQueryService {
         userInteraction: userInteractions[item.id!] || null,
       }, {
         excludeExtraneousValues: true,
-      })
-    );
+      });
+    });
   }
 
   private buildContentDetail(content: ContentEntity): ContentDetailDto {

@@ -30,7 +30,7 @@ import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import type { JwtPayload } from '@krgeobuk/jwt/interfaces';
 
 import { ReportService } from '../../report/services/index.js';
-import { ReportTargetType } from '../../report/enums/index.js';
+import { ReportTargetType, ReportStatus } from '../../report/enums/index.js';
 import { ReportSearchQueryDto, ReviewReportDto, ReportDetailDto } from '../../report/dto/index.js';
 import { UpdatePriorityDto } from '../dto/index.js';
 
@@ -75,7 +75,7 @@ export class AdminReportController {
   async getPendingReports(
     @Query() query: Omit<ReportSearchQueryDto, 'status'>
   ): Promise<PaginatedResult<ReportDetailDto>> {
-    const searchQuery: ReportSearchQueryDto = { ...query, status: 'pending' as any };
+    const searchQuery: ReportSearchQueryDto = { ...query, status: ReportStatus.PENDING };
     return await this.reportService.searchReports(searchQuery);
   }
 

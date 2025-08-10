@@ -36,12 +36,12 @@ export class ReportTargetInfoDto {
   @Expose()
   name?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: '대상 타입',
     example: 'content',
   })
   @Expose()
-  type!: string;
+  type?: string;
 }
 
 export class ReportEvidenceDetailDto {

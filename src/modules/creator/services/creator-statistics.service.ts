@@ -47,10 +47,10 @@ export class CreatorStatisticsService {
     totalLikes: number;
     totalComments: number;
     totalShares: number;
-    platformStats?: Record<string, any>;
-    categoryStats?: Record<string, any>;
-    monthlyAverageViews?: number;
-    contentQualityScore?: number;
+    platformStats?: Record<string, unknown>;
+    categoryStats?: Record<string, unknown>;
+    monthlyAverageViews?: number | undefined;
+    contentQualityScore?: number | undefined;
     activePlatformCount: number;
     lastCalculatedAt?: Date;
   }> {
@@ -73,7 +73,23 @@ export class CreatorStatisticsService {
         };
       }
 
-      const result: any = {
+      const result: {
+        totalFollowers: number;
+        totalContent: number;
+        totalViews: number;
+        followersGrowthRate: number;
+        contentGrowthRate: number;
+        averageEngagementRate: number;
+        totalLikes: number;
+        totalComments: number;
+        totalShares: number;
+        activePlatformCount: number;
+        platformStats?: Record<string, unknown>;
+        categoryStats?: Record<string, unknown>;
+        monthlyAverageViews?: number | undefined;
+        contentQualityScore?: number | undefined;
+        lastCalculatedAt?: Date;
+      } = {
         totalFollowers: statistics.totalFollowers,
         totalContent: statistics.totalContent,
         totalViews: statistics.totalViews,
@@ -84,8 +100,8 @@ export class CreatorStatisticsService {
         totalComments: statistics.totalComments,
         totalShares: statistics.totalShares,
         // platformStats and categoryStats are handled by separate services
-        monthlyAverageViews: statistics.monthlyAverageViews,
-        contentQualityScore: statistics.contentQualityScore,
+        monthlyAverageViews: statistics.monthlyAverageViews || undefined,
+        contentQualityScore: statistics.contentQualityScore || undefined,
         activePlatformCount: statistics.activePlatformCount,
       };
 
@@ -117,13 +133,24 @@ export class CreatorStatisticsService {
       totalLikes?: number;
       totalComments?: number;
       totalShares?: number;
-      platformStats?: Record<string, any>;
-      categoryStats?: Record<string, any>;
+      platformStats?: Record<string, {
+        followers: number;
+        content: number;
+        views: number;
+        averageEngagementRate: number;
+      }>;
+      categoryStats?: Record<string, {
+        contentCount: number;
+        viewCount: number;
+        likeCount: number;
+        commentCount: number;
+        shareCount: number;
+      }>;
       monthlyAverageViews?: number;
       contentQualityScore?: number;
       activePlatformCount?: number;
     },
-    transactionManager?: EntityManager
+    _transactionManager?: EntityManager
   ): Promise<void> {
     try {
       this.logger.debug('Creating/updating creator statistics', {

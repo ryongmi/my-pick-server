@@ -119,7 +119,7 @@ export class ContentCategoryRepository extends Repository<ContentCategoryEntity>
 
   // ==================== AI 분류 관련 메서드 ====================
 
-  async getAIClassifiedCategories(minConfidence = 0.8): Promise<ContentCategoryEntity[]> {
+  async getAIClassifiedCategories(_minConfidence = 0.8): Promise<ContentCategoryEntity[]> {
     return await this.find({
       where: {
         source: 'ai',

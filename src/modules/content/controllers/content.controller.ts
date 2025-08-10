@@ -20,12 +20,11 @@ import {
   SwaggerApiOperation,
   SwaggerApiBearerAuth,
   SwaggerApiParam,
-  SwaggerApiBody,
   SwaggerApiOkResponse,
   SwaggerApiErrorResponse,
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
-import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
+// import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { JwtPayload } from '@krgeobuk/jwt/interfaces';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
@@ -438,8 +437,8 @@ export class ContentBookmarkController {
 
   @Get()
   async getBookmarkedContent(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 20,
+    @Query('page') _page: number = 1,
+    @Query('limit') _limit: number = 20,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<ContentSearchResultDto[]> {
     const bookmarkedContentIds = await this.userInteractionService.getBookmarkedContentIds(id);

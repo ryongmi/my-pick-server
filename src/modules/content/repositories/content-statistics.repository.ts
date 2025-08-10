@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { DataSource, In, MoreThan, LessThan, And, Between } from 'typeorm';
+import { DataSource, In, MoreThan, Between } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
 import { LimitType, SortOrderType } from '@krgeobuk/core/enum';

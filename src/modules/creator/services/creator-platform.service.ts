@@ -1,6 +1,6 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
 
-import { EntityManager, In } from 'typeorm';
+import { EntityManager } from 'typeorm';
 
 import { PlatformType } from '@common/enums/index.js';
 
@@ -287,7 +287,7 @@ export class CreatorPlatformService {
     }
   }
 
-  async deactivatePlatform(platformId: string, transactionManager?: EntityManager): Promise<void> {
+  async deactivatePlatform(platformId: string, _transactionManager?: EntityManager): Promise<void> {
     try {
       const platform = await this.platformRepo.findOne({ where: { id: platformId } });
 
@@ -302,7 +302,7 @@ export class CreatorPlatformService {
       });
 
       // 소프트 비활성화
-      const result = await this.platformRepo.softDelete(platformId);
+      const _result = await this.platformRepo.softDelete(platformId);
 
       this.logger.log('Platform deactivated successfully', {
         platformId,

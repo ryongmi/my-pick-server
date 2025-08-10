@@ -43,10 +43,14 @@ export class ReportEvidenceRepository extends Repository<ReportEvidenceEntity> {
     evidenceData: Partial<{
       screenshots: string[];
       urls: string[];
-      additionalInfo: Record<string, unknown>;
+      additionalInfo: Record<string, unknown> | null;
     }>
   ): Promise<void> {
-    const updateData: any = {};
+    const updateData: {
+      screenshots?: string[];
+      urls?: string[];  
+      additionalInfo?: Record<string, unknown> | null;
+    } = {};
 
     if (evidenceData.screenshots !== undefined) {
       updateData.screenshots = evidenceData.screenshots;

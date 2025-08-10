@@ -1,10 +1,9 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
 
-import { EntityManager, MoreThan, LessThan } from 'typeorm';
+import { EntityManager, MoreThan } from 'typeorm';
 
 import { CreatorConsentRepository, type ConsentStats } from '../repositories/index.js';
 import { CreatorConsentEntity, ConsentType } from '../entities/index.js';
-import { GrantConsentDto } from '../dto/index.js';
 import { CreatorException } from '../exceptions/index.js';
 
 @Injectable()
@@ -91,7 +90,7 @@ export class CreatorConsentService {
    */
   async getConsentHistory(creatorId: string, type?: ConsentType): Promise<CreatorConsentEntity[]> {
     try {
-      const where: any = { creatorId };
+      const where: { creatorId: string; type?: ConsentType } = { creatorId };
       if (type) where.type = type;
 
       return await this.consentRepo.find({
@@ -253,7 +252,7 @@ export class CreatorConsentService {
   async revokeConsent(
     creatorId: string,
     type: ConsentType,
-    transactionManager?: EntityManager
+    _transactionManager?: EntityManager
   ): Promise<void> {
     try {
       const updateResult = await this.consentRepo.update(

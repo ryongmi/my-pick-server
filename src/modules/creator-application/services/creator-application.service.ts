@@ -1,13 +1,12 @@
 import { Injectable, Logger, HttpException, Inject } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import { EntityManager } from 'typeorm';
 
+import { EntityManager } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
 
 import { LimitType } from '@krgeobuk/core/enum';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
-import { PlatformType } from '@common/enums/index.js';
 
 import {
   CreatorApplicationRepository,
@@ -441,7 +440,7 @@ export class CreatorApplicationService {
       };
 
       // Creator 엔티티 생성
-      const creatorId = await this.creatorService.createCreator(createCreatorDto);
+      const _creatorId = await this.creatorService.createCreator(createCreatorDto);
 
       // TODO: CreatorPlatformService를 통해 플랫폼 정보 별도 생성
       // const platformDto = {

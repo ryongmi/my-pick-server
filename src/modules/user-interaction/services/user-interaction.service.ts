@@ -11,7 +11,6 @@ import {
   LikeContentDto,
   WatchContentDto,
   RateContentDto,
-  UpdateInteractionDto,
 } from '../dto/index.js';
 import { UserInteractionException } from '../exceptions/index.js';
 
@@ -148,7 +147,7 @@ export class UserInteractionService {
 
   // ==================== 변경 메서드 ====================
 
-  async bookmarkContent(dto: BookmarkContentDto, transactionManager?: EntityManager): Promise<void> {
+  async bookmarkContent(dto: BookmarkContentDto, _transactionManager?: EntityManager): Promise<void> {
     try {
       const interaction = await this.userInteractionRepo.upsertInteraction(
         dto.userId,
@@ -221,7 +220,7 @@ export class UserInteractionService {
     }
   }
 
-  async likeContent(dto: LikeContentDto, transactionManager?: EntityManager): Promise<void> {
+  async likeContent(dto: LikeContentDto, _transactionManager?: EntityManager): Promise<void> {
     try {
       const interaction = await this.userInteractionRepo.upsertInteraction(
         dto.userId,

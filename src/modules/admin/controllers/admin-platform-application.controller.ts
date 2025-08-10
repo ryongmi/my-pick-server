@@ -107,8 +107,8 @@ export class AdminPlatformApplicationController {
     @Param('creatorId', ParseUUIDPipe) creatorId: string
   ): Promise<ApplicationDetailDto[]> {
     const applications = await this.platformApplicationService.findByCreatorId(creatorId);
-    return applications.map((app) => {
-      const result: any = {
+    return applications.map((app): ApplicationDetailDto => {
+      const result: ApplicationDetailDto = {
         id: app.id,
         creatorId: app.creatorId,
         userId: app.userId,

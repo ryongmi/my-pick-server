@@ -2,8 +2,6 @@ import { Injectable, Logger, HttpException } from '@nestjs/common';
 
 import { EntityManager } from 'typeorm';
 
-import { PlatformType } from '@common/enums/index.js';
-import { ConsentType } from '@modules/creator/entities/index.js';
 
 import { ContentException } from '../exceptions/index.js';
 import { CreateContentDto, UpdateContentDto, UpdateContentStatisticsDto } from '../dto/index.js';

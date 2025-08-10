@@ -179,7 +179,13 @@ export class CreatorCategoryStatisticsService {
       }
     >
   > {
-    const result: Record<string, any> = {};
+    const result: Record<string, {
+      totalCategories: number;
+      topCategory: string | null;
+      totalCategoryContent: number;
+      totalCategoryViews: number;
+      averageViewsPerCategory: number;
+    }> = {};
 
     // 각 크리에이터의 카테고리 성과 요약을 개별적으로 계산
     for (const creatorId of creatorIds) {

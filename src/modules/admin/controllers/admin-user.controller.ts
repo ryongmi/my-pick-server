@@ -32,7 +32,6 @@ import {
   AdminUserListItemDto,
   AdminUserDetailDto,
   UpdateUserStatusDto,
-  UserStatus,
 } from '../dto/index.js';
 import { AdminException } from '../exceptions/index.js';
 
@@ -131,7 +130,7 @@ export class AdminUserController {
           hasNextPage: false,
         },
       };
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       throw AdminException.userDataFetchError();
     }
   }
@@ -182,7 +181,7 @@ export class AdminUserController {
           excludeExtraneousValues: true,
         }
       );
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       throw AdminException.userDataFetchError();
     }
   }
@@ -223,7 +222,7 @@ export class AdminUserController {
 
       // TODO: 모더레이션 이력 저장
       // TODO: 상태에 따른 추가 액션 (알림, 세션 무효화 등)
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       throw AdminException.userStatusUpdateError();
     }
   }
@@ -233,7 +232,7 @@ export class AdminUserController {
   @RequirePermission('user:read')
   async getUserActivity(
     @Param('id', ParseUUIDPipe) userId: string,
-    @Query('days') days: number = 30
+    @Query('days') _days: number = 30
     // @CurrentUser() admin: UserInfo,
   ): Promise<{
     loginHistory: Array<{
@@ -262,7 +261,7 @@ export class AdminUserController {
         contentInteractions: [], // TODO: 콘텐츠 상호작용 이력 조회
         subscriptionActivity: [], // TODO: 구독 활동 이력 조회
       };
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       throw AdminException.userDataFetchError();
     }
   }
@@ -327,9 +326,9 @@ export class AdminUserController {
         reportsByUser,
         reportsAgainstUser,
       };
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       this.logger.error('Failed to get user reports', {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: _error instanceof Error ? _error.message : 'Unknown error',
         userId,
       });
       throw AdminException.userDataFetchError();
@@ -368,14 +367,14 @@ export class AdminUserController {
         newUsersThisWeek: 180,
         newUsersThisMonth: 750,
       };
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       throw AdminException.statisticsGenerationError();
     }
   }
 
   // ==================== PRIVATE HELPER METHODS ====================
 
-  private async checkIfUserIsCreator(userId: string): Promise<boolean> {
+  private async checkIfUserIsCreator(_userId: string): Promise<boolean> {
     try {
       // TODO: CreatorService나 CreatorApplicationService에서 확인
       // const creator = await this.creatorService.findByUserId(userId);
@@ -383,7 +382,7 @@ export class AdminUserController {
 
       // 임시 반환값
       return Math.random() > 0.8; // 20% 확률로 크리에이터
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       return false;
     }
   }
@@ -413,7 +412,7 @@ export class AdminUserController {
           subscribedAt: sub.subscribedAt,
         };
       });
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       return [];
     }
   }
@@ -436,7 +435,7 @@ export class AdminUserController {
         type: interaction.isLiked ? 'like' : interaction.isBookmarked ? 'bookmark' : 'view',
         interactedAt: interaction.updatedAt,
       }));
-    } catch (error: unknown) {
+    } catch (_error: unknown) {
       return [];
     }
   }

@@ -123,7 +123,11 @@ export class CreatorPlatformSyncService {
           estimatedTimeRemaining = Math.round((estimatedTotalMs - elapsedMs) / 1000); // 초 단위
         }
 
-        const progressData: any = {
+        const progressData: {
+          platformId: string;
+          progressPercentage: number;
+          estimatedTimeRemaining?: number;
+        } = {
           platformId,
           progressPercentage,
         };
@@ -287,7 +291,15 @@ export class CreatorPlatformSyncService {
       let syncEntity = await this.findByPlatformId(platformId);
 
       if (!syncEntity) {
-        const syncEntityData: any = {
+        const syncEntityData: {
+          platformId: string;
+          videoSyncStatus: VideoSyncStatus;
+          syncStartedAt: Date;
+          lastVideoSyncAt: Date;
+          syncedVideoCount: number;
+          failedVideoCount: number;
+          totalVideoCount?: number;
+        } = {
           platformId,
           videoSyncStatus: VideoSyncStatus.IN_PROGRESS,
           syncStartedAt: new Date(),

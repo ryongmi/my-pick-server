@@ -47,8 +47,8 @@ export class ContentBookmarkController {
   })
   @Serialize({ dto: ContentSearchResultDto })
   async getBookmarkedContent(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 20,
+    @Query('page') _page: number = 1,
+    @Query('limit') _limit: number = 20,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<ContentSearchResultDto[]> {
     const bookmarkedContentIds = await this.userInteractionService.getBookmarkedContentIds(id);

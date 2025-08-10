@@ -29,7 +29,12 @@ export class CreatorOrchestrationService {
 
   async createCreatorWithPlatforms(
     dto: CreateCreatorDto,
-    platforms: { type: PlatformType; platformId: string }[],
+    platforms: { 
+      type: PlatformType; 
+      platformId: string; 
+      url?: string; 
+      displayName?: string; 
+    }[],
     consents: ConsentType[],
     transactionManager?: EntityManager
   ): Promise<string> {
@@ -49,8 +54,8 @@ export class CreatorOrchestrationService {
             creatorId,
             type: platform.type,
             platformId: platform.platformId,
-            url: (platform as any).url || `https://${platform.type}.com/${platform.platformId}`,
-            displayName: (platform as any).displayName || platform.platformId,
+            url: platform.url || `https://${platform.type}.com/${platform.platformId}`,
+            displayName: platform.displayName || platform.platformId,
           },
           transactionManager
         );

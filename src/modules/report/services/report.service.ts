@@ -14,9 +14,6 @@ import {
 } from '../repositories/index.js';
 import {
   ReportEntity,
-  ReportEvidenceEntity,
-  ReportReviewEntity,
-  ReportActionEntity,
   ReportActionType,
 } from '../entities/index.js';
 import { ReportStatus, ReportTargetType, ReportReason } from '../enums/index.js';
@@ -152,7 +149,7 @@ export class ReportService {
   async createReport(
     reporterId: string,
     dto: CreateReportDto,
-    transactionManager?: EntityManager
+    _transactionManager?: EntityManager
   ): Promise<void> {
     try {
       this.logger.log('Creating new report', {
@@ -191,7 +188,7 @@ export class ReportService {
       const priority = this.calculateReportPriority(dto.reason);
 
       // 신고 생성
-      const reportData: any = {
+      const reportData: Partial<ReportEntity> = {
         reporterId,
         targetType: dto.targetType,
         targetId: dto.targetId,
@@ -242,7 +239,7 @@ export class ReportService {
     reportId: string,
     reviewerId: string,
     dto: ReviewReportDto,
-    transactionManager?: EntityManager
+    _transactionManager?: EntityManager
   ): Promise<void> {
     try {
       this.logger.log('Reviewing report', {
@@ -265,7 +262,11 @@ export class ReportService {
       await this.reportRepo.updateReport(reportId, { status: dto.status });
 
       // 검토 정보 저장
-      const reviewData: any = {
+      const reviewData: {
+        reviewerId: string;
+        reviewedAt: Date;
+        reviewComment?: string;
+      } = {
         reviewerId,
         reviewedAt: new Date(),
       };
@@ -278,7 +279,13 @@ export class ReportService {
 
       // 조치 정보가 있다면 저장
       if (dto.actions) {
-        const actionData: any = {
+        const actionData: {
+          actionType: ReportActionType;
+          executedBy: string;
+          executionStatus: 'pending' | 'executed' | 'failed';
+          duration?: number;
+          reason?: string;
+        } = {
           actionType: (dto.actions.actionType as ReportActionType) || ReportActionType.NONE,
           executedBy: reviewerId,
           executionStatus: 'pending',
@@ -497,7 +504,7 @@ export class ReportService {
         this.getTargetInfo(report.targetType, report.targetId),
       ]);
 
-      const result: any = {
+      const result: ReportDetailDto = {
         id: report.id,
         reporterId: report.reporterId,
         targetType: report.targetType,
@@ -511,41 +518,49 @@ export class ReportService {
 
       // Handle optional properties conditionally
       if (report.description !== undefined) {
-        result.description = report.description;
+        result.description = report.description || '';
       }
 
       if (evidence) {
-        const evidenceData: any = {};
-        if (evidence.screenshots !== undefined) {
+        const evidenceData: {
+          screenshots?: string[];
+          urls?: string[];
+          additionalInfo?: Record<string, unknown>;
+        } = {};
+        if (evidence.screenshots !== undefined && evidence.screenshots !== null) {
           evidenceData.screenshots = evidence.screenshots;
         }
-        if (evidence.urls !== undefined) {
+        if (evidence.urls !== undefined && evidence.urls !== null) {
           evidenceData.urls = evidence.urls;
         }
-        if (evidence.additionalInfo !== undefined) {
+        if (evidence.additionalInfo !== undefined && evidence.additionalInfo !== null) {
           evidenceData.additionalInfo = evidence.additionalInfo;
         }
         result.evidence = evidenceData;
       }
 
       if (review?.reviewerId !== undefined) {
-        result.reviewerId = review.reviewerId;
+        result.reviewerId = review.reviewerId || '';
       }
       if (review?.reviewedAt !== undefined) {
-        result.reviewedAt = review.reviewedAt;
+        result.reviewedAt = review.reviewedAt || new Date();
       }
       if (review?.reviewComment !== undefined) {
-        result.reviewComment = review.reviewComment;
+        result.reviewComment = review.reviewComment || '';
       }
 
       if (action) {
-        const actionData: any = {
+        const actionData: {
+          actionType: ReportActionType;
+          duration?: number;
+          reason?: string;
+        } = {
           actionType: action.actionType as ReportActionType,
         };
-        if (action.duration !== undefined) {
+        if (action.duration !== undefined && action.duration !== null) {
           actionData.duration = action.duration;
         }
-        if (action.reason !== undefined) {
+        if (action.reason !== undefined && action.reason !== null) {
           actionData.reason = action.reason;
         }
         result.actions = actionData;
@@ -566,7 +581,7 @@ export class ReportService {
       });
 
       // 최소한의 정보만 반환
-      const basicDetail: any = {
+      const basicDetail: ReportDetailDto = {
         id: report.id,
         reporterId: report.reporterId,
         targetType: report.targetType,
@@ -579,7 +594,7 @@ export class ReportService {
       };
 
       if (report.description !== undefined) {
-        basicDetail.description = report.description;
+        basicDetail.description = report.description || '';
       }
 
       return basicDetail;

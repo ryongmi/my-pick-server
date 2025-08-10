@@ -1,9 +1,9 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
 
-import { EntityManager, UpdateResult, In, LessThan } from 'typeorm';
+import { EntityManager, In, LessThan } from 'typeorm';
 
 import { ContentSyncRepository, ContentSyncMetadataRepository } from '../repositories/index.js';
-import { ContentSyncEntity } from '../entities/content-sync.entity.js';
+import { ContentSyncEntity, ContentSyncMetadataEntity } from '../entities/index.js';
 import { ContentException } from '../exceptions/content.exception.js';
 
 @Injectable()
@@ -92,7 +92,7 @@ export class ContentSyncService {
       syncError?: string;
       incrementRetryCount?: boolean;
       nextSyncAt?: Date;
-      syncMetadata?: any;
+      syncMetadata?: Record<string, unknown>;
     },
     transactionManager?: EntityManager
   ): Promise<void> {
@@ -212,8 +212,8 @@ export class ContentSyncService {
 
       // 비인증 데이터 배치 삭제
       if (expiredNonAuthorized.length > 0) {
-        const contentIds = expiredNonAuthorized.map((sync) => sync.contentId);
-        // TODO: ContentService.deleteContent() 호출하여 실제 콘텐츠도 삭제
+        const _contentIds = expiredNonAuthorized.map((sync) => sync.contentId);
+        // TODO: ContentService.deleteContent() 호출하여 실제 콘텐츠도 삭제 (현재는 _contentIds 사용)
 
         const syncContentIds = expiredNonAuthorized.map((sync) => sync.contentId);
         const deleteResult = await this.contentSyncRepo.delete(syncContentIds);
@@ -378,7 +378,7 @@ export class ContentSyncService {
     }
   }
 
-  async getSyncMetadata(contentId: string): Promise<any> {
+  async getSyncMetadata(contentId: string): Promise<ContentSyncMetadataEntity | null> {
     try {
       return await this.syncMetadataRepo.findByContentId(contentId);
     } catch (error: unknown) {

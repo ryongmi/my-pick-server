@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 import { Type, Transform } from 'class-transformer';
-import { IsOptional, IsString, IsBoolean, IsArray, IsInt, Min, Max, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsBoolean, IsArray, IsInt, Min, IsEnum } from 'class-validator';
 
 import { LimitType, SortOrderType } from '@krgeobuk/core/enum';
 

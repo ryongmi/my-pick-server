@@ -1,4 +1,4 @@
-import { Exclude, Expose, Type } from 'class-transformer';
+import { Expose, Type } from 'class-transformer';
 
 import { ContentType } from '../enums/index.js';
 
@@ -53,7 +53,7 @@ export class ContentSearchResultDto {
   title!: string;
 
   @Expose()
-  description?: string | undefined;
+  description?: string | null;
 
   @Expose()
   thumbnail!: string;
@@ -68,7 +68,7 @@ export class ContentSearchResultDto {
   platformId!: string;
 
   @Expose()
-  duration?: number | undefined;
+  duration?: number | null;
 
   @Expose()
   publishedAt!: Date;
@@ -87,13 +87,13 @@ export class ContentSearchResultDto {
   // ==================== 메타데이터 필드 (JSON에서 개별 컬럼으로 분리) ====================
 
   @Expose()
-  language?: string;
+  language?: string | null;
 
   @Expose()
   isLive!: boolean;
 
   @Expose()
-  quality?: 'sd' | 'hd' | '4k';
+  quality?: 'sd' | 'hd' | '4k' | null;
 
   @Expose()
   ageRestriction!: boolean;

@@ -4,7 +4,7 @@ import { EntityManager } from 'typeorm';
 
 import { PlatformApplicationDataRepository } from '../repositories/index.js';
 import { PlatformApplicationDataEntity } from '../entities/index.js';
-import { PlatformType } from '../enums/index.js';
+import { PlatformType, VerificationProofType } from '../enums/index.js';
 import { PlatformApplicationException } from '../exceptions/index.js';
 
 @Injectable()
@@ -60,14 +60,14 @@ export class PlatformApplicationDataService {
       displayName: string;
       description?: string;
       followerCount?: number;
-      verificationProofType: string;
+      verificationProofType: VerificationProofType;
       verificationProofUrl: string;
       verificationProofDescription: string;
     },
     transactionManager?: EntityManager
   ): Promise<void> {
     try {
-      const data: any = {
+      const data: Partial<PlatformApplicationDataEntity> = {
         applicationId,
         type: platformData.type,
         platformId: platformData.platformId,
@@ -117,14 +117,14 @@ export class PlatformApplicationDataService {
       displayName: string;
       description: string;
       followerCount: number;
-      verificationProofType: string;
+      verificationProofType: VerificationProofType;
       verificationProofUrl: string;
       verificationProofDescription: string;
     }>,
-    transactionManager?: EntityManager
+    _transactionManager?: EntityManager
   ): Promise<void> {
     try {
-      const updateData: any = {};
+      const updateData: Partial<PlatformApplicationDataEntity> = {};
 
       if (platformData.type !== undefined) {
         updateData.type = platformData.type;

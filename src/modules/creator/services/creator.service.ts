@@ -7,7 +7,7 @@ import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import { CacheService } from '@database/redis/index.js';
 
 import { CreatorRepository } from '../repositories/index.js';
-import { CreatorEntity, CreatorPlatformEntity, ConsentType } from '../entities/index.js';
+import { CreatorEntity, ConsentType } from '../entities/index.js';
 import { CreatorException } from '../exceptions/index.js';
 import {
   CreatorSearchQueryDto,

@@ -7,7 +7,7 @@ import { CreatorConsentDto } from './creator-consent.dto.js';
 import { CreatorPlatformStatsDto } from './creator-platform-stats.dto.js';
 import { CreatorCategoryStatsDto } from './creator-category-stats.dto.js';
 
-class DetailedPlatformStatsDto {
+export class DetailedPlatformStatsDto {
   @ApiProperty({
     description: '총 팔로워 수',
     example: 111000000,

@@ -6,7 +6,6 @@ import {
   Delete,
   Body,
   Param,
-  Query,
   UseGuards,
   ParseUUIDPipe,
   ForbiddenException,
@@ -36,14 +35,13 @@ interface UserInfo {
 }
 
 // 임시 데코레이터
-const CurrentUser = () => (target: unknown, propertyKey: string, parameterIndex: number) => {};
+const CurrentUser = () => (_target: unknown, _propertyKey: string, _parameterIndex: number): void => {};
 
 import { PlatformApplicationService } from '../services/index.js';
 import {
   CreatePlatformApplicationDto,
   UpdatePlatformApplicationDto,
   ApplicationDetailDto,
-  PlatformApplicationSearchQueryDto,
 } from '../dto/index.js';
 
 @SwaggerApiTags({ tags: ['platform-applications'] })

@@ -3,18 +3,16 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { ContentService } from '@modules/content/services/index.js';
 import { CreateContentDto } from '@modules/content/dto/index.js';
-import { ContentEntity } from '@modules/content/entities/index.js';
+import { ContentType } from '@modules/content/enums/index.js';
 import { VideoSyncStatus, PlatformType, SyncStatus } from '@common/enums/index.js';
 import {
   CreatorService,
-  CreatorEntity,
   CreatorPlatformEntity,
   CreatorPlatformService,
   CreatorPlatformSyncService,
   CreatorConsentService,
   ConsentType,
 } from '@modules/creator/index.js';
-import { ContentType } from '@modules/content/enums/index.js';
 
 import { ExternalApiException } from '../exceptions/index.js';
 
@@ -558,7 +556,7 @@ export class ExternalApiSchedulerService {
             const existingContent = await this.contentService.findByPlatformId(video.id, 'youtube');
 
             if (!existingContent) {
-              const creator = await this.creatorService.findById(platform.creatorId);
+              const _creator = await this.creatorService.findById(platform.creatorId);
               const hasConsent = await this.creatorConsentService.hasConsent(
                 platform.creatorId,
                 ConsentType.DATA_COLLECTION
@@ -569,7 +567,7 @@ export class ExternalApiSchedulerService {
                 ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
                 : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-              const createDto: any = {
+              const createDto: CreateContentDto = {
                 type: ContentType.YOUTUBE_VIDEO,
                 title: video.title,
                 description: video.description || '',

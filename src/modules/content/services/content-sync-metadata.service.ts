@@ -102,7 +102,7 @@ export class ContentSyncMetadataService {
 
       const isQuotaExceeded = this.isQuotaExceeded(metadata.quotaUsed || 0);
 
-      const result: any = {
+      const result: QuotaAnalysis = {
         contentId,
         totalApiCalls: metadata.apiCallCount || 0,
         totalQuotaUsed: metadata.quotaUsed || 0,

@@ -63,14 +63,14 @@ export class PlatformDataDto {
     example: 'Gaming content creator specializing in Minecraft and entertainment',
   })
   @Expose()
-  description?: string;
+  description?: string | null;
 
   @ApiPropertyOptional({
     description: '현재 팔로워 수',
     example: 150000000,
   })
   @Expose()
-  followerCount?: number;
+  followerCount?: number | null;
 
   @ApiProperty({
     description: '인증 증명 정보',

@@ -117,7 +117,14 @@ export class ContentTagService {
         .filter((tag) => tag.length > 0)
         .map((tag) => {
           const originalTag = tags.find((t) => t.tag.toLowerCase().trim() === tag);
-          const tagData: any = {
+          const tagData: {
+            contentId: string;
+            tag: string;
+            source: 'platform' | 'ai' | 'manual';
+            relevanceScore: number;
+            usageCount: number;
+            addedBy?: string;
+          } = {
             contentId,
             tag: originalTag?.tag || tag,
             source: originalTag?.source || ('platform' as const),

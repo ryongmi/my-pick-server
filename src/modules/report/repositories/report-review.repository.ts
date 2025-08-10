@@ -46,7 +46,11 @@ export class ReportReviewRepository extends Repository<ReportReviewEntity> {
       reviewComment: string;
     }>
   ): Promise<void> {
-    const updateData: any = {};
+    const updateData: Partial<{
+      reviewerId: string;
+      reviewedAt: Date;
+      reviewComment: string;
+    }> = {};
 
     if (reviewData.reviewerId !== undefined) {
       updateData.reviewerId = reviewData.reviewerId;

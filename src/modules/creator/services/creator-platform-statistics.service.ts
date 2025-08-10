@@ -157,7 +157,16 @@ export class CreatorPlatformStatisticsService {
       }
     >
   > {
-    const result: Record<string, any> = {};
+    const result: Record<string, {
+      totalFollowers: number;
+      totalContent: number;
+      totalViews: number;
+      totalLikes: number;
+      totalComments: number;
+      totalShares: number;
+      averageEngagementRate: number;
+      activePlatformCount: number;
+    }> = {};
 
     // 각 크리에이터의 통합 통계를 개별적으로 계산
     for (const creatorId of creatorIds) {

@@ -1,8 +1,5 @@
 import { Controller, Get, Param, UseGuards, HttpCode, ParseUUIDPipe } from '@nestjs/common';
 
-import { plainToInstance } from 'class-transformer';
-
-import { Serialize } from '@krgeobuk/core/decorators';
 import {
   SwaggerApiTags,
   SwaggerApiOperation,
@@ -56,7 +53,7 @@ export class CreatorSubscriptionController {
   })
   async getCreatorSubscribers(
     @Param('creatorId', ParseUUIDPipe) creatorId: string,
-    @CurrentJwt() jwt: JwtPayload
+    @CurrentJwt() _jwt: JwtPayload
   ): Promise<{ creatorId: string; userIds: string[]; totalCount: number }> {
     // Creator 존재 확인
     await this.creatorService.findByIdOrFail(creatorId);
@@ -93,7 +90,7 @@ export class CreatorSubscriptionController {
   })
   async getSubscriberCount(
     @Param('creatorId', ParseUUIDPipe) creatorId: string,
-    @CurrentJwt() jwt: JwtPayload
+    @CurrentJwt() _jwt: JwtPayload
   ): Promise<{ creatorId: string; subscriberCount: number }> {
     // Creator 존재 확인
     await this.creatorService.findByIdOrFail(creatorId);
@@ -130,7 +127,7 @@ export class CreatorSubscriptionController {
   })
   async getSubscriptionStats(
     @Param('creatorId', ParseUUIDPipe) creatorId: string,
-    @CurrentJwt() jwt: JwtPayload
+    @CurrentJwt() _jwt: JwtPayload
   ): Promise<{
     creatorId: string;
     subscriberCount: number;

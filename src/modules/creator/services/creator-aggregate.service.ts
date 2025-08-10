@@ -13,6 +13,7 @@ import {
   CreatorSearchQueryDto,
   CreatorSearchResultDto,
   CreatorDetailDto,
+  DetailedPlatformStatsDto,
 } from '../dto/index.js';
 
 import { CreatorService } from './creator.service.js';
@@ -96,7 +97,7 @@ export class CreatorAggregateService {
       this.logger.debug('Creator detail fetched and cached', {
         creatorId,
         name: creator.name,
-        platformCount: platformStats.platformCount,
+        platformCount: platformStats?.platformCount || 0,
       });
 
       return detailDto;
@@ -163,7 +164,7 @@ export class CreatorAggregateService {
 
   private buildCreatorDetail(
     creator: CreatorEntity,
-    platformStats: any
+    platformStats: DetailedPlatformStatsDto
   ): CreatorDetailDto {
     const result: CreatorDetailDto = {
       id: creator.id,
@@ -201,7 +202,7 @@ export class CreatorAggregateService {
     return result;
   }
 
-  private async buildDetailedPlatformStats(creatorId: string): Promise<any> {
+  private async buildDetailedPlatformStats(creatorId: string): Promise<DetailedPlatformStatsDto> {
     // 플랫폼 통계 서비스들을 활용하여 상세 통계 구성
     const platformStatsRecord = await this.creatorPlatformStatisticsService.groupPlatformStatsByCreatorId([creatorId]);
     const platformStats = platformStatsRecord[creatorId];

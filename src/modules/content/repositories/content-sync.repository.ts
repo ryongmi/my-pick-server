@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { DataSource, LessThan, MoreThan, In } from 'typeorm';
+import { DataSource, LessThan } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
 import { LimitType, SortOrderType } from '@krgeobuk/core/enum';
@@ -122,7 +122,11 @@ export class ContentSyncRepository extends BaseRepository<ContentSyncEntity> {
   }
 
   async findPendingSync(limit?: number): Promise<ContentSyncEntity[]> {
-    const queryOptions: any = {
+    const queryOptions: {
+      where: { syncStatus: 'pending' };
+      order: { nextSyncAt: 'ASC' };
+      take?: number;
+    } = {
       where: { syncStatus: 'pending' },
       order: { nextSyncAt: 'ASC' },
     };

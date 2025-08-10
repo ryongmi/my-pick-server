@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { DataSource, Repository, FindManyOptions, Between, MoreThan } from 'typeorm';
+import { DataSource, Repository, Between, MoreThan } from 'typeorm';
 
 import { ReportEntity } from '../entities/index.js';
 import { ReportStatus, ReportTargetType, ReportReason } from '../enums/index.js';
@@ -33,7 +33,11 @@ export class ReportRepository extends Repository<ReportEntity> {
   // ==================== 검색 및 필터링 메서드 ====================
 
   async findByReporter(reporterId: string, limit?: number): Promise<ReportEntity[]> {
-    const findOptions: any = {
+    const findOptions: {
+      where: { reporterId: string };
+      order: { createdAt: 'DESC' };
+      take?: number;
+    } = {
       where: { reporterId },
       order: { createdAt: 'DESC' },
     };
@@ -53,7 +57,11 @@ export class ReportRepository extends Repository<ReportEntity> {
   }
 
   async findByStatus(status: ReportStatus, limit?: number): Promise<ReportEntity[]> {
-    const findOptions: any = {
+    const findOptions: {
+      where: { status: ReportStatus };
+      order: { createdAt: 'ASC' };
+      take?: number;
+    } = {
       where: { status },
       order: { createdAt: 'ASC' }, // 오래된 신고부터 처리
     };
@@ -66,7 +74,11 @@ export class ReportRepository extends Repository<ReportEntity> {
   }
 
   async findPendingReports(limit?: number): Promise<ReportEntity[]> {
-    const findOptions: any = {
+    const findOptions: {
+      where: { status: ReportStatus };
+      order: { priority: 'ASC'; createdAt: 'ASC' };
+      take?: number;
+    } = {
       where: { status: ReportStatus.PENDING },
       order: { priority: 'ASC', createdAt: 'ASC' }, // 우선순위, 생성시간 순
     };

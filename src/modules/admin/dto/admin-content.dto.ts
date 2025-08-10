@@ -1,4 +1,4 @@
-import { Exclude, Expose, Type } from 'class-transformer';
+import { Expose } from 'class-transformer';
 import { IsOptional, IsEnum, IsString, IsNumber, Min } from 'class-validator';
 
 import { ContentType } from '../../content/enums/index.js';
