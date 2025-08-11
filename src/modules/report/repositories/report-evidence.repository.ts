@@ -46,23 +46,22 @@ export class ReportEvidenceRepository extends Repository<ReportEvidenceEntity> {
       additionalInfo: Record<string, unknown> | null;
     }>
   ): Promise<void> {
-    const updateData: {
-      screenshots?: string[];
-      urls?: string[];  
-      additionalInfo?: Record<string, unknown> | null;
-    } = {};
+    // exactOptionalPropertyTypes로 인한 타입 문제 해결을 위해 직접 update 호출
+    const updateFields: Record<string, unknown> = {};
 
     if (evidenceData.screenshots !== undefined) {
-      updateData.screenshots = evidenceData.screenshots;
+      updateFields.screenshots = evidenceData.screenshots;
     }
     if (evidenceData.urls !== undefined) {
-      updateData.urls = evidenceData.urls;
+      updateFields.urls = evidenceData.urls;
     }
     if (evidenceData.additionalInfo !== undefined) {
-      updateData.additionalInfo = evidenceData.additionalInfo;
+      updateFields.additionalInfo = evidenceData.additionalInfo;
     }
 
-    await this.update({ reportId }, updateData);
+    if (Object.keys(updateFields).length > 0) {
+      await this.update({ reportId }, updateFields);
+    }
   }
 
   async deleteByReportId(reportId: string): Promise<void> {

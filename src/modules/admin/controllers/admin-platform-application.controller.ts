@@ -25,7 +25,11 @@ import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
 
-import { PlatformApplicationService } from '../../platform-application/services/index.js';
+import { 
+  PlatformApplicationService,
+  PlatformApplicationStatisticsService,
+  PlatformApplicationReviewService,
+} from '../../platform-application/services/index.js';
 import {
   ApplicationDetailDto,
   ApproveApplicationDto,
@@ -43,7 +47,11 @@ import { PlatformApplicationException } from '../../platform-application/excepti
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
 @RequireRole('superAdmin')
 export class AdminPlatformApplicationController {
-  constructor(private readonly platformApplicationService: PlatformApplicationService) {}
+  constructor(
+    private readonly platformApplicationService: PlatformApplicationService,
+    private readonly statisticsService: PlatformApplicationStatisticsService,
+    private readonly reviewService: PlatformApplicationReviewService,
+  ) {}
 
   @Get()
   @SwaggerApiOperation({
@@ -82,7 +90,7 @@ export class AdminPlatformApplicationController {
   @RequirePermission('platform-application:read')
   @Serialize({ dto: ApplicationStatsDto })
   async getApplicationStats(): Promise<ApplicationStatsDto> {
-    return await this.platformApplicationService.getApplicationStats();
+    return await this.statisticsService.getApplicationStats();
   }
 
   @Get('creator/:creatorId')
@@ -168,7 +176,7 @@ export class AdminPlatformApplicationController {
     @Body() dto: ApproveApplicationDto
     // @CurrentUser() admin: UserInfo
   ): Promise<void> {
-    await this.platformApplicationService.approveApplication(applicationId, dto, 'admin-user-id'); // TODO: CurrentUser 구현 후 실제 admin.id 사용
+    await this.reviewService.approveApplication(applicationId, dto, 'admin-user-id'); // TODO: CurrentUser 구현 후 실제 admin.id 사용
   }
 
   @Post(':id/reject')
@@ -188,7 +196,7 @@ export class AdminPlatformApplicationController {
     @Body() dto: RejectApplicationDto
     // @CurrentUser() admin: UserInfo
   ): Promise<void> {
-    await this.platformApplicationService.rejectApplication(applicationId, dto, 'admin-user-id'); // TODO: CurrentUser 구현 후 실제 admin.id 사용
+    await this.reviewService.rejectApplication(applicationId, dto, 'admin-user-id'); // TODO: CurrentUser 구현 후 실제 admin.id 사용
   }
 
   @Get('rejection-reasons')

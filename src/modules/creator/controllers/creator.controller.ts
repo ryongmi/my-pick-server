@@ -94,9 +94,13 @@ export class CreatorController {
     status: 200,
     description: '플랫폼 목록',
   })
-  async getCreatorPlatforms(@Param('id', ParseUUIDPipe) creatorId: string): Promise<CreatorPlatformEntity[]> {
+  async getCreatorPlatforms(
+    @Param('id', ParseUUIDPipe) creatorId: string
+  ): Promise<CreatorPlatformEntity[]> {
     return await this.platformService.findByCreatorId(creatorId);
   }
+
+  // ==================== 관리자 전용 기능은 /admin/creators 엔드포인트에서 제공됩니다 ====================
 
   // ==================== 향상된 통계 ====================
 

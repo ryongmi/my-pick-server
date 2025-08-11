@@ -20,132 +20,115 @@ export class AdminPlatformService {
   // ==================== ADMIN PLATFORM 관리 메서드 ====================
 
   async addPlatformToCreator(creatorId: string, dto: CreatePlatformDto): Promise<void> {
-    try {
-      // 1. Creator 존재 확인
-      const creator = await this.creatorService.findByIdOrFail(creatorId);
+    return await this.executeWithErrorHandling(
+      async () => {
+        // 1. Creator 존재 확인
+        const creator = await this.creatorService.findByIdOrFail(creatorId);
 
-      // 2. 중복 플랫폼 확인
-      const existingPlatform = await this.creatorPlatformRepo.findOne({
-        where: {
+        // 2. 중복 플랫폼 확인
+        const existingPlatform = await this.creatorPlatformRepo.findOne({
+          where: {
+            creatorId,
+            type: dto.type,
+            platformId: dto.platformId,
+          },
+        });
+
+        if (existingPlatform) {
+          this.logger.warn('Platform already exists for creator', {
+            creatorId,
+            platformType: dto.type,
+            platformId: dto.platformId,
+          });
+          throw CreatorException.platformAlreadyExists();
+        }
+
+        // 3. Platform 엔티티 생성 및 저장
+        const platform = new CreatorPlatformEntity();
+        Object.assign(platform, {
           creatorId,
           type: dto.type,
           platformId: dto.platformId,
-        },
-      });
-
-      if (existingPlatform) {
-        this.logger.warn('Platform already exists for creator', {
-          creatorId,
-          platformType: dto.type,
-          platformId: dto.platformId,
+          url: dto.url,
+          followerCount: 0,
+          contentCount: 0,
+          totalViews: 0,
+          isActive: true,
         });
-        throw CreatorException.platformAlreadyExists();
-      }
 
-      // 3. Platform 엔티티 생성 및 저장
-      const platform = new CreatorPlatformEntity();
-      Object.assign(platform, {
-        creatorId,
-        type: dto.type,
-        platformId: dto.platformId,
-        url: dto.url,
-        followerCount: 0,
-        contentCount: 0,
-        totalViews: 0,
-        isActive: true,
-      });
+        await this.creatorPlatformRepo.saveEntity(platform);
 
-      await this.creatorPlatformRepo.saveEntity(platform);
-
-      this.logger.log('Platform added to creator successfully via admin', {
-        creatorId,
-        platformId: platform.id,
-        platformType: dto.type,
-        creatorName: creator.name,
-      });
-    } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      this.logger.error('Add platform to creator failed via admin', {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        this.logger.log('Platform added to creator successfully via admin', {
+          creatorId,
+          platformId: platform.id,
+          platformType: dto.type,
+          creatorName: creator.name,
+        });
+      },
+      'Add platform to creator via admin',
+      {
         creatorId,
         platformType: dto.type,
         platformId: dto.platformId,
-      });
-
-      throw CreatorException.platformCreateError();
-    }
+      }
+    );
   }
 
   async updateCreatorPlatform(platformId: string, dto: UpdatePlatformDto): Promise<void> {
-    try {
-      // 1. Platform 존재 확인
-      const platform = await this.findByIdOrFail(platformId);
+    return await this.executeWithErrorHandling(
+      async () => {
+        // 1. Platform 존재 확인
+        const platform = await this.findByIdOrFail(platformId);
 
-      // 2. 업데이트 수행
-      Object.assign(platform, dto);
-      await this.creatorPlatformRepo.saveEntity(platform);
+        // 2. 업데이트 수행
+        Object.assign(platform, dto);
+        await this.creatorPlatformRepo.saveEntity(platform);
 
-      this.logger.log('Creator platform updated successfully via admin', {
+        this.logger.log('Creator platform updated successfully via admin', {
+          platformId,
+          creatorId: platform.creatorId,
+          updatedFields: Object.keys(dto),
+        });
+      },
+      'Update creator platform via admin',
+      {
         platformId,
-        creatorId: platform.creatorId,
         updatedFields: Object.keys(dto),
-      });
-    } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
       }
-
-      this.logger.error('Update creator platform failed via admin', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        platformId,
-        updatedFields: Object.keys(dto),
-      });
-
-      throw CreatorException.platformUpdateError();
-    }
+    );
   }
 
   async removeCreatorPlatform(platformId: string): Promise<void> {
-    try {
-      // 1. Platform 존재 확인
-      const platform = await this.findByIdOrFail(platformId);
+    return await this.executeWithErrorHandling(
+      async () => {
+        // 1. Platform 존재 확인
+        const platform = await this.findByIdOrFail(platformId);
 
-      // 2. 최소 1개 플랫폼 유지 검증
-      const creatorPlatforms = await this.creatorPlatformRepo.find({
-        where: { creatorId: platform.creatorId },
-      });
-      if (creatorPlatforms.length <= 1) {
-        this.logger.warn('Cannot remove last platform from creator', {
+        // 2. 최소 1개 플랫폼 유지 검증
+        const creatorPlatforms = await this.creatorPlatformRepo.find({
+          where: { creatorId: platform.creatorId },
+        });
+        if (creatorPlatforms.length <= 1) {
+          this.logger.warn('Cannot remove last platform from creator', {
+            platformId,
+            creatorId: platform.creatorId,
+            platformCount: creatorPlatforms.length,
+          });
+          throw new Error('Cannot remove last platform from creator');
+        }
+
+        // 3. 삭제 수행
+        await this.creatorPlatformRepo.delete(platformId);
+
+        this.logger.log('Creator platform removed successfully via admin', {
           platformId,
           creatorId: platform.creatorId,
-          platformCount: creatorPlatforms.length,
+          platformType: platform.type,
         });
-        throw new Error('Cannot remove last platform from creator');
-      }
-
-      // 3. 삭제 수행
-      await this.creatorPlatformRepo.delete(platformId);
-
-      this.logger.log('Creator platform removed successfully via admin', {
-        platformId,
-        creatorId: platform.creatorId,
-        platformType: platform.type,
-      });
-    } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      this.logger.error('Remove creator platform failed via admin', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        platformId,
-      });
-
-      throw CreatorException.platformDeleteError();
-    }
+      },
+      'Remove creator platform via admin',
+      { platformId }
+    );
   }
 
   /**
@@ -156,79 +139,114 @@ export class AdminPlatformService {
   }
 
   async syncPlatformData(platformId: string): Promise<void> {
-    try {
-      // 1. Platform 존재 확인
-      const platform = await this.findByIdOrFail(platformId);
+    return await this.executeWithErrorHandling(
+      async () => {
+        // 1. Platform 존재 확인
+        const platform = await this.findByIdOrFail(platformId);
 
-      // 2. 플랫폼별 외부 API 동기화
-      let syncData: {
-        followerCount?: number;
-        contentCount?: number;
-        totalViews?: number;
-        isActive?: boolean;
-      } = {};
-      let syncStatus = SyncStatus.ACTIVE;
+        // 2. 플랫폼별 외부 API 동기화
+        let syncData: {
+          followerCount?: number;
+          contentCount?: number;
+          totalViews?: number;
+          isActive?: boolean;
+        } = {};
+        let syncStatus = SyncStatus.ACTIVE;
 
-      try {
-        switch (platform.type) {
-          case PlatformType.YOUTUBE:
-            syncData = await this.syncYouTubePlatformData(platform);
-            break;
-          // case PlatformType.TWITTER:
-          //   syncData = await this.syncTwitterPlatformData(platform);
-          //   break;
-          default:
-            this.logger.warn('Unsupported platform type for sync', {
-              platformId,
-              platformType: platform.type,
-            });
-            // 지원하지 않는 플랫폼이어도 동기화 시간은 업데이트
-            syncData = {};
+        try {
+          switch (platform.type) {
+            case PlatformType.YOUTUBE:
+              syncData = await this.syncYouTubePlatformData(platform);
+              break;
+            // case PlatformType.TWITTER:
+            //   syncData = await this.syncTwitterPlatformData(platform);
+            //   break;
+            default:
+              this.logger.warn('Unsupported platform type for sync', {
+                platformId,
+                platformType: platform.type,
+              });
+              // 지원하지 않는 플랫폼이어도 동기화 시간은 업데이트
+              syncData = {};
+          }
+        } catch (syncError: unknown) {
+          this.logger.warn('External API sync failed, marking platform as error', {
+            platformId,
+            platformType: platform.type,
+            error: syncError instanceof Error ? syncError.message : 'Unknown sync error',
+          });
+          syncStatus = SyncStatus.ERROR;
         }
-      } catch (syncError: unknown) {
-        this.logger.warn('External API sync failed, marking platform as error', {
-          platformId,
-          platformType: platform.type,
-          error: syncError instanceof Error ? syncError.message : 'Unknown sync error',
+
+        // 3. 동기화된 데이터로 Platform 업데이트
+        Object.assign(platform, {
+          ...syncData,
+          lastSyncAt: new Date(),
+          syncStatus,
         });
-        syncStatus = SyncStatus.ERROR;
-      }
 
-      // 3. 동기화된 데이터로 Platform 업데이트
-      Object.assign(platform, {
-        ...syncData,
-        lastSyncAt: new Date(),
-        syncStatus,
-      });
+        await this.creatorPlatformRepo.saveEntity(platform);
 
-      await this.creatorPlatformRepo.saveEntity(platform);
+        this.logger.log('Platform data synchronized successfully via admin', {
+          platformId,
+          creatorId: platform.creatorId,
+          platformType: platform.type,
+          syncedAt: platform.lastSyncAt,
+          syncStatus,
+          followerCountUpdated: syncData.followerCount !== undefined,
+          contentCountUpdated: syncData.contentCount !== undefined,
+          totalViewsUpdated: syncData.totalViews !== undefined,
+          statusUpdated: syncData.isActive !== undefined,
+        });
+      },
+      'Sync platform data via admin',
+      { platformId }
+    );
+  }
 
-      this.logger.log('Platform data synchronized successfully via admin', {
-        platformId,
-        creatorId: platform.creatorId,
-        platformType: platform.type,
-        syncedAt: platform.lastSyncAt,
-        syncStatus,
-        followerCountUpdated: syncData.followerCount !== undefined,
-        contentCountUpdated: syncData.contentCount !== undefined,
-        totalViewsUpdated: syncData.totalViews !== undefined,
-        statusUpdated: syncData.isActive !== undefined,
-      });
+  // ==================== PRIVATE HELPER METHODS ====================
+
+  private async executeWithErrorHandling<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    context: Record<string, unknown> = {},
+    fallbackValue?: T
+  ): Promise<T> {
+    try {
+      return await operation();
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
       }
 
-      this.logger.error('Platform data sync failed via admin', {
+      this.logger.error(`${operationName} failed`, {
         error: error instanceof Error ? error.message : 'Unknown error',
-        platformId,
+        ...context,
       });
 
-      throw CreatorException.platformSyncError();
+      if (fallbackValue !== undefined) {
+        this.logger.warn(`Using fallback value for ${operationName}`, {
+          fallbackValue,
+          ...context,
+        });
+        return fallbackValue;
+      }
+
+      // Re-throw appropriate exception based on operation type
+      if (operationName.includes('Add') || operationName.includes('Create')) {
+        throw CreatorException.platformCreateError();
+      } else if (operationName.includes('Update')) {
+        throw CreatorException.platformUpdateError();
+      } else if (operationName.includes('Remove') || operationName.includes('Delete')) {
+        throw CreatorException.platformDeleteError();
+      } else if (operationName.includes('Sync')) {
+        throw CreatorException.platformSyncError();
+      }
+
+      // Default error
+      throw CreatorException.platformOperationError();
     }
   }
-
-  // ==================== PRIVATE HELPER METHODS ====================
 
   private async findByIdOrFail(platformId: string): Promise<CreatorPlatformEntity> {
     const platform = await this.creatorPlatformRepo.findOneById(platformId);

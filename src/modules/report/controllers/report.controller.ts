@@ -31,7 +31,7 @@ import { Serialize } from '@krgeobuk/core/decorators';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import type { JwtPayload } from '@krgeobuk/jwt/interfaces';
 
-import { ReportService } from '../services/index.js';
+import { ReportService, ReportReviewService, ReportStatisticsService } from '../services/index.js';
 import {
   CreateReportDto,
   ReportSearchQueryDto,
@@ -46,7 +46,11 @@ import {
 export class ReportController {
   private readonly logger = new Logger(ReportController.name);
 
-  constructor(private readonly reportService: ReportService) {}
+  constructor(
+    private readonly reportService: ReportService,
+    private readonly reportReviewService: ReportReviewService,
+    private readonly reportStatisticsService: ReportStatisticsService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -187,7 +191,7 @@ export class ReportController {
       newStatus: dto.status,
     });
 
-    await this.reportService.reviewReport(reportId, reviewerId, dto);
+    await this.reportReviewService.reviewReport(reportId, reviewerId, dto);
 
     this.logger.log('Report reviewed successfully', {
       reportId,
@@ -254,7 +258,7 @@ export class ReportController {
   }> {
     this.logger.debug('Fetching report statistics');
 
-    return await this.reportService.getReportStatistics();
+    return await this.reportStatisticsService.getReportStatistics();
   }
 
   @Post('batch/process')
@@ -275,7 +279,7 @@ export class ReportController {
   ): Promise<{ processed: number; failed: number }> {
     this.logger.debug('Starting batch report processing', { limit });
 
-    const result = await this.reportService.batchProcessPendingReports(limit);
+    const result = await this.reportReviewService.batchProcessPendingReports(limit);
 
     this.logger.log('Batch processing completed', result);
 

@@ -290,10 +290,10 @@ export class CreatorStatisticsService {
     try {
       this.logger.debug('Calculating growth rates', { creatorId });
 
-      // TODO: 실제 성장률 계산 로직 구현
-      // 1. 지난 달 통계 데이터 조회
+      // 성장률 계산 로직 (향후 구현 예정)
+      // 1. Repository에서 지난 달 통계 데이터 조회 필요
       // 2. 현재 통계와 비교하여 성장률 계산
-      // 3. 성장률 업데이트
+      // 3. CreatorStatisticsRepository.updateGrowthRates() 메서드 구현 필요
 
       // 임시로 기본값 설정
       const mockGrowthRates = {

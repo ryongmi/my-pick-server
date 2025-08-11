@@ -220,8 +220,8 @@ export class ContentSyncOrchestrationService {
     try {
       const content = await this.contentService.findByIdOrFail(contentId);
 
-      // 메타데이터 갱신 (lastSyncedAt는 별도 처리 필요)
-      // TODO: lastSyncedAt 필드는 ContentEntity 스키마에 추가하거나 별도 메서드로 처리
+      // 메타데이터 갱신 (lastSyncedAt는 ContentSyncService에서 별도 관리)
+      // lastSyncedAt는 ContentSyncEntity에서 관리되므로 여기서는 기본 메타데이터만 처리
 
       // 캐시 갱신
       await this.contentQueryService.refreshContentCache(contentId);

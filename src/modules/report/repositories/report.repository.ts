@@ -202,26 +202,30 @@ export class ReportRepository extends Repository<ReportEntity> {
   }
 
   async getTopReportedTargets(
-    targetType: ReportTargetType,
     limit = 10
   ): Promise<
     Array<{
+      targetType: ReportTargetType;
       targetId: string;
       count: number;
+      lastReportedAt: Date;
     }>
   > {
     const result = await this.createQueryBuilder('report')
-      .select('report.targetId', 'targetId')
+      .select('report.targetType', 'targetType')
+      .addSelect('report.targetId', 'targetId')
       .addSelect('COUNT(*)', 'count')
-      .where('report.targetType = :targetType', { targetType })
-      .groupBy('report.targetId')
+      .addSelect('MAX(report.createdAt)', 'lastReportedAt')
+      .groupBy('report.targetType, report.targetId')
       .orderBy('count', 'DESC')
       .limit(limit)
       .getRawMany();
 
     return result.map((item) => ({
+      targetType: item.targetType,
       targetId: item.targetId,
       count: parseInt(item.count, 10),
+      lastReportedAt: new Date(item.lastReportedAt),
     }));
   }
 
@@ -246,5 +250,215 @@ export class ReportRepository extends Repository<ReportEntity> {
       date: item.date,
       count: parseInt(item.count, 10),
     }));
+  }
+
+  // ==================== 고급 통계 메서드 ====================
+
+  async getReportStatsByPriority(): Promise<
+    Array<{
+      priority: number;
+      count: number;
+    }>
+  > {
+    const result = await this.createQueryBuilder('report')
+      .select('report.priority', 'priority')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('report.priority')
+      .orderBy('report.priority', 'ASC')
+      .getRawMany();
+
+    return result.map((item) => ({
+      priority: parseInt(item.priority, 10),
+      count: parseInt(item.count, 10),
+    }));
+  }
+
+  async getMonthlyReportTrends(
+    months = 12
+  ): Promise<
+    Array<{
+      month: string;
+      total: number;
+      resolved: number;
+      pending: number;
+    }>
+  > {
+    const result = await this.createQueryBuilder('report')
+      .select("DATE_FORMAT(report.createdAt, '%Y-%m')", 'month')
+      .addSelect('COUNT(*)', 'total')
+      .addSelect(
+        "SUM(CASE WHEN report.status = 'resolved' THEN 1 ELSE 0 END)",
+        'resolved'
+      )
+      .addSelect(
+        "SUM(CASE WHEN report.status = 'pending' THEN 1 ELSE 0 END)",
+        'pending'
+      )
+      .where('report.createdAt >= DATE_SUB(CURRENT_DATE, INTERVAL :months MONTH)', {
+        months,
+      })
+      .groupBy("DATE_FORMAT(report.createdAt, '%Y-%m')")
+      .orderBy('month', 'ASC')
+      .getRawMany();
+
+    return result.map((item) => ({
+      month: item.month,
+      total: parseInt(item.total, 10),
+      resolved: parseInt(item.resolved || '0', 10),
+      pending: parseInt(item.pending || '0', 10),
+    }));
+  }
+
+  async getTotalReportersCount(): Promise<number> {
+    const result = await this.createQueryBuilder('report')
+      .select('COUNT(DISTINCT report.reporterId)', 'count')
+      .getRawOne();
+
+    return parseInt(result.count, 10);
+  }
+
+  async getActiveReportersThisMonth(): Promise<number> {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const result = await this.createQueryBuilder('report')
+      .select('COUNT(DISTINCT report.reporterId)', 'count')
+      .where('report.createdAt >= :startOfMonth', { startOfMonth })
+      .getRawOne();
+
+    return parseInt(result.count, 10);
+  }
+
+  async getTopReporters(
+    limit = 10
+  ): Promise<
+    Array<{
+      reporterId: string;
+      reportCount: number;
+      lastReportAt: Date;
+    }>
+  > {
+    const result = await this.createQueryBuilder('report')
+      .select('report.reporterId', 'reporterId')
+      .addSelect('COUNT(*)', 'reportCount')
+      .addSelect('MAX(report.createdAt)', 'lastReportAt')
+      .groupBy('report.reporterId')
+      .orderBy('reportCount', 'DESC')
+      .limit(limit)
+      .getRawMany();
+
+    return result.map((item) => ({
+      reporterId: item.reporterId,
+      reportCount: parseInt(item.reportCount, 10),
+      lastReportAt: new Date(item.lastReportAt),
+    }));
+  }
+
+  async getAverageResolutionTime(): Promise<number> {
+    const result = await this.createQueryBuilder('report')
+      .leftJoin('report_review', 'review', 'review.reportId = report.id')
+      .select(
+        'AVG(TIMESTAMPDIFF(HOUR, report.createdAt, review.reviewedAt))',
+        'averageHours'
+      )
+      .where('report.status IN (:...statuses)', {
+        statuses: [ReportStatus.RESOLVED, ReportStatus.REJECTED],
+      })
+      .andWhere('review.reviewedAt IS NOT NULL')
+      .getRawOne();
+
+    return parseFloat(result.averageHours || '0');
+  }
+
+  async getMedianResolutionTime(): Promise<number> {
+    // 대부분의 데이터베이스에서 중앙값 계산은 복잡하므로 근사치 제공
+    const result = await this.createQueryBuilder('report')
+      .leftJoin('report_review', 'review', 'review.reportId = report.id')
+      .select(
+        'TIMESTAMPDIFF(HOUR, report.createdAt, review.reviewedAt)',
+        'resolutionHours'
+      )
+      .where('report.status IN (:...statuses)', {
+        statuses: [ReportStatus.RESOLVED, ReportStatus.REJECTED],
+      })
+      .andWhere('review.reviewedAt IS NOT NULL')
+      .orderBy('resolutionHours', 'ASC')
+      .getRawMany();
+
+    if (result.length === 0) return 0;
+
+    const values = result.map((r) => parseFloat(r.resolutionHours || '0'));
+    const middle = Math.floor(values.length / 2);
+
+    if (values.length % 2 === 0) {
+      return (values[middle - 1]! + values[middle]!) / 2;
+    } else {
+      return values[middle]!;
+    }
+  }
+
+  async getResolutionTimesByPriority(): Promise<
+    Array<{
+      priority: number;
+      averageHours: number;
+    }>
+  > {
+    const result = await this.createQueryBuilder('report')
+      .leftJoin('report_review', 'review', 'review.reportId = report.id')
+      .select('report.priority', 'priority')
+      .addSelect(
+        'AVG(TIMESTAMPDIFF(HOUR, report.createdAt, review.reviewedAt))',
+        'averageHours'
+      )
+      .where('report.status IN (:...statuses)', {
+        statuses: [ReportStatus.RESOLVED, ReportStatus.REJECTED],
+      })
+      .andWhere('review.reviewedAt IS NOT NULL')
+      .groupBy('report.priority')
+      .orderBy('report.priority', 'ASC')
+      .getRawMany();
+
+    return result.map((item) => ({
+      priority: parseInt(item.priority, 10),
+      averageHours: parseFloat(item.averageHours || '0'),
+    }));
+  }
+
+  // ==================== 성능 최적화된 배치 메서드 ====================
+
+  async getReportsWithEvidenceCount(): Promise<
+    Array<{
+      reportId: string;
+      hasEvidence: boolean;
+    }>
+  > {
+    const result = await this.createQueryBuilder('report')
+      .leftJoin('report_evidence', 'evidence', 'evidence.reportId = report.id')
+      .select('report.id', 'reportId')
+      .addSelect('CASE WHEN evidence.reportId IS NOT NULL THEN true ELSE false END', 'hasEvidence')
+      .getRawMany();
+
+    return result.map((item) => ({
+      reportId: item.reportId,
+      hasEvidence: item.hasEvidence === 1 || item.hasEvidence === true,
+    }));
+  }
+
+  async getBulkReportStatusCounts(reportIds: string[]): Promise<Record<string, ReportStatus>> {
+    if (reportIds.length === 0) return {};
+
+    const result = await this.createQueryBuilder('report')
+      .select('report.id', 'id')
+      .addSelect('report.status', 'status')
+      .where('report.id IN (:...reportIds)', { reportIds })
+      .getRawMany();
+
+    const statusMap: Record<string, ReportStatus> = {};
+    result.forEach((item) => {
+      statusMap[item.id] = item.status;
+    });
+
+    return statusMap;
   }
 }

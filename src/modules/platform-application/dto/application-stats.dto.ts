@@ -11,5 +11,17 @@ export class ApplicationStatsDto {
   rejected!: number;
 
   @Expose()
+  total!: number;
+
+  @Expose()
+  approvalRate!: number;
+
+  @Expose()
+  rejectionRate!: number;
+
+  @Expose()
+  avgProcessingDays!: number;
+
+  @Expose()
   totalByPlatform!: Record<string, number>;
 }

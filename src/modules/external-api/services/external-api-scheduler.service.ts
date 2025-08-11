@@ -1,7 +1,7 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
-import { ContentService } from '@modules/content/services/index.js';
+import { ContentService, ContentOrchestrationService, ContentSyncService } from '@modules/content/services/index.js';
 import { CreateContentDto } from '@modules/content/dto/index.js';
 import { ContentType } from '@modules/content/enums/index.js';
 import { VideoSyncStatus, PlatformType, SyncStatus } from '@common/enums/index.js';
@@ -10,6 +10,8 @@ import {
   CreatorPlatformEntity,
   CreatorPlatformService,
   CreatorPlatformSyncService,
+  CreatorSyncProcessorService,
+  CreatorSyncSchedulerService,
   CreatorConsentService,
   ConsentType,
 } from '@modules/creator/index.js';
@@ -32,8 +34,12 @@ export class ExternalApiSchedulerService {
     private readonly creatorService: CreatorService,
     private readonly creatorPlatformService: CreatorPlatformService,
     private readonly creatorPlatformSyncService: CreatorPlatformSyncService,
+    private readonly creatorSyncProcessorService: CreatorSyncProcessorService,
+    private readonly creatorSyncSchedulerService: CreatorSyncSchedulerService,
     private readonly creatorConsentService: CreatorConsentService,
     private readonly contentService: ContentService,
+    private readonly contentOrchestrationService: ContentOrchestrationService,
+    private readonly contentSyncService: ContentSyncService,
     private readonly quotaMonitorService: QuotaMonitorService
   ) {}
 
@@ -51,11 +57,9 @@ export class ExternalApiSchedulerService {
     try {
       this.logger.log('Starting YouTube content synchronization');
 
-      // TODO: CreatorPlatformService.findByType 메서드 구현 필요
-      // 활성 YouTube 플랫폼 조회 (임시로 빈 배열 반환)
-      // const allYoutubePlatforms = await this.creatorPlatformService.findByType(PlatformType.YOUTUBE, true);
-      // const youtubePlatforms = allYoutubePlatforms.filter(p => p.isActive);
-      const youtubePlatforms: CreatorPlatformEntity[] = [];
+      // 활성 YouTube 플랫폼 조회
+      const allYoutubePlatforms = await this.creatorPlatformService.findByType(PlatformType.YOUTUBE, true);
+      const youtubePlatforms = allYoutubePlatforms.filter(p => p.isActive);
 
       this.logger.debug('Found YouTube platforms to sync', {
         count: youtubePlatforms.length,
@@ -113,9 +117,11 @@ export class ExternalApiSchedulerService {
           totalErrors++;
 
           // 에러 상태로 업데이트
-          await this.creatorPlatformSyncService.failVideoSync(
+          await this.creatorSyncProcessorService.failVideoSync(
             platform.id,
-            error instanceof Error ? error.message : 'Unknown error'
+            {
+              errorMessage: error instanceof Error ? error.message : 'Unknown error'
+            }
           );
 
           // 플랫폼 상태도 에러로 업데이트
@@ -154,9 +160,8 @@ export class ExternalApiSchedulerService {
     try {
       this.logger.log('Starting daily expired content cleanup');
 
-      // TODO: ContentService.cleanupExpiredContent 메서드 구현 필요
-      // const result = await this.contentService.cleanupExpiredContent();
-      const result = { deletedCount: 0, authorizedDataCount: 0, nonAuthorizedDataCount: 0 };
+      // 만료된 콘텐츠 정리 (ContentSyncService 활용)
+      const result = await this.contentSyncService.cleanupExpiredContent();
 
       if (result.deletedCount > 0 || result.authorizedDataCount > 0) {
         this.logger.log('Expired content cleanup completed with authorization logic', {
@@ -168,15 +173,13 @@ export class ExternalApiSchedulerService {
         this.logger.debug('No expired content found during cleanup');
       }
 
-      // Rolling Window: 비동의 크리에이터 데이터 정리 (YouTube API 30일 정책)
-      // TODO: ContentService.batchCleanupNonConsentedData 메서드 구현 필요
-      // const rollingWindowResult = await this.contentService.batchCleanupNonConsentedData();
-      const rollingWindowResult = {
-        totalDeleted: 0,
-        processedCreators: 0,
-        totalRetained: 0,
-        errors: 0,
-      };
+      // Rolling Window: 비동의 크리에이터 데이터 정리 (YouTube API 30일 정책)  
+      // 비동의 크리에이터들의 ID를 조회해서 배치 정리
+      const nonConsentedCreatorIds = await this.getNonConsentedCreatorIds();
+      const rollingWindowResult = await this.contentOrchestrationService.batchCleanupOldContent(
+        nonConsentedCreatorIds, 
+        30 // 30일
+      );
 
       if (rollingWindowResult.totalDeleted > 0) {
         this.logger.log('Rolling window cleanup completed for non-consented creators', {
@@ -187,14 +190,13 @@ export class ExternalApiSchedulerService {
         });
       }
 
-      // 만료 예정 콘텐츠 통계 로깅
-      // TODO: ContentService.getExpiredContentStats 메서드 구현 필요
-      // const stats = await this.contentService.getExpiredContentStats();
+      // 만료 예정 콘텐츠 통계 로깅 (ContentSyncService 활용)
+      const syncStats = await this.contentSyncService.getSyncStatusStats();
       const stats = {
-        expiringSoon: 0,
-        totalActive: 0,
-        totalExpired: 0,
-        platformBreakdown: {},
+        expiringSoon: syncStats.totalExpired, // 만료된 콘텐츠 수
+        totalActive: syncStats.completed, // 완료된 동기화 수
+        totalExpired: syncStats.totalExpired,
+        platformBreakdown: {}, // 간단한 구현으로 빈 객체 유지
       };
       if (stats.expiringSoon > 0) {
         this.logger.warn('Content expiring soon detected', {
@@ -214,14 +216,12 @@ export class ExternalApiSchedulerService {
     try {
       this.logger.log('Starting rolling window cleanup for non-consented creators');
 
-      // TODO: ContentService.batchCleanupNonConsentedData 메서드 구현 필요
-      // const result = await this.contentService.batchCleanupNonConsentedData();
-      const result = {
-        totalDeleted: 0,
-        processedCreators: 0,
-        totalRetained: 0,
-        errors: 0,
-      };
+      // 비동의 크리에이터들의 오래된 데이터 배치 정리
+      const nonConsentedCreatorIds = await this.getNonConsentedCreatorIds();
+      const result = await this.contentOrchestrationService.batchCleanupOldContent(
+        nonConsentedCreatorIds,
+        30 // 30일
+      );
 
       this.logger.log('Rolling window cleanup completed', {
         processedCreators: result.processedCreators,
@@ -537,7 +537,7 @@ export class ExternalApiSchedulerService {
     let totalProcessed = 0;
 
     // 동기화 시작
-    await this.creatorPlatformSyncService.startVideoSync(platform.id);
+    await this.creatorSyncProcessorService.startVideoSync(platform.id);
 
     this.logger.debug('Starting full sync for platform', {
       platformId: platform.id,
@@ -609,7 +609,7 @@ export class ExternalApiSchedulerService {
                 likes: video.statistics.likeCount,
                 comments: video.statistics.commentCount,
               });
-              await this.contentService.refreshContentMetadata(existingContent.id);
+              await this.contentOrchestrationService.refreshContentMetadata(existingContent.id);
             }
 
             totalProcessed++;
@@ -625,10 +625,12 @@ export class ExternalApiSchedulerService {
         nextPageToken = result.nextPageToken;
 
         // 동기화 진행률 업데이트
-        await this.creatorPlatformSyncService.updateSyncProgress(
+        await this.creatorSyncProcessorService.updateSyncProgress(
           platform.id,
-          totalProcessed,
-          0 // failedCount는 별도 추적
+          {
+            syncedCount: totalProcessed,
+            failedCount: 0
+          }
         );
 
         // API 레이트 리미팅
@@ -638,10 +640,10 @@ export class ExternalApiSchedulerService {
       } while (nextPageToken);
 
       // 전체 동기화 완료
-      await this.creatorPlatformSyncService.completeVideoSync(platform.id, {
-        syncedVideoCount: syncedCount,
-        failedVideoCount: 0,
-        totalVideoCount: totalProcessed,
+      await this.creatorSyncProcessorService.completeVideoSync(platform.id, {
+        totalProcessed: syncedCount,
+        successCount: syncedCount,
+        failedCount: 0,
       });
 
       this.logger.debug('Full sync completed successfully', {
@@ -654,11 +656,15 @@ export class ExternalApiSchedulerService {
       return syncedCount;
     } catch (error: unknown) {
       // 동기화 실패 시 상태 업데이트
-      await this.creatorPlatformSyncService.failVideoSync(
+      await this.creatorSyncProcessorService.failVideoSync(
         platform.id,
-        error instanceof Error ? error.message : 'Unknown error',
-        syncedCount,
-        0
+        {
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          partialResults: {
+            syncedCount: syncedCount,
+            failedCount: 0
+          }
+        }
       );
       throw error;
     }
@@ -754,7 +760,7 @@ export class ExternalApiSchedulerService {
               likes: video.statistics.likeCount,
               comments: video.statistics.commentCount,
             });
-            await this.contentService.refreshContentMetadata(existingContent.id);
+            await this.contentOrchestrationService.refreshContentMetadata(existingContent.id);
           }
         } catch (error: unknown) {
           this.logger.warn('Failed to process video in incremental sync', {
@@ -767,10 +773,12 @@ export class ExternalApiSchedulerService {
 
       // 증분 동기화 진행률 업데이트
       if (syncEntity) {
-        await this.creatorPlatformSyncService.updateSyncProgress(
+        await this.creatorSyncProcessorService.updateSyncProgress(
           platform.id,
-          (syncEntity.syncedVideoCount || 0) + syncedCount,
-          0
+          {
+            syncedCount: (syncEntity.syncedVideoCount || 0) + syncedCount,
+            failedCount: 0
+          }
         );
       }
 
@@ -783,9 +791,11 @@ export class ExternalApiSchedulerService {
 
       return syncedCount;
     } catch (error: unknown) {
-      await this.creatorPlatformSyncService.failVideoSync(
+      await this.creatorSyncProcessorService.failVideoSync(
         platform.id,
-        error instanceof Error ? error.message : 'Unknown error'
+        {
+          errorMessage: error instanceof Error ? error.message : 'Unknown error'
+        }
       );
       throw error;
     }
@@ -891,7 +901,7 @@ export class ExternalApiSchedulerService {
             });
 
             // 동기화 시간 갱신 (Twitter API 정책 준수)
-            await this.contentService.refreshContentMetadata(existingContent.id);
+            await this.contentOrchestrationService.refreshContentMetadata(existingContent.id);
           }
         } catch (error: unknown) {
           this.logger.warn('Failed to sync tweet', {
@@ -957,5 +967,38 @@ export class ExternalApiSchedulerService {
 
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * 데이터 수집 동의하지 않은 크리에이터 ID 목록 조회
+   * 성능 최적화를 위해 우선 활성 플랫폼을 가진 크리에이터 중에서 확인
+   */
+  private async getNonConsentedCreatorIds(): Promise<string[]> {
+    try {
+      // 활성 플랫폼을 가진 크리에이터 ID들 조회
+      const activePlatforms = await this.creatorPlatformService.findByType(PlatformType.YOUTUBE, false); // 모든 YouTube 플랫폼
+      const creatorIds = [...new Set(activePlatforms.map(p => p.creatorId))]; // 중복 제거
+      
+      const nonConsentedCreatorIds: string[] = [];
+
+      // 각 크리에이터의 동의 상태 확인
+      for (const creatorId of creatorIds) {
+        const hasConsent = await this.creatorConsentService.hasConsent(
+          creatorId,
+          ConsentType.DATA_COLLECTION
+        );
+        
+        if (!hasConsent) {
+          nonConsentedCreatorIds.push(creatorId);
+        }
+      }
+
+      return nonConsentedCreatorIds;
+    } catch (error: unknown) {
+      this.logger.warn('Failed to get non-consented creator IDs', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return []; // 오류 시 빈 배열 반환
+    }
   }
 }

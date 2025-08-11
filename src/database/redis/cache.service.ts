@@ -15,6 +15,21 @@ export enum CacheKeyType {
   PLATFORM_STATS = 'platform_stats',
   TRENDING_CONTENT = 'trending_content',
   USER_SUBSCRIPTIONS = 'user_subscriptions',
+  USER_BOOKMARKS = 'user_bookmarks',
+  USER_LIKES = 'user_likes',
+  USER_CREATOR_SUBSCRIPTIONS = 'user_creator_subscriptions',
+  CREATOR_SUBSCRIBERS = 'creator_subscribers',
+  REPORT_STATISTICS = 'report_statistics',
+  REPORT_DISTRIBUTION = 'report_distribution',
+  REPORT_TRENDS = 'report_trends',
+  PLATFORM_APPLICATION_STATS = 'platform_application_stats',
+  PLATFORM_APPLICATION_DISTRIBUTION = 'platform_application_distribution',
+  PLATFORM_APPLICATION_TRENDS = 'platform_application_trends',
+  PLATFORM_APPLICATION_SEARCH = 'platform_application_search',
+  ADMIN_DASHBOARD_STATS = 'admin_dashboard_stats',
+  ADMIN_DASHBOARD_METRICS = 'admin_dashboard_metrics',
+  ADMIN_DASHBOARD_HEALTH = 'admin_dashboard_health',
+  ADMIN_DASHBOARD_OVERVIEW = 'admin_dashboard_overview',
 }
 
 // 캐시 TTL 설정 (초 단위)
@@ -184,6 +199,95 @@ export class CacheService {
     await this.delete(key);
   }
 
+  // ==================== 사용자 상호작용 목록 캐시 메서드 ====================
+
+  async getUserBookmarks(userId: string): Promise<string[] | null> {
+    const key = this.generateKey(CacheKeyType.USER_BOOKMARKS, userId);
+    return this.get(key);
+  }
+
+  async setUserBookmarks(userId: string, contentIds: string[]): Promise<void> {
+    const key = this.generateKey(CacheKeyType.USER_BOOKMARKS, userId);
+    await this.set(key, contentIds, CacheTTL.MEDIUM);
+  }
+
+  async deleteUserBookmarksCache(userId: string): Promise<void> {
+    const key = this.generateKey(CacheKeyType.USER_BOOKMARKS, userId);
+    await this.delete(key);
+  }
+
+  async getUserLikes(userId: string): Promise<string[] | null> {
+    const key = this.generateKey(CacheKeyType.USER_LIKES, userId);
+    return this.get(key);
+  }
+
+  async setUserLikes(userId: string, contentIds: string[]): Promise<void> {
+    const key = this.generateKey(CacheKeyType.USER_LIKES, userId);
+    await this.set(key, contentIds, CacheTTL.MEDIUM);
+  }
+
+  async deleteUserLikesCache(userId: string): Promise<void> {
+    const key = this.generateKey(CacheKeyType.USER_LIKES, userId);
+    await this.delete(key);
+  }
+
+  // ==================== 사용자 구독 관계 캐시 메서드 ====================
+
+  async getUserCreatorSubscriptions(userId: string): Promise<string[] | null> {
+    const key = this.generateKey(CacheKeyType.USER_CREATOR_SUBSCRIPTIONS, userId);
+    return this.get(key);
+  }
+
+  async setUserCreatorSubscriptions(userId: string, creatorIds: string[]): Promise<void> {
+    const key = this.generateKey(CacheKeyType.USER_CREATOR_SUBSCRIPTIONS, userId);
+    await this.set(key, creatorIds, CacheTTL.LONG); // 구독 관계는 변경 빈도 낮음
+  }
+
+  async deleteUserCreatorSubscriptionsCache(userId: string): Promise<void> {
+    const key = this.generateKey(CacheKeyType.USER_CREATOR_SUBSCRIPTIONS, userId);
+    await this.delete(key);
+  }
+
+  async getCreatorSubscribers(creatorId: string): Promise<string[] | null> {
+    const key = this.generateKey(CacheKeyType.CREATOR_SUBSCRIBERS, creatorId);
+    return this.get(key);
+  }
+
+  async setCreatorSubscribers(creatorId: string, userIds: string[]): Promise<void> {
+    const key = this.generateKey(CacheKeyType.CREATOR_SUBSCRIBERS, creatorId);
+    await this.set(key, userIds, CacheTTL.LONG); // 구독 관계는 변경 빈도 낮음
+  }
+
+  async deleteCreatorSubscribersCache(creatorId: string): Promise<void> {
+    const key = this.generateKey(CacheKeyType.CREATOR_SUBSCRIBERS, creatorId);
+    await this.delete(key);
+  }
+
+  // ==================== 배치 캐시 무효화 메서드 ====================
+
+  async invalidateUserInteractionCaches(userId: string): Promise<void> {
+    this.logger.debug('Invalidating user interaction caches', { userId });
+    
+    const deleteTasks = [
+      this.deleteUserInteractionCache(userId),
+      this.deleteUserBookmarksCache(userId),
+      this.deleteUserLikesCache(userId),
+    ];
+
+    await Promise.all(deleteTasks);
+  }
+
+  async invalidateUserSubscriptionCaches(userId: string, creatorId: string): Promise<void> {
+    this.logger.debug('Invalidating user subscription caches', { userId, creatorId });
+    
+    const deleteTasks = [
+      this.deleteUserCreatorSubscriptionsCache(userId),
+      this.deleteCreatorSubscribersCache(creatorId),
+    ];
+
+    await Promise.all(deleteTasks);
+  }
+
   // ==================== 배치 무효화 메서드 ====================
 
   async invalidateCreatorRelatedCaches(creatorId: string): Promise<void> {
@@ -202,6 +306,176 @@ export class CacheService {
     if (creatorId) {
       deleteTasks.push(this.deleteCreatorCache(creatorId));
     }
+
+    await Promise.all(deleteTasks);
+  }
+
+  async invalidateReportRelatedCaches(): Promise<void> {
+    this.logger.log('Invalidating report-related caches');
+    await this.invalidateReportStatisticsCaches();
+  }
+
+  async invalidatePlatformApplicationRelatedCaches(): Promise<void> {
+    this.logger.log('Invalidating platform application-related caches');
+    await this.invalidatePlatformApplicationCaches();
+  }
+
+  // ==================== 신고 통계 캐시 메서드 ====================
+
+  async getReportStatistics(): Promise<Record<string, unknown> | null> {
+    const key = this.generateKey(CacheKeyType.REPORT_STATISTICS, 'overall');
+    return this.get(key);
+  }
+
+  async setReportStatistics(statistics: Record<string, unknown>): Promise<void> {
+    const key = this.generateKey(CacheKeyType.REPORT_STATISTICS, 'overall');
+    await this.set(key, statistics, CacheTTL.MEDIUM); // 30분 캐시
+  }
+
+  async getReportDistribution(distributionType: string): Promise<Record<string, unknown> | null> {
+    const key = this.generateKey(CacheKeyType.REPORT_DISTRIBUTION, distributionType);
+    return this.get(key);
+  }
+
+  async setReportDistribution(distributionType: string, distribution: Record<string, unknown>): Promise<void> {
+    const key = this.generateKey(CacheKeyType.REPORT_DISTRIBUTION, distributionType);
+    await this.set(key, distribution, CacheTTL.LONG); // 1시간 캐시
+  }
+
+  async getReportTrends(period: string): Promise<Record<string, unknown> | null> {
+    const key = this.generateKey(CacheKeyType.REPORT_TRENDS, period);
+    return this.get(key);
+  }
+
+  async setReportTrends(period: string, trends: Record<string, unknown>): Promise<void> {
+    const key = this.generateKey(CacheKeyType.REPORT_TRENDS, period);
+    await this.set(key, trends, CacheTTL.MEDIUM); // 30분 캐시
+  }
+
+  async invalidateReportStatisticsCaches(): Promise<void> {
+    this.logger.debug('Invalidating report statistics caches');
+    
+    const deleteTasks = [
+      this.delete(this.generateKey(CacheKeyType.REPORT_STATISTICS, 'overall')),
+      this.delete(this.generateKey(CacheKeyType.REPORT_DISTRIBUTION, 'status')),
+      this.delete(this.generateKey(CacheKeyType.REPORT_DISTRIBUTION, 'targetType')),
+      this.delete(this.generateKey(CacheKeyType.REPORT_DISTRIBUTION, 'reason')),
+      this.delete(this.generateKey(CacheKeyType.REPORT_DISTRIBUTION, 'priority')),
+      this.delete(this.generateKey(CacheKeyType.REPORT_TRENDS, 'monthly')),
+      this.delete(this.generateKey(CacheKeyType.REPORT_TRENDS, 'daily')),
+    ];
+
+    await Promise.all(deleteTasks);
+  }
+
+  // ==================== 플랫폼 신청 캐시 메서드 ====================
+
+  async getPlatformApplicationStats(): Promise<Record<string, unknown> | null> {
+    const key = this.generateKey(CacheKeyType.PLATFORM_APPLICATION_STATS, 'overall');
+    return this.get(key);
+  }
+
+  async setPlatformApplicationStats(stats: Record<string, unknown>): Promise<void> {
+    const key = this.generateKey(CacheKeyType.PLATFORM_APPLICATION_STATS, 'overall');
+    await this.set(key, stats, CacheTTL.MEDIUM); // 30분 캐시
+  }
+
+  async getPlatformApplicationDistribution(distributionType: string): Promise<Record<string, unknown> | null> {
+    const key = this.generateKey(CacheKeyType.PLATFORM_APPLICATION_DISTRIBUTION, distributionType);
+    return this.get(key);
+  }
+
+  async setPlatformApplicationDistribution(distributionType: string, distribution: Record<string, unknown>): Promise<void> {
+    const key = this.generateKey(CacheKeyType.PLATFORM_APPLICATION_DISTRIBUTION, distributionType);
+    await this.set(key, distribution, CacheTTL.LONG); // 1시간 캐시
+  }
+
+  async getPlatformApplicationTrends(period: string): Promise<Record<string, unknown> | null> {
+    const key = this.generateKey(CacheKeyType.PLATFORM_APPLICATION_TRENDS, period);
+    return this.get(key);
+  }
+
+  async setPlatformApplicationTrends(period: string, trends: Record<string, unknown>): Promise<void> {
+    const key = this.generateKey(CacheKeyType.PLATFORM_APPLICATION_TRENDS, period);
+    await this.set(key, trends, CacheTTL.MEDIUM); // 30분 캐시
+  }
+
+  async getPlatformApplicationSearchResults(searchKey: string): Promise<Record<string, unknown> | null> {
+    const key = this.generateKey(CacheKeyType.PLATFORM_APPLICATION_SEARCH, searchKey);
+    return this.get(key);
+  }
+
+  async setPlatformApplicationSearchResults(searchKey: string, results: Record<string, unknown>): Promise<void> {
+    const key = this.generateKey(CacheKeyType.PLATFORM_APPLICATION_SEARCH, searchKey);
+    await this.set(key, results, CacheTTL.SHORT); // 5분 캐시
+  }
+
+  async invalidatePlatformApplicationCaches(): Promise<void> {
+    this.logger.debug('Invalidating platform application caches');
+    
+    const deleteTasks = [
+      this.delete(this.generateKey(CacheKeyType.PLATFORM_APPLICATION_STATS, 'overall')),
+      this.delete(this.generateKey(CacheKeyType.PLATFORM_APPLICATION_DISTRIBUTION, 'status')),
+      this.delete(this.generateKey(CacheKeyType.PLATFORM_APPLICATION_DISTRIBUTION, 'platformType')),
+      this.delete(this.generateKey(CacheKeyType.PLATFORM_APPLICATION_DISTRIBUTION, 'approval')),
+      this.delete(this.generateKey(CacheKeyType.PLATFORM_APPLICATION_TRENDS, 'monthly-12')),
+      this.delete(this.generateKey(CacheKeyType.PLATFORM_APPLICATION_TRENDS, 'monthly-6')),
+    ];
+
+    await Promise.all(deleteTasks);
+  }
+
+  // ==================== Admin Dashboard 캐시 메서드 ====================
+
+  async getAdminDashboardStats(): Promise<Record<string, unknown> | null> {
+    const key = this.generateKey(CacheKeyType.ADMIN_DASHBOARD_STATS, 'overall');
+    return this.get(key);
+  }
+
+  async setAdminDashboardStats(stats: Record<string, unknown>): Promise<void> {
+    const key = this.generateKey(CacheKeyType.ADMIN_DASHBOARD_STATS, 'overall');
+    await this.set(key, stats, CacheTTL.SHORT); // 5분 캐시 (대시보드 통계는 자주 업데이트)
+  }
+
+  async getAdminDashboardMetrics(): Promise<Record<string, unknown> | null> {
+    const key = this.generateKey(CacheKeyType.ADMIN_DASHBOARD_METRICS, 'overall');
+    return this.get(key);
+  }
+
+  async setAdminDashboardMetrics(metrics: Record<string, unknown>): Promise<void> {
+    const key = this.generateKey(CacheKeyType.ADMIN_DASHBOARD_METRICS, 'overall');
+    await this.set(key, metrics, CacheTTL.SHORT); // 5분 캐시
+  }
+
+  async getAdminDashboardHealth(): Promise<Record<string, unknown> | null> {
+    const key = this.generateKey(CacheKeyType.ADMIN_DASHBOARD_HEALTH, 'overall');
+    return this.get(key);
+  }
+
+  async setAdminDashboardHealth(health: Record<string, unknown>): Promise<void> {
+    const key = this.generateKey(CacheKeyType.ADMIN_DASHBOARD_HEALTH, 'overall');
+    await this.set(key, health, CacheTTL.SHORT / 5); // 1분 캐시 (헬스 체크는 빠른 업데이트 필요)
+  }
+
+  async getAdminDashboardOverview(): Promise<Record<string, unknown> | null> {
+    const key = this.generateKey(CacheKeyType.ADMIN_DASHBOARD_OVERVIEW, 'overall');
+    return this.get(key);
+  }
+
+  async setAdminDashboardOverview(overview: Record<string, unknown>): Promise<void> {
+    const key = this.generateKey(CacheKeyType.ADMIN_DASHBOARD_OVERVIEW, 'overall');
+    await this.set(key, overview, CacheTTL.SHORT); // 5분 캐시
+  }
+
+  async invalidateAdminDashboardCaches(): Promise<void> {
+    this.logger.debug('Invalidating admin dashboard caches');
+    
+    const deleteTasks = [
+      this.delete(this.generateKey(CacheKeyType.ADMIN_DASHBOARD_STATS, 'overall')),
+      this.delete(this.generateKey(CacheKeyType.ADMIN_DASHBOARD_METRICS, 'overall')),
+      this.delete(this.generateKey(CacheKeyType.ADMIN_DASHBOARD_HEALTH, 'overall')),
+      this.delete(this.generateKey(CacheKeyType.ADMIN_DASHBOARD_OVERVIEW, 'overall')),
+    ];
 
     await Promise.all(deleteTasks);
   }

@@ -15,7 +15,13 @@ import {
   CreatorApplicationSampleVideoRepository,
   CreatorApplicationReviewRepository,
 } from './repositories/index.js';
-import { CreatorApplicationService } from './services/index.js';
+import { 
+  CreatorApplicationService,
+  CreatorApplicationOrchestrationService,
+  CreatorApplicationStatisticsService,
+  CreatorApplicationRequirementService,
+  CreatorApplicationReviewService,
+} from './services/index.js';
 import { CreatorApplicationController } from './controllers/index.js';
 
 @Module({
@@ -30,14 +36,28 @@ import { CreatorApplicationController } from './controllers/index.js';
   ],
   controllers: [CreatorApplicationController],
   providers: [
+    // Repositories
     CreatorApplicationRepository,
     CreatorApplicationChannelInfoRepository,
     CreatorApplicationSampleVideoRepository,
     CreatorApplicationReviewRepository,
+    
+    // Services
     CreatorApplicationService,
+    CreatorApplicationOrchestrationService,
+    CreatorApplicationStatisticsService,
+    CreatorApplicationRequirementService,
+    CreatorApplicationReviewService,
   ],
   exports: [
+    // Services
     CreatorApplicationService,
+    CreatorApplicationOrchestrationService,
+    CreatorApplicationStatisticsService,
+    CreatorApplicationRequirementService,
+    CreatorApplicationReviewService,
+    
+    // Repositories  
     CreatorApplicationRepository,
     CreatorApplicationChannelInfoRepository,
     CreatorApplicationSampleVideoRepository,

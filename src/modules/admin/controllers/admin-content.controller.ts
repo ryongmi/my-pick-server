@@ -10,6 +10,8 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  HttpException,
+  Logger,
 } from '@nestjs/common';
 
 import { plainToInstance } from 'class-transformer';
@@ -21,7 +23,11 @@ import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorato
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import type { JwtPayload } from '@krgeobuk/jwt/interfaces';
 
-import { ContentService } from '../../content/services/index.js';
+import { 
+  ContentService,
+  ContentOrchestrationService,
+  ContentAdminStatisticsService,
+} from '../../content/services/index.js';
 import {
   AdminContentSearchQueryDto,
   AdminContentListItemDto,
@@ -35,16 +41,33 @@ import { AdminException } from '../exceptions/index.js';
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
 @RequireRole('superAdmin')
 export class AdminContentController {
-  constructor(private readonly contentService: ContentService) {}
+  private readonly logger = new Logger(AdminContentController.name);
+
+  constructor(
+    private readonly contentService: ContentService,
+    private readonly contentOrchestrationService: ContentOrchestrationService,
+    private readonly contentStatisticsService: ContentAdminStatisticsService,
+  ) {}
 
   @Get()
   @RequirePermission('content:read')
   async getContentList(
-    @Query() query: AdminContentSearchQueryDto
-    // @CurrentUser() admin: UserInfo,
+    @Query() query: AdminContentSearchQueryDto,
+    @CurrentJwt() jwt: JwtPayload
   ): Promise<PaginatedResult<AdminContentListItemDto>> {
     try {
-      // ContentService의 searchContent를 활용하되, 관리자용으로 변환
+      this.logger.debug('Admin content list request', {
+        adminId: jwt.id,
+        query: {
+          creatorId: query.creatorId,
+          type: query.type,
+          platform: query.platform,
+          page: query.page,
+          limit: query.limit,
+        },
+      });
+
+      // ContentOrchestrationService의 searchContent를 활용하되, 관리자용으로 변환
       const searchQuery = {
         creatorId: query.creatorId,
         type: query.type,
@@ -55,7 +78,7 @@ export class AdminContentController {
         sortOrder: query.sortOrder,
       };
 
-      const result = await this.contentService.searchContent(searchQuery);
+      const result = await this.contentOrchestrationService.searchContent(searchQuery);
 
       // 관리자용 DTO로 변환
       const adminItems = result.items.map((content) => {
@@ -77,9 +100,9 @@ export class AdminContentController {
               displayName: `Creator ${content.creatorId}`,
             },
             statistics: {
-              views: 0, // TODO: content statistics 조회
-              likes: 0,
-              comments: 0,
+              views: content.statistics?.views || 0,
+              likes: content.statistics?.likes || 0,
+              comments: content.statistics?.comments || 0,
             },
             flagCount: 0, // TODO: ReportService 구현 후 추가
             lastModeratedAt: undefined, // TODO: moderation 기능 구현 후 추가
@@ -91,30 +114,50 @@ export class AdminContentController {
         );
       });
 
+      this.logger.log('Admin content list fetched successfully', {
+        adminId: jwt.id,
+        totalItems: result.pageInfo.totalItems,
+        returnedItems: adminItems.length,
+      });
+
       return {
         items: adminItems,
-        pageInfo: {
-          page: result.pageInfo.page,
-          limit: result.pageInfo.limit,
-          totalItems: result.pageInfo.totalItems,
-          totalPages: result.pageInfo.totalPages,
-          hasPreviousPage: result.pageInfo.hasPreviousPage,
-          hasNextPage: result.pageInfo.hasNextPage,
-        },
-      } as PaginatedResult<AdminContentListItemDto>;
-    } catch (_error: unknown) {
+        pageInfo: result.pageInfo,
+      };
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      this.logger.error('Admin content list fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        adminId: jwt?.id,
+        query,
+      });
       throw AdminException.contentDataFetchError();
     }
   }
 
   @Get(':id')
-  // @UseGuards(AuthGuard)
   @RequirePermission('content:read')
   async getContentDetail(
-    @Param('id', ParseUUIDPipe) contentId: string
+    @Param('id', ParseUUIDPipe) contentId: string,
+    @CurrentJwt() jwt: JwtPayload
   ): Promise<AdminContentDetailDto> {
     try {
+      this.logger.debug('Admin content detail request', {
+        adminId: jwt.id,
+        contentId,
+      });
+
       const content = await this.contentService.getContentById(contentId);
+
+      this.logger.log('Admin content detail fetched successfully', {
+        adminId: jwt.id,
+        contentId,
+        contentType: content.type,
+        platform: content.platform,
+      });
 
       return plainToInstance(
         AdminContentDetailDto,
@@ -137,9 +180,9 @@ export class AdminContentController {
             displayName: `Creator ${content.creatorId}`,
           },
           statistics: {
-            views: 0, // TODO: content statistics 조회
-            likes: 0,
-            comments: 0,
+            views: content.statistics?.views || 0,
+            likes: content.statistics?.likes || 0,
+            comments: content.statistics?.comments || 0,
           },
           // metadata: content.metadata, // TODO: Add metadata field to ContentDetailDto
           flagCount: 0, // TODO: ReportService 구현 후 추가
@@ -150,52 +193,97 @@ export class AdminContentController {
           excludeExtraneousValues: true,
         }
       );
-    } catch (_error: unknown) {
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      this.logger.error('Admin content detail fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        adminId: jwt?.id,
+        contentId,
+      });
       throw AdminException.contentDataFetchError();
     }
   }
 
   @Put(':id/status')
   @HttpCode(HttpStatus.NO_CONTENT)
-  // @UseGuards(AuthGuard)
   @RequirePermission('content:write')
   async updateContentStatus(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @Body() _dto: UpdateContentStatusDto,
-    @CurrentJwt() { id: _id }: JwtPayload
+    @Body() dto: UpdateContentStatusDto,
+    @CurrentJwt() { id: adminId }: JwtPayload
   ): Promise<void> {
     try {
+      this.logger.log('Admin content status update request', {
+        adminId,
+        contentId,
+        newStatus: dto.status,
+        reason: dto.reason,
+      });
+
       // TODO: ContentService에 updateContentStatus 메서드 구현 필요
       // await this.contentService.updateContentStatus(
       //   contentId,
       //   dto.status,
-      //   id, // JWT에서 추출한 관리자 ID
+      //   adminId, // JWT에서 추출한 관리자 ID
       //   dto.reason,
       // );
 
       // 임시로 콘텐츠 존재 여부만 확인
       await this.contentService.findByIdOrFail(contentId);
-    } catch (_error: unknown) {
+
+      this.logger.log('Admin content status updated successfully', {
+        adminId,
+        contentId,
+        newStatus: dto.status,
+      });
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      this.logger.error('Admin content status update failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        adminId,
+        contentId,
+        newStatus: dto.status,
+      });
       throw AdminException.contentStatusUpdateError();
     }
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  // @UseGuards(AuthGuard)
   @RequirePermission('content:delete')
   async deleteContent(
-    @Param('id', ParseUUIDPipe) contentId: string
-    // @CurrentUser() admin: UserInfo,
+    @Param('id', ParseUUIDPipe) contentId: string,
+    @CurrentJwt() { id: adminId }: JwtPayload
   ): Promise<void> {
     try {
-      // TODO: ContentService에 deleteContent 메서드 구현 필요
-      // await this.contentService.deleteContent(contentId);
+      this.logger.log('Admin content deletion request', {
+        adminId,
+        contentId,
+      });
 
-      // 임시로 콘텐츠 존재 여부만 확인
-      await this.contentService.findByIdOrFail(contentId);
-    } catch (_error: unknown) {
-      throw AdminException.contentStatusUpdateError();
+      await this.contentService.deleteContent(contentId);
+
+      this.logger.log('Admin content deleted successfully', {
+        adminId,
+        contentId,
+      });
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      this.logger.error('Admin content deletion failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        adminId,
+        contentId,
+      });
+      throw AdminException.contentDeleteError();
     }
   }
 
@@ -260,24 +348,18 @@ export class AdminContentController {
     contentByStatus: Array<{ status: string; count: number }>;
   }> {
     try {
-      // TODO: ContentService에 통계 메서드 구현 필요
-      // const statusStats = await this.contentService.getContentStatusStatistics();
-
-      // 임시로 기본 값 반환
+      const stats = await this.contentStatisticsService.getContentStatistics();
+      
       return {
-        totalContent: 0,
-        activeContent: 0,
-        inactiveContent: 0,
-        flaggedContent: 0,
-        removedContent: 0,
-        contentByPlatform: [
-          { platform: 'youtube', count: 0 },
-          { platform: 'twitter', count: 0 },
-          { platform: 'instagram', count: 0 },
-        ],
+        totalContent: stats.totalContent,
+        activeContent: stats.totalContent - stats.ageRestrictedContent, // 임시 계산
+        inactiveContent: stats.ageRestrictedContent,
+        flaggedContent: 0, // TODO: 신고 시스템 구현 후 추가
+        removedContent: 0, // TODO: 삭제된 콘텐츠 추적 시스템 구현 후 추가
+        contentByPlatform: stats.contentByPlatform,
         contentByStatus: [
-          { status: 'active', count: 0 },
-          { status: 'inactive', count: 0 },
+          { status: 'active', count: stats.totalContent - stats.ageRestrictedContent },
+          { status: 'inactive', count: stats.ageRestrictedContent },
           { status: 'flagged', count: 0 },
           { status: 'removed', count: 0 },
         ],

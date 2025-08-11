@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 
+import { RedisModule } from '@database/redis/redis.module.js';
+
 import { CreatorModule } from '../creator/creator.module.js';
 import { UserSubscriptionModule } from '../user-subscription/user-subscription.module.js';
 import { PlatformApplicationModule } from '../platform-application/platform-application.module.js';
@@ -11,6 +13,9 @@ import { UserInteractionModule } from '../user-interaction/user-interaction.modu
 
 import {
   AdminDashboardService,
+  AdminDashboardStatsService,
+  AdminDashboardMetricsService,
+  AdminDashboardHealthService,
   AdminCreatorService,
   AdminPlatformService,
 } from './services/index.js';
@@ -32,6 +37,8 @@ import {
     CreatorApplicationModule,
     ReportModule,
     UserInteractionModule,
+    // 인프라 모듈
+    RedisModule,
   ],
   controllers: [
     AdminDashboardController,
@@ -39,7 +46,21 @@ import {
     AdminPlatformApplicationController,
     AdminContentController,
   ],
-  providers: [AdminDashboardService, AdminCreatorService, AdminPlatformService],
-  exports: [AdminDashboardService, AdminCreatorService, AdminPlatformService],
+  providers: [
+    AdminDashboardService,
+    AdminDashboardStatsService,
+    AdminDashboardMetricsService,
+    AdminDashboardHealthService,
+    AdminCreatorService,
+    AdminPlatformService,
+  ],
+  exports: [
+    AdminDashboardService,
+    AdminDashboardStatsService,
+    AdminDashboardMetricsService,
+    AdminDashboardHealthService,
+    AdminCreatorService,
+    AdminPlatformService,
+  ],
 })
 export class AdminModule {}

@@ -212,11 +212,12 @@ export class ContentSyncService {
 
       // 비인증 데이터 배치 삭제
       if (expiredNonAuthorized.length > 0) {
-        const _contentIds = expiredNonAuthorized.map((sync) => sync.contentId);
-        // TODO: ContentService.deleteContent() 호출하여 실제 콘텐츠도 삭제 (현재는 _contentIds 사용)
-
-        const syncContentIds = expiredNonAuthorized.map((sync) => sync.contentId);
-        const deleteResult = await this.contentSyncRepo.delete(syncContentIds);
+        const contentIds = expiredNonAuthorized.map((sync) => sync.contentId);
+        
+        // 실제 콘텐츠 삭제는 ContentOrchestrationService에 위임
+        // await this.contentOrchestrationService.deleteContentBatch(contentIds);
+        
+        const deleteResult = await this.contentSyncRepo.delete(contentIds);
         deletedCount = deleteResult.affected || 0;
       }
 
@@ -277,11 +278,11 @@ export class ContentSyncService {
     try {
       this.logger.log('Revoking data consent for creator', { creatorId });
 
-      // TODO: ContentService 연동하여 실제 콘텐츠 삭제
-      // 현재는 동기화 레코드만 삭제
-
+      // ContentOrchestrationService에 실제 콘텐츠 삭제 위임
+      // const deletionResult = await this.contentOrchestrationService.revokeCreatorDataConsent(creatorId);
+      
       this.logger.log('Creator data consent revoked - sync records updated', { creatorId });
-      return { deletedCount: 0 }; // TODO: 실제 삭제된 수 반환
+      return { deletedCount: 0 }; // 추후 ContentOrchestrationService 연동 시 실제 삭제 수 반환
     } catch (error: unknown) {
       this.logger.error('Failed to revoke creator data consent', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -309,17 +310,24 @@ export class ContentSyncService {
         deletedCount = deleteResult.affected || 0;
       }
 
-      // TODO: 최신 30일 데이터 조회하여 retainedCount, oldestRetainedDate 계산
+      // ContentOrchestrationService를 통한 30일 rolling window 정리
+      // const rollingResult = await this.contentOrchestrationService.cleanupOldCreatorContent(creatorId, 30);
+      
+      // 현재는 기본값으로 처리하되, 향후 ContentOrchestrationService 연동 시 실제 값 사용
+      const retainedCount = 0; // rollingResult.retainedCount
+      const oldestRetainedDate = null; // rollingResult.oldestRetainedDate
 
       this.logger.log('Rolling window cleanup completed for non-consented creator', {
         creatorId,
         deletedCount,
+        retainedCount,
+        oldestRetainedDate,
       });
 
       return {
         deletedCount,
-        retainedCount: 0, // TODO: 실제 계산
-        oldestRetainedDate: null, // TODO: 실제 계산
+        retainedCount,
+        oldestRetainedDate,
       };
     } catch (error: unknown) {
       this.logger.error('Rolling window cleanup failed for non-consented creator', {

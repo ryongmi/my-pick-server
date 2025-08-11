@@ -5,12 +5,16 @@ import {
   Body,
   Param,
   UseGuards,
+  UseInterceptors,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
 } from '@nestjs/common';
 
-import { Serialize } from '@krgeobuk/core/decorators';
+import { EntityManager } from 'typeorm';
+
+import { Serialize, TransactionManager } from '@krgeobuk/core/decorators';
+import { TransactionInterceptor } from '@krgeobuk/core/interceptors';
 import {
   SwaggerApiTags,
   SwaggerApiOperation,
@@ -24,19 +28,26 @@ import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { JwtPayload } from '@krgeobuk/jwt/interfaces';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 
-import { CreatorApplicationService } from '../services/index.js';
+import { CreatorApplicationService, CreatorApplicationOrchestrationService } from '../services/index.js';
 import { CreateApplicationDto, ApplicationDetailDto } from '../dto/index.js';
 
 @SwaggerApiTags({ tags: ['creator-application'] })
 @SwaggerApiBearerAuth()
 @Controller('creator-application')
 export class CreatorApplicationController {
-  constructor(private readonly creatorApplicationService: CreatorApplicationService) {}
+  constructor(
+    private readonly creatorApplicationService: CreatorApplicationService,
+    private readonly orchestrationService: CreatorApplicationOrchestrationService
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(AccessTokenGuard)
-  @SwaggerApiOperation({ summary: '크리에이터 신청' })
+  @UseInterceptors(TransactionInterceptor)
+  @SwaggerApiOperation({ 
+    summary: '크리에이터 신청',
+    description: '크리에이터 신청서를 제출하고 정규화된 데이터를 저장합니다. 트랜잭션을 통해 데이터 일관성을 보장합니다.'
+  })
   @SwaggerApiBody({ dto: CreateApplicationDto })
   @SwaggerApiOkResponse({
     status: 201,
@@ -52,11 +63,13 @@ export class CreatorApplicationController {
   })
   async createApplication(
     @Body() dto: CreateApplicationDto,
-    @CurrentJwt() { id }: JwtPayload
-  ): Promise<void> {
+    @CurrentJwt() { id }: JwtPayload,
+    @TransactionManager() transactionManager: EntityManager
+  ): Promise<{ applicationId: string }> {
     dto.userId = id;
 
-    await this.creatorApplicationService.createApplication(dto);
+    const applicationId = await this.orchestrationService.createApplicationComplete(dto, transactionManager);
+    return { applicationId };
   }
 
   @Get('status')

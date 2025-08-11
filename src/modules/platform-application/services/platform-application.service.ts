@@ -5,24 +5,19 @@ import { EntityManager } from 'typeorm';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import { LimitType } from '@krgeobuk/core/enum';
 
-import { PlatformType } from '@common/enums/index.js';
+import { CacheService } from '@database/redis/cache.service.js';
 
 import {
   PlatformApplicationRepository,
 } from '../repositories/index.js';
 import { CreatorService } from '../../creator/services/creator.service.js';
-import { CreatorPlatformService } from '../../creator/services/creator-platform.service.js';
-import { CreatePlatformInternalDto } from '../../creator/dto/create-platform-internal.dto.js';
 import { PlatformApplicationEntity } from '../entities/index.js';
-import { ApplicationStatus, RejectionReason, PlatformType as LocalPlatformType, VerificationProofType } from '../enums/index.js';
+import { ApplicationStatus, PlatformType as LocalPlatformType, VerificationProofType } from '../enums/index.js';
 import {
   CreatePlatformApplicationDto,
   UpdatePlatformApplicationDto,
   ApplicationDetailDto,
-  ApproveApplicationDto,
-  RejectApplicationDto,
   PlatformApplicationSearchQueryDto,
-  ApplicationStatsDto,
   PlatformDataDto,
   ReviewDataDto,
 } from '../dto/index.js';
@@ -39,24 +34,23 @@ export class PlatformApplicationService {
     private readonly platformAppDataService: PlatformApplicationDataService,
     private readonly platformAppReviewService: PlatformApplicationReviewService,
     private readonly creatorService: CreatorService,
-    private readonly creatorPlatformService: CreatorPlatformService
+    private readonly cacheService: CacheService
   ) {}
 
   // ==================== PUBLIC METHODS ====================
 
   // 기본 조회 메서드들
   async findById(applicationId: string): Promise<PlatformApplicationEntity | null> {
-    try {
-      return await this.platformApplyRepo.findOne({
-        where: { id: applicationId },
-      });
-    } catch (error: unknown) {
-      this.logger.error('Platform application fetch failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        applicationId,
-      });
-      throw PlatformApplicationException.applicationFetchError();
-    }
+    return await this.executeWithErrorHandling(
+      async () => {
+        return await this.platformApplyRepo.findOne({
+          where: { id: applicationId },
+        });
+      },
+      'Find platform application by ID',
+      { applicationId },
+      null
+    );
   }
 
   async findByIdOrFail(applicationId: string): Promise<PlatformApplicationEntity> {
@@ -69,27 +63,25 @@ export class PlatformApplicationService {
   }
 
   async findByUserId(userId: string): Promise<PlatformApplicationEntity[]> {
-    try {
-      return await this.platformApplyRepo.findByUserId(userId);
-    } catch (error: unknown) {
-      this.logger.error('Platform applications fetch by user failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        userId,
-      });
-      throw PlatformApplicationException.applicationFetchError();
-    }
+    return await this.executeWithErrorHandling(
+      async () => {
+        return await this.platformApplyRepo.findByUserId(userId);
+      },
+      'Find platform applications by user ID',
+      { userId },
+      []
+    );
   }
 
   async findByCreatorId(creatorId: string): Promise<PlatformApplicationEntity[]> {
-    try {
-      return await this.platformApplyRepo.findByCreatorId(creatorId);
-    } catch (error: unknown) {
-      this.logger.error('Platform applications fetch by creator failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
-      });
-      throw PlatformApplicationException.applicationFetchError();
-    }
+    return await this.executeWithErrorHandling(
+      async () => {
+        return await this.platformApplyRepo.findByCreatorId(creatorId);
+      },
+      'Find platform applications by creator ID',
+      { creatorId },
+      []
+    );
   }
 
   // 복합 조회 메서드들
@@ -159,7 +151,8 @@ export class PlatformApplicationService {
     try {
       const { items, total } = await this.platformApplyRepo.searchApplications(query);
 
-      const results = await Promise.all(items.map((app) => this.mapToApplicationDetail(app)));
+      // 배치 처리로 상세 정보 구성 - 최적화된 성능
+      const results = await this.buildApplicationDetailsBatch(items);
 
       const limitValue = query.limit || 20;
       const limitType = this.convertToLimitType(limitValue);
@@ -187,16 +180,6 @@ export class PlatformApplicationService {
     }
   }
 
-  async getApplicationStats(): Promise<ApplicationStatsDto> {
-    try {
-      return await this.platformApplyRepo.getApplicationStats();
-    } catch (error: unknown) {
-      this.logger.error('Platform application stats fetch failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      throw PlatformApplicationException.applicationFetchError();
-    }
-  }
 
   // ==================== 변경 메서드 ====================
 
@@ -287,6 +270,9 @@ export class PlatformApplicationService {
           txManager
         );
       });
+
+      // 플랫폼 신청 관련 캐시 무효화
+      await this.cacheService.invalidatePlatformApplicationRelatedCaches();
 
       this.logger.log('Platform application created successfully', {
         applicationId: application.id,
@@ -442,168 +428,37 @@ export class PlatformApplicationService {
     }
   }
 
-  async approveApplication(
-    applicationId: string,
-    dto: ApproveApplicationDto,
-    reviewerId: string,
-    transactionManager?: EntityManager
-  ): Promise<void> {
+
+
+  // ==================== 에러 처리 헬퍼 메서드 ====================
+
+  private async executeWithErrorHandling<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    context: Record<string, unknown> = {},
+    fallbackValue?: T
+  ): Promise<T> {
     try {
-      const application = await this.findByIdOrFail(applicationId);
-
-      // 1. 상태 확인
-      if (application.status !== ApplicationStatus.PENDING) {
-        this.logger.warn('Platform application already reviewed', {
-          applicationId,
-          status: application.status,
-        });
-        throw PlatformApplicationException.applicationAlreadyReviewed();
-      }
-
-      // 2. 자기 신청 검토 방지
-      if (application.userId === reviewerId) {
-        this.logger.warn('Cannot review own platform application', {
-          applicationId,
-          userId: application.userId,
-          reviewerId,
-        });
-        throw PlatformApplicationException.cannotReviewOwnApplication();
-      }
-
-      const manager = transactionManager || this.platformApplyRepo.manager;
-
-      await manager.transaction(async (txManager) => {
-        // 3. 신청 승인 처리
-        application.status = ApplicationStatus.APPROVED;
-        application.reviewerId = reviewerId;
-        application.reviewedAt = new Date();
-
-        await txManager.save(application);
-
-        // 4. 리뷰 데이터 저장
-        const reviewData: {
-          reasons?: RejectionReason[];
-          customReason?: string;
-          comment?: string;
-          requirements?: string[];
-          reason?: string;
-        } = {};
-        if (dto.comment !== undefined) {
-          reviewData.comment = dto.comment;
-        }
-
-        await this.platformAppReviewService.createReviewData(applicationId, reviewData, txManager);
-
-        // 5. 실제 플랫폼 생성
-        await this.createPlatformFromApplication(application, txManager);
-
-        // 6. 플랫폼 데이터 조회해서 로깅
-        const platformData = await this.platformAppDataService.findByApplicationId(applicationId);
-
-        this.logger.log('Platform application approved successfully', {
-          applicationId,
-          creatorId: application.creatorId,
-          platformType: platformData?.type,
-          reviewerId,
-        });
-      });
+      return await operation();
     } catch (error: unknown) {
+      this.logger.error(`${operationName} failed`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        ...context,
+      });
+
       if (error instanceof HttpException) {
         throw error;
       }
 
-      this.logger.error('Platform application approval failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        applicationId,
-        reviewerId,
-      });
-      throw PlatformApplicationException.applicationReviewError();
-    }
-  }
-
-  async rejectApplication(
-    applicationId: string,
-    dto: RejectApplicationDto,
-    reviewerId: string,
-    transactionManager?: EntityManager
-  ): Promise<void> {
-    try {
-      const application = await this.findByIdOrFail(applicationId);
-
-      // 1. 상태 확인
-      if (application.status !== ApplicationStatus.PENDING) {
-        this.logger.warn('Platform application already reviewed', {
-          applicationId,
-          status: application.status,
+      if (fallbackValue !== undefined) {
+        this.logger.warn(`Using fallback value for ${operationName}`, {
+          fallbackValue,
+          ...context,
         });
-        throw PlatformApplicationException.applicationAlreadyReviewed();
+        return fallbackValue;
       }
 
-      // 2. 자기 신청 검토 방지
-      if (application.userId === reviewerId) {
-        this.logger.warn('Cannot review own platform application', {
-          applicationId,
-          userId: application.userId,
-          reviewerId,
-        });
-        throw PlatformApplicationException.cannotReviewOwnApplication();
-      }
-
-      // 3. 신청 거부 처리
-      application.status = ApplicationStatus.REJECTED;
-      application.reviewerId = reviewerId;
-      application.reviewedAt = new Date();
-
-      const manager = transactionManager || this.platformApplyRepo.manager;
-      await manager.transaction(async (txManager) => {
-        // 메인 신청 엔티티 업데이트
-        await txManager.save(application);
-
-        // 리뷰 데이터 저장
-        const rejectReviewData: {
-          reasons?: RejectionReason[];
-          customReason?: string;
-          comment?: string;
-          requirements?: string[];
-          reason?: string;
-        } = {
-          reasons: dto.reasons,
-        };
-        
-        if (dto.customReason !== undefined) {
-          rejectReviewData.customReason = dto.customReason;
-        }
-        if (dto.comment !== undefined) {
-          rejectReviewData.comment = dto.comment;
-        }
-        if (dto.requirements !== undefined) {
-          rejectReviewData.requirements = dto.requirements;
-        }
-
-        await this.platformAppReviewService.createReviewData(
-          applicationId,
-          rejectReviewData,
-          txManager
-        );
-      });
-
-      this.logger.log('Platform application rejected successfully', {
-        applicationId,
-        reasons: dto.reasons,
-        customReason: dto.customReason,
-        reviewerId,
-      });
-    } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      this.logger.error('Platform application rejection failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        applicationId,
-        reviewerId,
-      });
-      throw PlatformApplicationException.applicationReviewError();
+      throw PlatformApplicationException.applicationFetchError();
     }
   }
 
@@ -679,45 +534,104 @@ export class PlatformApplicationService {
     return result;
   }
 
-  private async createPlatformFromApplication(
-    application: PlatformApplicationEntity,
-    transactionManager: EntityManager
-  ): Promise<void> {
-    try {
-      // 분리된 엔티티에서 플랫폼 데이터 조회
-      const platformData = await this.platformAppDataService.findByApplicationId(application.id);
+  // ==================== 배치 처리 메서드 ====================
 
-      // 플랫폼 데이터 검증
-      if (!platformData || !platformData.type || !platformData.platformId || !platformData.url) {
-        throw PlatformApplicationException.invalidPlatformData();
-      }
+  private async buildApplicationDetailsBatch(applications: PlatformApplicationEntity[]): Promise<ApplicationDetailDto[]> {
+    if (applications.length === 0) return [];
 
-      // CreatorPlatformService를 통해 플랫폼 생성
-      const createPlatformData: CreatePlatformInternalDto = {
+    return await this.executeWithErrorHandling(
+      async () => {
+        // 1. 각 신청에 대한 platform data 및 review data 배치 조회
+        const platformDataPromises = applications.map(app => 
+          this.platformAppDataService.findByApplicationId(app.id)
+        );
+        const reviewDataPromises = applications.map(app => 
+          this.platformAppReviewService.findByApplicationId(app.id)
+        );
+
+        const [platformDataResults, reviewDataResults] = await Promise.all([
+          Promise.all(platformDataPromises),
+          Promise.all(reviewDataPromises),
+        ]);
+
+        // 2. 결과 조합
+        const results = applications.map((application, index) => {
+          const platformData = platformDataResults[index];
+          const reviewData = reviewDataResults[index];
+
+          const result: ApplicationDetailDto = {
+            id: application.id,
+            creatorId: application.creatorId,
+            userId: application.userId,
+            status: application.status,
+            platformType: application.platformType,
+            appliedAt: application.appliedAt,
+            createdAt: application.createdAt,
+            updatedAt: application.updatedAt,
+          };
+
+          // 선택적 속성 처리 (exactOptionalPropertyTypes 준수)
+          if (platformData) {
+            result.platformData = {
+              type: platformData.type,
+              platformId: platformData.platformId,
+              url: platformData.url,
+              displayName: platformData.displayName,
+              description: platformData.description,
+              followerCount: platformData.followerCount,
+              verificationProof: {
+                type: platformData.verificationProofType,
+                url: platformData.verificationProofUrl,
+                description: platformData.verificationProofDescription,
+              },
+              createdAt: platformData.createdAt,
+              updatedAt: platformData.updatedAt,
+            } as PlatformDataDto;
+          }
+
+          if (reviewData) {
+            result.reviewData = {
+              reasons: reviewData.reasons,
+              customReason: reviewData.customReason,
+              comment: reviewData.comment,
+              requirements: reviewData.requirements,
+              reason: reviewData.reason,
+              createdAt: reviewData.createdAt,
+              updatedAt: reviewData.updatedAt,
+            } as ReviewDataDto;
+          }
+
+          // 조건부 할당 (exactOptionalPropertyTypes 준수)
+          if (application.reviewedAt !== undefined && application.reviewedAt !== null) {
+            result.reviewedAt = application.reviewedAt;
+          }
+          if (application.reviewerId !== undefined && application.reviewerId !== null) {
+            result.reviewerId = application.reviewerId;
+          }
+
+          return result;
+        });
+
+        this.logger.debug('Batch application details built', {
+          applicationCount: applications.length,
+        });
+
+        return results;
+      },
+      'Build application details batch',
+      { applicationCount: applications.length },
+      // fallback: 배치 처리가 실패하면 기본 정보만 폴백
+      applications.map(application => ({
+        id: application.id,
         creatorId: application.creatorId,
-        type: platformData.type as PlatformType,
-        platformId: platformData.platformId,
-        url: platformData.url,
-      };
-
-      if (platformData.displayName !== undefined) {
-        createPlatformData.displayName = platformData.displayName;
-      }
-
-      await this.creatorPlatformService.createPlatform(createPlatformData, transactionManager);
-
-      this.logger.log('Platform created from approved application', {
-        applicationId: application.id,
-        creatorId: application.creatorId,
-        platformType: platformData.type,
-        platformId: platformData.platformId,
-      });
-    } catch (error: unknown) {
-      this.logger.error('Platform creation from application failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        applicationId: application.id,
-      });
-      throw PlatformApplicationException.platformCreationError();
-    }
+        userId: application.userId,
+        status: application.status,
+        platformType: application.platformType,
+        appliedAt: application.appliedAt,
+        createdAt: application.createdAt,
+        updatedAt: application.updatedAt,
+      } as ApplicationDetailDto))
+    );
   }
+
 }

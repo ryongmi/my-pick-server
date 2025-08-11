@@ -1,6 +1,6 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
 
-import { EntityManager } from 'typeorm';
+import { EntityManager, DataSource } from 'typeorm';
 
 import { PlatformType } from '@common/enums/index.js';
 
@@ -19,6 +19,7 @@ export class CreatorOrchestrationService {
   private readonly logger = new Logger(CreatorOrchestrationService.name);
 
   constructor(
+    private readonly dataSource: DataSource,
     private readonly creatorService: CreatorService,
     private readonly creatorAggregateService: CreatorAggregateService,
     private readonly creatorPlatformService: CreatorPlatformService,
@@ -127,7 +128,7 @@ export class CreatorOrchestrationService {
     }
   }
 
-  async deleteCreatorComplete(creatorId: string): Promise<void> {
+  async deleteCreatorComplete(creatorId: string, _transactionManager?: EntityManager): Promise<void> {
     try {
       this.logger.log('Starting complete creator deletion', { creatorId });
 

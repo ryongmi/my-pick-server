@@ -20,6 +20,13 @@ import {
 import { CreatorPlatformService } from './creator-platform.service.js';
 import { CreatorConsentService } from './creator-consent.service.js';
 
+interface PlatformStats {
+  totalFollowers: number;
+  totalContent: number;
+  totalViews: number;
+  platformCount: number;
+}
+
 @Injectable()
 export class CreatorService {
   private readonly logger = new Logger(CreatorService.name);
@@ -68,81 +75,35 @@ export class CreatorService {
     });
   }
 
-  async searchCreators(
-    query: CreatorSearchQueryDto
-  ): Promise<PaginatedResult<CreatorSearchResultDto>> {
+  async searchCreators(query: CreatorSearchQueryDto): Promise<PaginatedResult<CreatorSearchResultDto>> {
     try {
       const result = await this.creatorRepo.searchCreators(query);
-
-      if (result.items.length === 0) {
-        return { items: [], pageInfo: result.pageInfo };
-      }
-
-      const items = this.buildCreatorSearchResults(result.items);
-
-      this.logger.debug('Creator search completed', {
-        totalFound: result.pageInfo.totalItems,
-        page: query.page,
-        limit: query.limit,
-        hasNameFilter: !!query.name,
-        category: query.category,
-      });
-
       return {
-        items,
+        items: this.buildCreatorSearchResults(result.items),
         pageInfo: result.pageInfo,
       };
     } catch (error: unknown) {
-      this.logger.error('Creator search failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        query,
-      });
-      throw CreatorException.creatorFetchError();
+      this.handleServiceError(error, 'Creator search', { query }, CreatorException.creatorFetchError);
     }
   }
 
   async getCreatorById(creatorId: string): Promise<CreatorDetailDto> {
     try {
-      // 1. 캐시에서 먼저 조회 시도
+      // 캐시 조회
       const cached = await this.cacheService.getCreatorDetail(creatorId);
-      if (cached) {
-        this.logger.debug('Creator detail served from cache', { creatorId });
-        return cached;
-      }
+      if (cached) return cached;
 
-      // 2. 캐시 미스 시 DB에서 조회
+      // DB 조회 및 DTO 생성
       const creator = await this.findByIdOrFail(creatorId);
-
-      // 3. 플랫폼 통계 조회 (캐시 적용)
-      let platformStats = await this.cacheService.getPlatformStats(creatorId);
-      if (!platformStats) {
-        platformStats = await this.buildDetailedPlatformStats(creatorId);
-        await this.cacheService.setPlatformStats(creatorId, platformStats);
-      }
-
-      // 4. DTO 생성
+      const platformStats = await this.getPlatformStatsWithCache(creatorId);
       const detailDto = this.buildCreatorDetail(creator, platformStats);
 
-      // 5. 결과 캐싱
+      // 결과 캐싱
       await this.cacheService.setCreatorDetail(creatorId, detailDto);
-
-      this.logger.debug('Creator detail fetched and cached', {
-        creatorId,
-        name: creator.name,
-        platformCount: platformStats.platformCount,
-      });
-
       return detailDto;
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      this.logger.error('Creator detail fetch failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
-      });
-      throw CreatorException.creatorFetchError();
+      if (error instanceof HttpException) throw error;
+      this.handleServiceError(error, 'Creator detail fetch', { creatorId }, CreatorException.creatorFetchError);
     }
   }
 
@@ -150,208 +111,74 @@ export class CreatorService {
 
   async createCreator(dto: CreateCreatorDto, transactionManager?: EntityManager): Promise<string> {
     try {
-      // 1. 사전 검증 (비즈니스 규칙)
+      // 중복 검증
       if (dto.name && dto.category) {
         const existingCreator = await this.creatorRepo.findOne({
           where: { name: dto.name, category: dto.category },
         });
-
-        if (existingCreator) {
-          this.logger.warn('Creator creation failed: duplicate name', {
-            name: dto.name,
-            category: dto.category,
-          });
-          throw CreatorException.creatorAlreadyExists();
-        }
+        if (existingCreator) throw CreatorException.creatorAlreadyExists();
       }
 
-      // 2. 엔티티 생성
+      // 엔티티 생성 및 저장
       const creatorEntity = new CreatorEntity();
       Object.assign(creatorEntity, dto);
-
-      // 3. Creator 저장
       await this.creatorRepo.saveEntity(creatorEntity, transactionManager);
 
-      // 4. 캐시 무효화 (새로운 크리에이터이므로 관련 트렌딩, 검색 캐시 무효화)
+      // 캐시 무효화
       await this.cacheService.invalidateCreatorRelatedCaches(creatorEntity.id);
-
-      // 5. 성공 로깅
-      this.logger.log('Creator created successfully', {
-        creatorId: creatorEntity.id,
-        name: dto.name,
-        category: dto.category,
-      });
-
       return creatorEntity.id;
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      this.logger.error('Creator creation failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        name: dto.name,
-        category: dto.category,
-      });
-
-      throw CreatorException.creatorCreateError();
+      this.handleServiceError(error, 'Creator creation', { name: dto.name, category: dto.category }, CreatorException.creatorCreateError);
     }
   }
 
-  async updateCreator(
-    creatorId: string,
-    dto: UpdateCreatorDto,
-    transactionManager?: EntityManager
-  ): Promise<void> {
+  async updateCreator(creatorId: string, dto: UpdateCreatorDto, transactionManager?: EntityManager): Promise<void> {
     try {
       const creator = await this.creatorRepo.findOne({ where: { id: creatorId } });
+      if (!creator) throw CreatorException.creatorNotFound();
 
-      if (!creator) {
-        this.logger.warn('Creator update failed: creator not found', { creatorId });
-        throw CreatorException.creatorNotFound();
-      }
-
-      // 표시명 변경 시 중복 체크
+      // 표시명 중복 체크
       if (dto.displayName && dto.displayName !== creator.displayName) {
         const existingCreator = await this.creatorRepo.findOne({
-          where: {
-            displayName: dto.displayName,
-            category: creator.category,
-            id: Not(creatorId),
-          },
+          where: { displayName: dto.displayName, category: creator.category, id: Not(creatorId) },
         });
-
-        if (existingCreator) {
-          this.logger.warn('Creator update failed: duplicate name', {
-            creatorId,
-            newDisplayName: dto.displayName,
-            category: creator.category,
-          });
-          throw CreatorException.creatorAlreadyExists();
-        }
+        if (existingCreator) throw CreatorException.creatorAlreadyExists();
       }
 
-      // 업데이트할 필드만 변경
+      // 업데이트 및 캐시 무효화
       Object.assign(creator, dto);
       await this.creatorRepo.updateEntity(creator, transactionManager);
-
-      // 캐시 무효화 (크리에이터 정보 변경시 관련 캐시 무효화)
       await this.cacheService.invalidateCreatorRelatedCaches(creatorId);
-
-      this.logger.log('Creator updated successfully', {
-        creatorId,
-        name: creator.name,
-        updatedFields: Object.keys(dto),
-      });
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      this.logger.error('Creator update failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
-        updatedFields: Object.keys(dto),
-      });
-
-      throw CreatorException.creatorUpdateError();
+      this.handleServiceError(error, 'Creator update', { creatorId, updatedFields: Object.keys(dto) }, CreatorException.creatorUpdateError);
     }
   }
 
   async deleteCreator(creatorId: string): Promise<UpdateResult> {
     try {
       const creator = await this.creatorRepo.findOne({ where: { id: creatorId } });
+      if (!creator) throw CreatorException.creatorNotFound();
 
-      if (!creator) {
-        this.logger.warn('Creator deletion failed: creator not found', { creatorId });
-        throw CreatorException.creatorNotFound();
-      }
-
-      this.logger.log('Creator deletion initiated', {
-        creatorId,
-        creatorName: creator.name,
-      });
-
-      // 소프트 삭제로 진행 (참조 무결성 유지)
       const result = await this.creatorRepo.softDelete(creatorId);
-
-      // 캐시 무효화 (삭제된 크리에이터 관련 모든 캐시 정리)
       await this.cacheService.invalidateCreatorRelatedCaches(creatorId);
-
-      this.logger.log('Creator deleted successfully', {
-        creatorId,
-        name: creator.name,
-        category: creator.category,
-        deletionType: 'soft',
-      });
-
       return result;
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      this.logger.error('Creator deletion failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
-      });
-
-      throw CreatorException.creatorDeleteError();
+      this.handleServiceError(error, 'Creator deletion', { creatorId }, CreatorException.creatorDeleteError);
     }
   }
 
-  // ==================== 동의 관리 메서드 ====================
+  // ==================== 동의 관리 메서드 (위임) ====================
 
-  /**
-   * 크리에이터의 활성 동의 여부 확인
-   */
   async hasValidConsents(creatorId: string): Promise<boolean> {
-    try {
-      return await this.creatorConsentService.hasAnyConsent(creatorId);
-    } catch (error: unknown) {
-      this.logger.warn('Failed to check creator consents', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
-      });
-      // 동의 확인 실패 시 false 반환 (보수적 접근)
-      return false;
-    }
+    return this.creatorConsentService.hasAnyConsent(creatorId);
   }
 
-  /**
-   * 크리에이터의 활성 동의 타입 목록 조회
-   */
   async getActiveConsents(creatorId: string): Promise<ConsentType[]> {
-    try {
-      return await this.creatorConsentService.getActiveConsents(creatorId);
-    } catch (error: unknown) {
-      this.logger.warn('Failed to fetch creator consents', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
-      });
-      return [];
-    }
+    return this.creatorConsentService.getActiveConsents(creatorId);
   }
 
-  /**
-   * 여러 크리에이터의 활성 동의 목록 조회 (배치 처리)
-   */
   async getActiveConsentsBatch(creatorIds: string[]): Promise<Record<string, ConsentType[]>> {
-    try {
-      return await this.creatorConsentService.getActiveConsentsBatch(creatorIds);
-    } catch (error: unknown) {
-      this.logger.warn('Failed to fetch creators consents batch', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        creatorCount: creatorIds.length,
-      });
-
-      // 실패 시 빈 배열로 초기화된 Record 반환
-      const result: Record<string, ConsentType[]> = {};
-      creatorIds.forEach((id) => {
-        result[id] = [];
-      });
-      return result;
-    }
+    return this.creatorConsentService.getActiveConsentsBatch(creatorIds);
   }
 
   // ==================== 통계 메서드 ====================
@@ -362,41 +189,43 @@ export class CreatorService {
 
   // ==================== PRIVATE HELPER METHODS ====================
 
-  private async buildDetailedPlatformStats(creatorId: string): Promise<{
-    totalFollowers: number;
-    totalContent: number;
-    totalViews: number;
-    platformCount: number;
-  }> {
-    try {
-      // Repository의 집계 쿼리 사용 (DB에서 직접 계산)
-      const stats = await this.creatorPlatformService.getStatsByCreatorId(creatorId);
-      return stats;
-    } catch (error: unknown) {
-      this.logger.warn('Failed to fetch platform stats, using default values', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        creatorId,
-      });
+  private handleServiceError(
+    error: unknown,
+    operation: string,
+    context: Record<string, unknown>,
+    fallbackException: () => HttpException
+  ): never {
+    if (error instanceof HttpException) {
+      throw error;
+    }
 
-      // 플랫폼 데이터 조회 실패 시 기본값 반환
-      return {
-        totalFollowers: 0,
-        totalContent: 0,
-        totalViews: 0,
-        platformCount: 0,
-      };
+    this.logger.error(`${operation} failed`, {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      ...context,
+    });
+
+    throw fallbackException();
+  }
+
+  private async getPlatformStatsWithCache(creatorId: string): Promise<PlatformStats> {
+    let stats = await this.cacheService.getPlatformStats(creatorId);
+    if (!stats) {
+      stats = await this.buildDetailedPlatformStats(creatorId);
+      await this.cacheService.setPlatformStats(creatorId, stats);
+    }
+    return stats;
+  }
+
+  private async buildDetailedPlatformStats(creatorId: string): Promise<PlatformStats> {
+    try {
+      return await this.creatorPlatformService.getStatsByCreatorId(creatorId);
+    } catch (error: unknown) {
+      this.logger.warn('Failed to fetch platform stats', { creatorId, error });
+      return { totalFollowers: 0, totalContent: 0, totalViews: 0, platformCount: 0 };
     }
   }
 
-  private buildCreatorDetail(
-    creator: CreatorEntity,
-    platformStats: {
-      totalFollowers: number;
-      totalContent: number;
-      totalViews: number;
-      platformCount: number;
-    }
-  ): CreatorDetailDto {
+  private buildCreatorDetail(creator: CreatorEntity, platformStats: PlatformStats): CreatorDetailDto {
     const result: CreatorDetailDto = {
       id: creator.id,
       name: creator.name,
@@ -415,25 +244,21 @@ export class CreatorService {
       updatedAt: creator.updatedAt,
     };
 
-    // 조건부 할당 (exactOptionalPropertyTypes 준수)
-    if (creator.userId !== undefined && creator.userId !== null) {
-      result.userId = creator.userId;
-    }
-    if (creator.avatar !== undefined && creator.avatar !== null) {
-      result.avatar = creator.avatar;
-    }
-    if (creator.description !== undefined && creator.description !== null) {
-      result.description = creator.description;
-    }
-    if (creator.tags !== undefined && creator.tags !== null) {
-      result.tags = creator.tags;
-    }
-    if (creator.lastActivityAt !== undefined && creator.lastActivityAt !== null) {
-      result.lastActivityAt = creator.lastActivityAt;
-    }
-    if (creator.socialLinks !== undefined && creator.socialLinks !== null) {
-      result.socialLinks = creator.socialLinks;
-    }
+    // 조건부 할당 (간소화)
+    const optionalFields = {
+      userId: creator.userId,
+      avatar: creator.avatar,
+      description: creator.description,
+      tags: creator.tags,
+      lastActivityAt: creator.lastActivityAt,
+      socialLinks: creator.socialLinks,
+    };
+
+    Object.entries(optionalFields).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        (result as unknown as Record<string, unknown>)[key] = value;
+      }
+    });
 
     return result;
   }

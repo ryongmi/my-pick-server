@@ -150,4 +150,12 @@ export class PlatformApplicationException {
     const messages = reasons.map((reason) => `• ${this.getRejectionReasonMessage(reason)}`);
     return `다음과 같은 사유로 승인이 어렵습니다:\n${messages.join('\n')}`;
   }
+
+  // 통계 관련 (600-699)
+  static statisticsGenerationError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'PLATFORM_APPLICATION_601',
+      message: '플랫폼 신청 통계 생성 중 오류가 발생했습니다.',
+    });
+  }
 }

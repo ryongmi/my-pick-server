@@ -45,6 +45,20 @@ export class CreatorApplicationException {
     });
   }
 
+  static applicationUpdateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_APPLICATION_204',
+      message: '크리에이터 신청 수정 중 오류가 발생했습니다.',
+    });
+  }
+
+  static applicationDeleteError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_APPLICATION_205',
+      message: '크리에이터 신청 삭제 중 오류가 발생했습니다.',
+    });
+  }
+
   // 권한 관련 (300-399)
   static notApplicationOwner(): HttpException {
     return new ForbiddenException({

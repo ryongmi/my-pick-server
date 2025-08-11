@@ -217,4 +217,146 @@ export class CreatorException {
       message: '크리에이터 통계 업데이트 중 오류가 발생했습니다.',
     });
   }
+
+  // ==================== 동기화 관련 예외 (500-599) ====================
+
+  static syncNotFound(): HttpException {
+    return new NotFoundException({
+      code: 'CREATOR_501',
+      message: '동기화 정보를 찾을 수 없습니다.',
+    });
+  }
+
+  static syncFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_502',
+      message: '동기화 정보 조회 중 오류가 발생했습니다.',
+    });
+  }
+
+  static syncBatchFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_503',
+      message: '동기화 배치 조회 중 오류가 발생했습니다.',
+    });
+  }
+
+  static syncUpsertError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_504',
+      message: '동기화 정보 저장 중 오류가 발생했습니다.',
+    });
+  }
+
+  static syncDeleteError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_505',
+      message: '동기화 정보 삭제 중 오류가 발생했습니다.',
+    });
+  }
+
+  static syncInitializeError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_506',
+      message: '동기화 정보 초기화 중 오류가 발생했습니다.',
+    });
+  }
+
+  static syncStartError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_507',
+      message: '동기화 시작 중 오류가 발생했습니다.',
+    });
+  }
+
+  static syncUpdateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_508',
+      message: '동기화 진행상황 업데이트 중 오류가 발생했습니다.',
+    });
+  }
+
+  static syncCompleteError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_509',
+      message: '동기화 완료 처리 중 오류가 발생했습니다.',
+    });
+  }
+
+  static syncFailError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_510',
+      message: '동기화 실패 처리 중 오류가 발생했습니다.',
+    });
+  }
+
+  static manualSyncError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_511',
+      message: '수동 동기화 시작 중 오류가 발생했습니다.',
+    });
+  }
+
+  static syncProgressFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_512',
+      message: '동기화 진행률 조회 중 오류가 발생했습니다.',
+    });
+  }
+
+  static syncTargetFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_513',
+      message: '동기화 대상 조회 중 오류가 발생했습니다.',
+    });
+  }
+
+  static timeoutSyncFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_514',
+      message: '타임아웃된 동기화 조회 중 오류가 발생했습니다.',
+    });
+  }
+
+  static failedSyncFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_515',
+      message: '실패한 동기화 조회 중 오류가 발생했습니다.',
+    });
+  }
+
+  static neverSyncedFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_516',
+      message: '미동기화 플랫폼 조회 중 오류가 발생했습니다.',
+    });
+  }
+
+  static syncStatsFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_517',
+      message: '동기화 통계 조회 중 오류가 발생했습니다.',
+    });
+  }
+
+  static statusCountFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_518',
+      message: '동기화 상태별 통계 조회 중 오류가 발생했습니다.',
+    });
+  }
+
+  static platformStatsFetchError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_519',
+      message: '플랫폼별 통계 조회 중 오류가 발생했습니다.',
+    });
+  }
+
+  static platformOperationError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_520',
+      message: '플랫폼 작업 중 오류가 발생했습니다.',
+    });
+  }
 }

@@ -6,6 +6,8 @@ import { EntityManager } from 'typeorm';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import { LimitType } from '@krgeobuk/core/enum';
 
+import { CacheService } from '@database/redis/cache.service.js';
+
 import {
   ReportRepository,
   ReportEvidenceRepository,
@@ -14,14 +16,12 @@ import {
 } from '../repositories/index.js';
 import {
   ReportEntity,
-  ReportActionType,
 } from '../entities/index.js';
 import { ReportStatus, ReportTargetType, ReportReason } from '../enums/index.js';
 import { ReportException } from '../exceptions/index.js';
 import {
   CreateReportDto,
   ReportSearchQueryDto,
-  ReviewReportDto,
   ReportDetailDto,
 } from '../dto/index.js';
 
@@ -34,6 +34,7 @@ export class ReportService {
     private readonly evidenceRepo: ReportEvidenceRepository,
     private readonly reviewRepo: ReportReviewRepository,
     private readonly actionRepo: ReportActionRepository,
+    private readonly cacheService: CacheService,
     @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy
   ) {}
 
@@ -98,12 +99,8 @@ export class ReportService {
         take: limit,
       });
 
-      // 상세 정보 구성
-      const detailedReports = await Promise.all(
-        reports.map(async (report) => {
-          return await this.buildReportDetail(report);
-        })
-      );
+      // 상세 정보 구성 - 배치 처리로 최적화
+      const detailedReports = await this.buildReportDetailsBatch(reports);
 
       const totalPages = Math.ceil(totalItems / limit);
 
@@ -211,6 +208,9 @@ export class ReportService {
         await this.evidenceRepo.saveEvidence(report.id, dto.evidence);
       }
 
+      // 신고 관련 캐시 무효화
+      await this.cacheService.invalidateReportRelatedCaches();
+
       this.logger.log('Report created successfully', {
         reportId: report.id,
         reporterId,
@@ -235,96 +235,6 @@ export class ReportService {
     }
   }
 
-  async reviewReport(
-    reportId: string,
-    reviewerId: string,
-    dto: ReviewReportDto,
-    _transactionManager?: EntityManager
-  ): Promise<void> {
-    try {
-      this.logger.log('Reviewing report', {
-        reportId,
-        reviewerId,
-        newStatus: dto.status,
-      });
-
-      const report = await this.findByIdOrFail(reportId);
-
-      // 이미 검토된 신고 확인
-      if (report.status !== ReportStatus.PENDING && report.status !== ReportStatus.UNDER_REVIEW) {
-        throw ReportException.reportAlreadyReviewed();
-      }
-
-      // 상태 전환 유효성 검사
-      this.validateStatusTransition(report.status, dto.status);
-
-      // 신고 상태 업데이트
-      await this.reportRepo.updateReport(reportId, { status: dto.status });
-
-      // 검토 정보 저장
-      const reviewData: {
-        reviewerId: string;
-        reviewedAt: Date;
-        reviewComment?: string;
-      } = {
-        reviewerId,
-        reviewedAt: new Date(),
-      };
-
-      if (dto.reviewComment !== undefined) {
-        reviewData.reviewComment = dto.reviewComment;
-      }
-
-      await this.reviewRepo.saveReview(reportId, reviewData);
-
-      // 조치 정보가 있다면 저장
-      if (dto.actions) {
-        const actionData: {
-          actionType: ReportActionType;
-          executedBy: string;
-          executionStatus: 'pending' | 'executed' | 'failed';
-          duration?: number;
-          reason?: string;
-        } = {
-          actionType: (dto.actions.actionType as ReportActionType) || ReportActionType.NONE,
-          executedBy: reviewerId,
-          executionStatus: 'pending',
-        };
-
-        if (dto.actions.duration !== undefined) {
-          actionData.duration = dto.actions.duration;
-        }
-        if (dto.actions.reason !== undefined) {
-          actionData.reason = dto.actions.reason;
-        }
-
-        await this.actionRepo.saveAction(reportId, actionData);
-
-        // 조치 실행
-        if (dto.actions.actionType && dto.actions.actionType !== 'none') {
-          await this.executeReportAction(report, dto.actions);
-        }
-      }
-
-      this.logger.log('Report reviewed successfully', {
-        reportId,
-        reviewerId,
-        newStatus: dto.status,
-        actionType: dto.actions?.actionType,
-      });
-    } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      this.logger.error('Report review failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        reportId,
-        reviewerId,
-      });
-      throw ReportException.reportUpdateError();
-    }
-  }
 
   async deleteReport(reportId: string): Promise<void> {
     try {
@@ -344,6 +254,9 @@ export class ReportService {
 
       await this.reportRepo.deleteReport(reportId);
 
+      // 신고 관련 캐시 무효화
+      await this.cacheService.invalidateReportRelatedCaches();
+
       this.logger.log('Report deleted successfully', { reportId });
     } catch (error: unknown) {
       if (error instanceof HttpException) {
@@ -358,230 +271,100 @@ export class ReportService {
     }
   }
 
-  // ==================== 배치 처리 메서드 ====================
 
-  async batchUpdateReportStatus(reportIds: string[], status: ReportStatus): Promise<void> {
+
+  // ==================== 에러 처리 헬퍼 메서드 ====================
+
+  private async executeWithErrorHandling<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    context: Record<string, unknown> = {},
+    fallbackValue?: T
+  ): Promise<T> {
     try {
-      this.logger.log('Batch updating report status', {
-        reportCount: reportIds.length,
-        newStatus: status,
-      });
-
-      await Promise.all(
-        reportIds.map((reportId) => this.reportRepo.updateReport(reportId, { status }))
-      );
-
-      this.logger.log('Batch status update completed', {
-        reportCount: reportIds.length,
-        newStatus: status,
-      });
+      return await operation();
     } catch (error: unknown) {
-      this.logger.error('Batch status update failed', {
+      this.logger.error(`${operationName} failed`, {
         error: error instanceof Error ? error.message : 'Unknown error',
-        reportCount: reportIds.length,
-        newStatus: status,
+        ...context,
       });
-      throw ReportException.reportUpdateError();
-    }
-  }
 
-  async batchProcessPendingReports(limit = 50): Promise<{
-    processed: number;
-    failed: number;
-  }> {
-    try {
-      const pendingReports = await this.reportRepo.findPendingReports(limit);
-
-      let processed = 0;
-      let failed = 0;
-
-      for (const report of pendingReports) {
-        try {
-          // 자동 처리 로직 (단순한 규칙 기반)
-          if (await this.shouldAutoResolve(report)) {
-            await this.reportRepo.updateReport(report.id, {
-              status: ReportStatus.DISMISSED,
-            });
-            processed++;
-          }
-        } catch (error: unknown) {
-          this.logger.warn('Failed to auto-process report', {
-            error: error instanceof Error ? error.message : 'Unknown error',
-            reportId: report.id,
-          });
-          failed++;
-        }
+      if (error instanceof HttpException) {
+        throw error;
       }
 
-      this.logger.log('Batch processing completed', {
-        totalReports: pendingReports.length,
-        processed,
-        failed,
-      });
+      if (fallbackValue !== undefined) {
+        this.logger.warn(`Using fallback value for ${operationName}`, {
+          fallbackValue,
+          ...context,
+        });
+        return fallbackValue;
+      }
 
-      return { processed, failed };
-    } catch (error: unknown) {
-      this.logger.error('Batch processing failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        limit,
-      });
-      return { processed: 0, failed: 0 };
-    }
-  }
-
-  // ==================== 통계 메서드 ====================
-
-  async getTotalCount(): Promise<number> {
-    try {
-      return await this.reportRepo.getTotalCount();
-    } catch (error: unknown) {
-      this.logger.warn('Failed to get total report count', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      return 0;
-    }
-  }
-
-  async getReportStatistics(): Promise<{
-    totalReports: number;
-    pendingReports: number;
-    resolvedReports: number;
-    reportsThisMonth: number;
-    reportsByTargetType: Array<{ targetType: ReportTargetType; count: number }>;
-    reportsByStatus: Array<{ status: ReportStatus; count: number }>;
-    reportsByReason: Array<{ reason: ReportReason; count: number }>;
-    reportTrends: Array<{ date: string; count: number }>;
-  }> {
-    try {
-      const [
-        totalReports,
-        pendingReports,
-        resolvedReports,
-        reportsThisMonth,
-        reportsByTargetType,
-        reportsByStatus,
-        reportsByReason,
-        reportTrends,
-      ] = await Promise.all([
-        this.reportRepo.getTotalCount(),
-        this.reportRepo.getCountByStatus(ReportStatus.PENDING),
-        this.reportRepo.getCountByStatus(ReportStatus.RESOLVED),
-        this.reportRepo.getReportsThisMonth(),
-        this.reportRepo.getReportStatsByTargetType(),
-        this.reportRepo.getReportStatsByStatus(),
-        this.reportRepo.getReportStatsByReason(),
-        this.reportRepo.getReportTrends(30),
-      ]);
-
-      return {
-        totalReports,
-        pendingReports,
-        resolvedReports,
-        reportsThisMonth,
-        reportsByTargetType,
-        reportsByStatus,
-        reportsByReason,
-        reportTrends,
-      };
-    } catch (error: unknown) {
-      this.logger.error('Failed to generate report statistics', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      throw ReportException.statisticsGenerationError();
+      throw ReportException.reportFetchError();
     }
   }
 
   // ==================== PRIVATE HELPER METHODS ====================
 
   private async buildReportDetail(report: ReportEntity): Promise<ReportDetailDto> {
-    try {
-      // 관련 엔티티 정보 조회
-      const [evidence, review, action, reporterInfo, targetInfo] = await Promise.all([
-        this.evidenceRepo.findByReportId(report.id),
-        this.reviewRepo.findByReportId(report.id),
-        this.actionRepo.findByReportId(report.id),
-        this.getReporterInfo(report.reporterId),
-        this.getTargetInfo(report.targetType, report.targetId),
-      ]);
+    return await this.executeWithErrorHandling(
+      async () => {
+        // 관련 엔티티 정보 조회
+        const [evidence, reporterInfo, targetInfo] = await Promise.all([
+          this.evidenceRepo.findByReportId(report.id),
+          this.getReporterInfo(report.reporterId),
+          this.getTargetInfo(report.targetType, report.targetId),
+        ]);
 
-      const result: ReportDetailDto = {
-        id: report.id,
-        reporterId: report.reporterId,
-        targetType: report.targetType,
-        targetId: report.targetId,
-        reason: report.reason,
-        status: report.status,
-        priority: report.priority,
-        createdAt: report.createdAt,
-        updatedAt: report.updatedAt,
-      };
-
-      // Handle optional properties conditionally
-      if (report.description !== undefined) {
-        result.description = report.description || '';
-      }
-
-      if (evidence) {
-        const evidenceData: {
-          screenshots?: string[];
-          urls?: string[];
-          additionalInfo?: Record<string, unknown>;
-        } = {};
-        if (evidence.screenshots !== undefined && evidence.screenshots !== null) {
-          evidenceData.screenshots = evidence.screenshots;
-        }
-        if (evidence.urls !== undefined && evidence.urls !== null) {
-          evidenceData.urls = evidence.urls;
-        }
-        if (evidence.additionalInfo !== undefined && evidence.additionalInfo !== null) {
-          evidenceData.additionalInfo = evidence.additionalInfo;
-        }
-        result.evidence = evidenceData;
-      }
-
-      if (review?.reviewerId !== undefined) {
-        result.reviewerId = review.reviewerId || '';
-      }
-      if (review?.reviewedAt !== undefined) {
-        result.reviewedAt = review.reviewedAt || new Date();
-      }
-      if (review?.reviewComment !== undefined) {
-        result.reviewComment = review.reviewComment || '';
-      }
-
-      if (action) {
-        const actionData: {
-          actionType: ReportActionType;
-          duration?: number;
-          reason?: string;
-        } = {
-          actionType: action.actionType as ReportActionType,
+        const result: ReportDetailDto = {
+          id: report.id,
+          reporterId: report.reporterId,
+          targetType: report.targetType,
+          targetId: report.targetId,
+          reason: report.reason,
+          status: report.status,
+          priority: report.priority,
+          createdAt: report.createdAt,
+          updatedAt: report.updatedAt,
         };
-        if (action.duration !== undefined && action.duration !== null) {
-          actionData.duration = action.duration;
+
+        // Handle optional properties conditionally
+        if (report.description !== undefined) {
+          result.description = report.description || '';
         }
-        if (action.reason !== undefined && action.reason !== null) {
-          actionData.reason = action.reason;
+
+        if (evidence) {
+          const evidenceData: {
+            screenshots?: string[];
+            urls?: string[];
+            additionalInfo?: Record<string, unknown>;
+          } = {};
+          if (evidence.screenshots !== undefined && evidence.screenshots !== null) {
+            evidenceData.screenshots = evidence.screenshots;
+          }
+          if (evidence.urls !== undefined && evidence.urls !== null) {
+            evidenceData.urls = evidence.urls;
+          }
+          if (evidence.additionalInfo !== undefined && evidence.additionalInfo !== null) {
+            evidenceData.additionalInfo = evidence.additionalInfo;
+          }
+          result.evidence = evidenceData;
         }
-        result.actions = actionData;
-      }
 
-      if (reporterInfo !== undefined) {
-        result.reporterInfo = reporterInfo;
-      }
-      if (targetInfo !== undefined) {
-        result.targetInfo = targetInfo;
-      }
+        if (reporterInfo !== undefined) {
+          result.reporterInfo = reporterInfo;
+        }
+        if (targetInfo !== undefined) {
+          result.targetInfo = targetInfo;
+        }
 
-      return result;
-    } catch (error: unknown) {
-      this.logger.warn('Failed to build report detail', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        reportId: report.id,
-      });
-
-      // 최소한의 정보만 반환
-      const basicDetail: ReportDetailDto = {
+        return result;
+      },
+      'Build report detail',
+      { reportId: report.id },
+      // 최소한의 정보만 포함한 기본 결과를 fallback으로 제공
+      {
         id: report.id,
         reporterId: report.reporterId,
         targetType: report.targetType,
@@ -591,73 +374,105 @@ export class ReportService {
         priority: report.priority,
         createdAt: report.createdAt,
         updatedAt: report.updatedAt,
-      };
-
-      if (report.description !== undefined) {
-        basicDetail.description = report.description || '';
-      }
-
-      return basicDetail;
-    }
+        description: report.description || '',
+      } as ReportDetailDto
+    );
   }
 
   private async getReporterInfo(
     reporterId: string
   ): Promise<{ email: string; name?: string } | undefined> {
-    try {
-      const userInfo = await this.authClient
-        .send('user.findById', { userId: reporterId })
-        .toPromise();
+    return await this.executeWithErrorHandling(
+      async () => {
+        const userInfo = await this.authClient
+          .send('user.findById', { userId: reporterId })
+          .toPromise();
 
-      if (userInfo) {
-        return {
-          email: userInfo.email,
-          name: userInfo.name,
-        };
-      }
-    } catch (error: unknown) {
-      this.logger.warn('Failed to get reporter info', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        reporterId,
-      });
-    }
+        if (userInfo) {
+          return {
+            email: userInfo.email,
+            name: userInfo.name,
+          };
+        }
 
-    return undefined;
+        return undefined;
+      },
+      'Get reporter info',
+      { reporterId },
+      undefined
+    );
+  }
+
+  async getReporterInfoBatch(
+    reporterIds: string[]
+  ): Promise<Record<string, { email: string; name?: string }>> {
+    if (reporterIds.length === 0) return {};
+
+    return await this.executeWithErrorHandling(
+      async () => {
+        // 비어있는 ID 제거 및 중복 제거
+        const uniqueIds = [...new Set(reporterIds.filter(id => id && id.trim().length > 0))];
+        
+        if (uniqueIds.length === 0) return {};
+
+        // 배치 사용자 정보 조회
+        const usersInfo = await this.authClient
+          .send('user.findByIds', { userIds: uniqueIds })
+          .toPromise();
+
+        const result: Record<string, { email: string; name?: string }> = {};
+        
+        if (Array.isArray(usersInfo)) {
+          usersInfo.forEach((userInfo: Record<string, unknown>) => {
+            if (userInfo && userInfo.id) {
+              result[userInfo.id as string] = {
+                email: userInfo.email as string,
+                name: userInfo.name as string,
+              };
+            }
+          });
+        }
+
+        this.logger.debug('Batch reporter info retrieved', {
+          requestedCount: uniqueIds.length,
+          retrievedCount: Object.keys(result).length,
+        });
+
+        return result;
+      },
+      'Get reporter info batch',
+      { reporterIdsCount: reporterIds.length },
+      {}
+    );
   }
 
   private async getTargetInfo(
     targetType: ReportTargetType,
     targetId: string
   ): Promise<{ title?: string; name?: string; type?: string } | undefined> {
-    try {
-      switch (targetType) {
-        case ReportTargetType.USER: {
-          const userInfo = await this.authClient
-            .send('user.findById', { userId: targetId })
-            .toPromise();
-          return userInfo ? { name: userInfo.name || userInfo.email, type: 'user' } : undefined;
-        }
+    return await this.executeWithErrorHandling(
+      async () => {
+        switch (targetType) {
+          case ReportTargetType.USER: {
+            const userInfo = await this.authClient
+              .send('user.findById', { userId: targetId })
+              .toPromise();
+            return userInfo ? { name: userInfo.name || userInfo.email, type: 'user' } : undefined;
+          }
 
-        case ReportTargetType.CREATOR: {
-          try {
-            // Creator 서비스를 통해 크리에이터 정보 조회
+          case ReportTargetType.CREATOR: {
             const creatorInfo = await this.authClient
               .send('creator.findById', { creatorId: targetId })
               .toPromise();
             return creatorInfo
               ? {
-                  name: creatorInfo.displayName || creatorInfo.name,
+                  name: (creatorInfo.displayName || creatorInfo.name) as string,
                   type: 'creator',
                 }
               : { name: `Creator ${targetId}`, type: 'creator' };
-          } catch {
-            return { name: `Creator ${targetId}`, type: 'creator' };
           }
-        }
 
-        case ReportTargetType.CONTENT: {
-          try {
-            // Content 서비스를 통해 콘텐츠 정보 조회
+          case ReportTargetType.CONTENT: {
             const contentInfo = await this.authClient
               .send('content.findById', { contentId: targetId })
               .toPromise();
@@ -668,31 +483,133 @@ export class ReportService {
                   type: 'content',
                 }
               : { title: `Content ${targetId}`, type: 'content' };
-          } catch {
-            return { title: `Content ${targetId}`, type: 'content' };
           }
+
+          default:
+            return undefined;
+        }
+      },
+      'Get target info',
+      { targetType, targetId },
+      // 기본값 반환
+      targetType === ReportTargetType.CREATOR
+        ? { name: `Creator ${targetId}`, type: 'creator' }
+        : targetType === ReportTargetType.CONTENT
+          ? { title: `Content ${targetId}`, type: 'content' }
+          : undefined
+    );
+  }
+
+  async getTargetInfoBatch(
+    targets: Array<{ targetType: ReportTargetType; targetId: string }>
+  ): Promise<Record<string, { title?: string; name?: string; type?: string }>> {
+    if (targets.length === 0) return {};
+
+    return await this.executeWithErrorHandling(
+      async () => {
+        // 타입별로 그룹화
+        const userIds: string[] = [];
+        const creatorIds: string[] = [];
+        const contentIds: string[] = [];
+
+        targets.forEach(({ targetType, targetId }) => {
+          if (!targetId || targetId.trim().length === 0) return;
+          
+          switch (targetType) {
+            case ReportTargetType.USER:
+              if (!userIds.includes(targetId)) userIds.push(targetId);
+              break;
+            case ReportTargetType.CREATOR:
+              if (!creatorIds.includes(targetId)) creatorIds.push(targetId);
+              break;
+            case ReportTargetType.CONTENT:
+              if (!contentIds.includes(targetId)) contentIds.push(targetId);
+              break;
+          }
+        });
+
+        const [usersInfo, creatorsInfo, contentsInfo] = await Promise.all([
+          userIds.length > 0
+            ? this.authClient.send('user.findByIds', { userIds }).toPromise()
+            : Promise.resolve([]),
+          creatorIds.length > 0
+            ? this.authClient.send('creator.findByIds', { creatorIds }).toPromise()
+            : Promise.resolve([]),
+          contentIds.length > 0
+            ? this.authClient.send('content.findByIds', { contentIds }).toPromise()
+            : Promise.resolve([]),
+        ]);
+
+        const result: Record<string, { title?: string; name?: string; type?: string }> = {};
+
+        // 사용자 정보 처리
+        if (Array.isArray(usersInfo)) {
+          usersInfo.forEach((userInfo: Record<string, unknown>) => {
+            if (userInfo && userInfo.id) {
+              result[`${ReportTargetType.USER}:${userInfo.id}`] = {
+                name: (userInfo.name || userInfo.email) as string,
+                type: 'user',
+              };
+            }
+          });
         }
 
-        default:
-          return undefined;
-      }
-    } catch (error: unknown) {
-      this.logger.warn('Failed to get target info', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        targetType,
-        targetId,
-      });
+        // 크리에이터 정보 처리
+        if (Array.isArray(creatorsInfo)) {
+          creatorsInfo.forEach((creatorInfo: Record<string, unknown>) => {
+            if (creatorInfo && creatorInfo.id) {
+              result[`${ReportTargetType.CREATOR}:${creatorInfo.id}`] = {
+                name: (creatorInfo.displayName || creatorInfo.name) as string,
+                type: 'creator',
+              };
+            }
+          });
+        }
 
-      // 기본값 반환
-      switch (targetType) {
-        case ReportTargetType.CREATOR:
-          return { name: `Creator ${targetId}`, type: 'creator' };
-        case ReportTargetType.CONTENT:
-          return { title: `Content ${targetId}`, type: 'content' };
-        default:
-          return undefined;
-      }
-    }
+        // 콘텐츠 정보 처리
+        if (Array.isArray(contentsInfo)) {
+          contentsInfo.forEach((contentInfo: Record<string, unknown>) => {
+            if (contentInfo && contentInfo.id) {
+              result[`${ReportTargetType.CONTENT}:${contentInfo.id}`] = {
+                title: contentInfo.title as string,
+                name: contentInfo.title as string,
+                type: 'content',
+              };
+            }
+          });
+        }
+
+        // 누락된 데이터에 대해 기본값 설정
+        targets.forEach(({ targetType, targetId }) => {
+          const key = `${targetType}:${targetId}`;
+          if (!result[key]) {
+            switch (targetType) {
+              case ReportTargetType.CREATOR:
+                result[key] = { name: `Creator ${targetId}`, type: 'creator' };
+                break;
+              case ReportTargetType.CONTENT:
+                result[key] = { title: `Content ${targetId}`, type: 'content' };
+                break;
+              case ReportTargetType.USER:
+                result[key] = { name: `User ${targetId}`, type: 'user' };
+                break;
+            }
+          }
+        });
+
+        this.logger.debug('Batch target info retrieved', {
+          userCount: userIds.length,
+          creatorCount: creatorIds.length,
+          contentCount: contentIds.length,
+          resultCount: Object.keys(result).length,
+        });
+
+        return result;
+      },
+      'Get target info batch',
+      { targetsCount: targets.length },
+      {}
+    );
   }
 
   private async validateReportTarget(
@@ -792,280 +709,102 @@ export class ReportService {
     }
   }
 
-  private validateStatusTransition(currentStatus: ReportStatus, newStatus: ReportStatus): void {
-    const validTransitions: Record<ReportStatus, ReportStatus[]> = {
-      [ReportStatus.PENDING]: [ReportStatus.UNDER_REVIEW, ReportStatus.DISMISSED],
-      [ReportStatus.UNDER_REVIEW]: [
-        ReportStatus.RESOLVED,
-        ReportStatus.REJECTED,
-        ReportStatus.DISMISSED,
-      ],
-      [ReportStatus.RESOLVED]: [],
-      [ReportStatus.REJECTED]: [],
-      [ReportStatus.DISMISSED]: [],
-    };
+  // ==================== 배치 처리 메서드 ====================
 
-    if (!validTransitions[currentStatus].includes(newStatus)) {
-      throw ReportException.invalidStatusTransition();
-    }
-  }
+  private async buildReportDetailsBatch(reports: ReportEntity[]): Promise<ReportDetailDto[]> {
+    if (reports.length === 0) return [];
 
-  private async executeReportAction(
-    report: ReportEntity,
-    actions: { actionType?: string; duration?: number; reason?: string }
-  ): Promise<void> {
-    try {
-      // actionType이 없으면 아무 작업도 하지 않음
-      if (!actions.actionType) {
-        this.logger.debug('No action type specified, skipping action execution', {
-          reportId: report.id,
-        });
-        return;
-      }
-
-      this.logger.log('Executing report action', {
-        reportId: report.id,
-        actionType: actions.actionType,
-        duration: actions.duration,
-        targetType: report.targetType,
-        targetId: report.targetId,
-      });
-
-      // 이제 actionType이 존재함을 TypeScript가 알 수 있음
-      const confirmedActions = actions as {
-        actionType: string;
-        duration?: number;
-        reason?: string;
-      };
-
-      switch (confirmedActions.actionType) {
-        case ReportActionType.WARNING:
-          await this.executeWarningAction(report, confirmedActions);
-          break;
-
-        case ReportActionType.SUSPENSION:
-          await this.executeSuspensionAction(report, confirmedActions);
-          break;
-
-        case ReportActionType.BAN:
-          await this.executeBanAction(report, confirmedActions);
-          break;
-
-        case ReportActionType.CONTENT_REMOVAL:
-          await this.executeContentRemovalAction(report, confirmedActions);
-          break;
-
-        case ReportActionType.NONE:
-        default:
-          this.logger.debug('No action required', { reportId: report.id });
-          break;
-      }
-
-      // 조치 실행 상태 업데이트
-      await this.actionRepo.updateAction(report.id, {
-        executedAt: new Date(),
-        executionStatus: 'executed',
-      });
-
-      this.logger.log('Report action executed successfully', {
-        reportId: report.id,
-        actionType: actions.actionType,
-        targetType: report.targetType,
-        targetId: report.targetId,
-      });
-    } catch (error: unknown) {
-      this.logger.error('Failed to execute report action', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        reportId: report.id,
-        actionType: actions.actionType,
-        targetType: report.targetType,
-        targetId: report.targetId,
-      });
-
-      // 조치 실행 실패 상태 업데이트
-      await this.actionRepo.updateAction(report.id, {
-        executionStatus: 'failed',
-      });
-    }
-  }
-
-  private async executeWarningAction(
-    report: ReportEntity,
-    actions: { actionType: string; duration?: number; reason?: string }
-  ): Promise<void> {
-    try {
-      if (report.targetType === ReportTargetType.USER) {
-        // Auth 서비스에 경고 요청 전송
-        await this.authClient
-          .send('user.sendWarning', {
-            userId: report.targetId,
-            reason: actions.reason || '신고로 인한 경고',
-            reportId: report.id,
-          })
-          .toPromise();
-
-        this.logger.log('Warning sent to user', {
-          reportId: report.id,
-          targetId: report.targetId,
-        });
-      }
-    } catch (error: unknown) {
-      this.logger.error('Failed to execute warning action', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        reportId: report.id,
-        targetId: report.targetId,
-      });
-      throw error;
-    }
-  }
-
-  private async executeSuspensionAction(
-    report: ReportEntity,
-    actions: { actionType: string; duration?: number; reason?: string }
-  ): Promise<void> {
-    try {
-      if (report.targetType === ReportTargetType.USER) {
-        // Auth 서비스에 정지 요청 전송
-        await this.authClient
-          .send('user.suspend', {
-            userId: report.targetId,
-            duration: actions.duration || 7, // 기본 7일
-            reason: actions.reason || '신고로 인한 계정 정지',
-            reportId: report.id,
-          })
-          .toPromise();
-
-        this.logger.log('User suspended', {
-          reportId: report.id,
-          targetId: report.targetId,
-          duration: actions.duration || 7,
-        });
-      } else if (report.targetType === ReportTargetType.CREATOR) {
-        // Creator 서비스에 정지 요청 전송
-        await this.authClient
-          .send('creator.suspend', {
-            creatorId: report.targetId,
-            duration: actions.duration || 7,
-            reason: actions.reason || '신고로 인한 크리에이터 정지',
-            reportId: report.id,
-          })
-          .toPromise();
-
-        this.logger.log('Creator suspended', {
-          reportId: report.id,
-          targetId: report.targetId,
-          duration: actions.duration || 7,
-        });
-      }
-    } catch (error: unknown) {
-      this.logger.error('Failed to execute suspension action', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        reportId: report.id,
-        targetId: report.targetId,
-        duration: actions.duration,
-      });
-      throw error;
-    }
-  }
-
-  private async executeBanAction(
-    report: ReportEntity,
-    actions: { actionType: string; duration?: number; reason?: string }
-  ): Promise<void> {
-    try {
-      if (report.targetType === ReportTargetType.USER) {
-        // Auth 서비스에 차단 요청 전송
-        await this.authClient
-          .send('user.ban', {
-            userId: report.targetId,
-            reason: actions.reason || '신고로 인한 계정 차단',
-            reportId: report.id,
-            permanent: !actions.duration, // duration이 없으면 영구 차단
-            duration: actions.duration,
-          })
-          .toPromise();
-
-        this.logger.log('User banned', {
-          reportId: report.id,
-          targetId: report.targetId,
-          permanent: !actions.duration,
-          duration: actions.duration,
-        });
-      } else if (report.targetType === ReportTargetType.CREATOR) {
-        // Creator 서비스에 차단 요청 전송
-        await this.authClient
-          .send('creator.ban', {
-            creatorId: report.targetId,
-            reason: actions.reason || '신고로 인한 크리에이터 차단',
-            reportId: report.id,
-            permanent: !actions.duration,
-            duration: actions.duration,
-          })
-          .toPromise();
-
-        this.logger.log('Creator banned', {
-          reportId: report.id,
-          targetId: report.targetId,
-          permanent: !actions.duration,
-          duration: actions.duration,
-        });
-      }
-    } catch (error: unknown) {
-      this.logger.error('Failed to execute ban action', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        reportId: report.id,
-        targetId: report.targetId,
-        duration: actions.duration,
-      });
-      throw error;
-    }
-  }
-
-  private async executeContentRemovalAction(
-    report: ReportEntity,
-    actions: { actionType: string; duration?: number; reason?: string }
-  ): Promise<void> {
-    try {
-      if (report.targetType === ReportTargetType.CONTENT) {
-        // Content 서비스에 삭제 요청 전송
-        await this.authClient
-          .send('content.remove', {
-            contentId: report.targetId,
-            reason: actions.reason || '신고로 인한 콘텐츠 삭제',
-            reportId: report.id,
-          })
-          .toPromise();
-
-        this.logger.log('Content removed', {
-          reportId: report.id,
-          targetId: report.targetId,
-        });
-      }
-    } catch (error: unknown) {
-      this.logger.error('Failed to execute content removal action', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        reportId: report.id,
-        targetId: report.targetId,
-      });
-      throw error;
-    }
-  }
-
-  private async shouldAutoResolve(report: ReportEntity): Promise<boolean> {
-    // 간단한 자동 해결 규칙
-    // 1. 낮은 우선순위이고 오래된 신고
-    // 2. 동일 대상에 대한 신고가 적은 경우
-    if (report.priority === 3) {
-      const daysSinceCreated = (Date.now() - report.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-      if (daysSinceCreated > 7) {
-        const relatedReports = await this.reportRepo.getCountByTarget(
-          report.targetType,
-          report.targetId
+    return await this.executeWithErrorHandling(
+      async () => {
+        // 1. 각 리포트에 대한 evidence 정보 배치 조회
+        const evidencePromises = reports.map(report => 
+          this.evidenceRepo.findByReportId(report.id)
         );
-        return relatedReports <= 2;
-      }
-    }
+        const evidenceResults = await Promise.all(evidencePromises);
 
-    return false;
+        // 2. 배치 외부 데이터 조회
+        const reporterIds = [...new Set(reports.map(r => r.reporterId).filter(id => id))];
+        const targets = reports.map(r => ({ targetType: r.targetType, targetId: r.targetId }));
+
+        const [reportersInfo, targetsInfo] = await Promise.all([
+          this.getReporterInfoBatch(reporterIds),
+          this.getTargetInfoBatch(targets),
+        ]);
+
+        // 3. 결과 조합
+        const results = reports.map((report, index) => {
+          const evidence = evidenceResults[index];
+          const reporterInfo = reportersInfo[report.reporterId];
+          const targetInfo = targetsInfo[`${report.targetType}:${report.targetId}`];
+
+          const result: ReportDetailDto = {
+            id: report.id,
+            reporterId: report.reporterId,
+            targetType: report.targetType,
+            targetId: report.targetId,
+            reason: report.reason,
+            status: report.status,
+            priority: report.priority,
+            createdAt: report.createdAt,
+            updatedAt: report.updatedAt,
+          };
+
+          // 선택적 속성 처리
+          if (report.description !== undefined) {
+            result.description = report.description || '';
+          }
+
+          if (evidence) {
+            const evidenceData: {
+              screenshots?: string[];
+              urls?: string[];
+              additionalInfo?: Record<string, unknown>;
+            } = {};
+            if (evidence.screenshots !== undefined && evidence.screenshots !== null) {
+              evidenceData.screenshots = evidence.screenshots;
+            }
+            if (evidence.urls !== undefined && evidence.urls !== null) {
+              evidenceData.urls = evidence.urls;
+            }
+            if (evidence.additionalInfo !== undefined && evidence.additionalInfo !== null) {
+              evidenceData.additionalInfo = evidence.additionalInfo;
+            }
+            result.evidence = evidenceData;
+          }
+
+          if (reporterInfo !== undefined) {
+            result.reporterInfo = reporterInfo;
+          }
+          if (targetInfo !== undefined) {
+            result.targetInfo = targetInfo;
+          }
+
+          return result;
+        });
+
+        this.logger.debug('Batch report details built', {
+          reportCount: reports.length,
+          reporterCount: reporterIds.length,
+          targetCount: targets.length,
+        });
+
+        return results;
+      },
+      'Build report details batch',
+      { reportCount: reports.length },
+      // fallback: 배치 처리가 실패하면 개별 처리로 폴백
+      reports.map(report => ({
+        id: report.id,
+        reporterId: report.reporterId,
+        targetType: report.targetType,
+        targetId: report.targetId,
+        reason: report.reason,
+        status: report.status,
+        priority: report.priority,
+        createdAt: report.createdAt,
+        updatedAt: report.updatedAt,
+        description: report.description || '',
+      } as ReportDetailDto))
+    );
   }
 }

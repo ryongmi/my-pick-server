@@ -109,4 +109,12 @@ export class AdminException {
       message: '통계 생성 중 오류가 발생했습니다.',
     });
   }
+
+  // 콘텐츠 관련 (600-699)
+  static contentDeleteError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'ADMIN_601',
+      message: '콘텐츠 삭제 중 오류가 발생했습니다.',
+    });
+  }
 }

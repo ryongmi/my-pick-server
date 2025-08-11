@@ -13,7 +13,7 @@ import {
   ReportReviewRepository,
   ReportActionRepository,
 } from './repositories/index.js';
-import { ReportService } from './services/index.js';
+import { ReportService, ReportReviewService, ReportStatisticsService } from './services/index.js';
 import { ReportController } from './controllers/index.js';
 
 @Module({
@@ -32,9 +32,13 @@ import { ReportController } from './controllers/index.js';
     ReportReviewRepository,
     ReportActionRepository,
     ReportService,
+    ReportReviewService,
+    ReportStatisticsService,
   ],
   exports: [
     ReportService,
+    ReportReviewService,
+    ReportStatisticsService,
     ReportRepository,
     ReportEvidenceRepository,
     ReportReviewRepository,

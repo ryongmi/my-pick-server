@@ -101,4 +101,123 @@ export class CreatorApplicationRepository extends BaseRepository<CreatorApplicat
   async countByStatus(status: ApplicationStatus): Promise<number> {
     return this.count({ where: { status } });
   }
+
+  // ==================== 추가 조회 메서드 ====================
+
+  async findApplicationsByIds(applicationIds: string[]): Promise<CreatorApplicationEntity[]> {
+    if (applicationIds.length === 0) {
+      return [];
+    }
+    return this.createQueryBuilder('application')
+      .where('application.id IN (:...ids)', { ids: applicationIds })
+      .getMany();
+  }
+
+  async findByUserIds(userIds: string[]): Promise<CreatorApplicationEntity[]> {
+    if (userIds.length === 0) {
+      return [];
+    }
+    return this.createQueryBuilder('application')
+      .where('application.userId IN (:...userIds)', { userIds })
+      .orderBy('application.appliedAt', 'DESC')
+      .getMany();
+  }
+
+  async countActiveApplications(userId: string): Promise<number> {
+    return this.count({ 
+      where: { 
+        userId,
+        status: ApplicationStatus.PENDING 
+      } 
+    });
+  }
+
+  async findPendingByPriority(): Promise<CreatorApplicationEntity[]> {
+    return this.find({
+      where: { status: ApplicationStatus.PENDING },
+      order: { priority: 'DESC', appliedAt: 'ASC' }
+    });
+  }
+
+  async findByDateRange(startDate: Date, endDate: Date): Promise<CreatorApplicationEntity[]> {
+    return this.createQueryBuilder('application')
+      .where('application.appliedAt >= :startDate', { startDate })
+      .andWhere('application.appliedAt <= :endDate', { endDate })
+      .orderBy('application.appliedAt', 'DESC')
+      .getMany();
+  }
+
+  async findProcessedApplications(): Promise<CreatorApplicationEntity[]> {
+    return this.find({
+      where: [
+        { status: ApplicationStatus.APPROVED },
+        { status: ApplicationStatus.REJECTED }
+      ],
+      order: { reviewedAt: 'DESC' }
+    });
+  }
+
+  // ==================== 통계 메서드 ====================
+
+  async getApplicationTrendsByDays(days: number): Promise<Array<{
+    period: string;
+    total: number;
+    approved: number;
+    rejected: number;
+  }>> {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const result = await this.createQueryBuilder('application')
+      .select('DATE(application.appliedAt) as period')
+      .addSelect('COUNT(*) as total')
+      .addSelect('SUM(CASE WHEN application.status = :approved THEN 1 ELSE 0 END) as approved')
+      .addSelect('SUM(CASE WHEN application.status = :rejected THEN 1 ELSE 0 END) as rejected')
+      .where('application.appliedAt >= :startDate', { startDate })
+      .setParameter('approved', ApplicationStatus.APPROVED)
+      .setParameter('rejected', ApplicationStatus.REJECTED)
+      .groupBy('DATE(application.appliedAt)')
+      .orderBy('period', 'ASC')
+      .getRawMany();
+
+    return result.map(row => ({
+      period: row.period,
+      total: parseInt(row.total, 10),
+      approved: parseInt(row.approved, 10),
+      rejected: parseInt(row.rejected, 10),
+    }));
+  }
+
+  async getReviewerStats(days: number): Promise<Array<{
+    reviewerId: string;
+    totalReviews: number;
+    approvals: number;
+    rejections: number;
+    avgProcessingDays: number;
+  }>> {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const result = await this.createQueryBuilder('application')
+      .select('application.reviewerId as reviewerId')
+      .addSelect('COUNT(*) as totalReviews')
+      .addSelect('SUM(CASE WHEN application.status = :approved THEN 1 ELSE 0 END) as approvals')
+      .addSelect('SUM(CASE WHEN application.status = :rejected THEN 1 ELSE 0 END) as rejections')
+      .addSelect('AVG(DATEDIFF(application.reviewedAt, application.appliedAt)) as avgProcessingDays')
+      .where('application.reviewedAt >= :startDate', { startDate })
+      .andWhere('application.reviewerId IS NOT NULL')
+      .setParameter('approved', ApplicationStatus.APPROVED)
+      .setParameter('rejected', ApplicationStatus.REJECTED)
+      .groupBy('application.reviewerId')
+      .orderBy('totalReviews', 'DESC')
+      .getRawMany();
+
+    return result.map(row => ({
+      reviewerId: row.reviewerId,
+      totalReviews: parseInt(row.totalReviews, 10),
+      approvals: parseInt(row.approvals, 10),
+      rejections: parseInt(row.rejections, 10),
+      avgProcessingDays: parseFloat(row.avgProcessingDays) || 0,
+    }));
+  }
 }

@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  HttpException,
 } from '@nestjs/common';
 
 import { plainToInstance } from 'class-transformer';
@@ -39,17 +40,19 @@ import {
 
 import {
   ContentService,
+  ContentOrchestrationService,
   ContentCategoryService,
   ContentTagService,
   ContentInteractionService,
 } from '../services/index.js';
-import { ContentSearchQueryDto, ContentSearchResultDto, ContentDetailDto } from '../dto/index.js';
+import { ContentSearchQueryDto, ContentSearchResultDto, TrendingContentDto, ContentDetailDto } from '../dto/index.js';
 
 @SwaggerApiTags({ tags: ['content'] })
 @Controller('content')
 export class ContentController {
   constructor(
     private readonly contentService: ContentService,
+    private readonly contentOrchestrationService: ContentOrchestrationService,
     private readonly userInteractionService: UserInteractionService,
     private readonly contentCategoryService: ContentCategoryService,
     private readonly contentTagService: ContentTagService,
@@ -57,15 +60,15 @@ export class ContentController {
   ) {}
 
   @Get()
-  @HttpCode(200)
+  @HttpCode(HttpStatus.OK)
   @SwaggerApiOperation({ summary: '콘텐츠 목록 조회' })
   @SwaggerApiOkResponse({
-    status: 200,
+    status: HttpStatus.OK,
     description: '콘텐츠 목록 조회 성공',
     dto: ContentSearchResultDto,
   })
   @SwaggerApiErrorResponse({
-    status: 500,
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
     description: '콘텐츠 조회 중 오류가 발생했습니다.',
   })
   @Serialize({ dto: ContentSearchResultDto })
@@ -73,45 +76,87 @@ export class ContentController {
     @Query() query: ContentSearchQueryDto,
     @CurrentJwt() jwt?: JwtPayload
   ): Promise<PaginatedResult<ContentSearchResultDto>> {
-    const userId = jwt?.id; // 선택적 인증: 로그인하지 않은 사용자도 볼 수 있음
-    return this.contentService.searchContent(query, userId);
+    try {
+      const userId = jwt?.id; // 선택적 인증: 로그인하지 않은 사용자도 볼 수 있음
+      return await this.contentOrchestrationService.searchContent(query, userId);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '콘텐츠 조회 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Get('trending')
-  @HttpCode(200)
+  @HttpCode(HttpStatus.OK)
   @SwaggerApiOperation({ summary: '트렌딩 콘텐츠 조회' })
   @SwaggerApiOkResponse({
-    status: 200,
+    status: HttpStatus.OK,
     description: '트렌딩 콘텐츠 조회 성공',
-    dto: ContentSearchResultDto,
+    dto: TrendingContentDto,
   })
-  @Serialize({ dto: ContentSearchResultDto })
+  @SwaggerApiErrorResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: '트렌딩 콘텐츠 조회 중 오류가 발생했습니다.',
+  })
+  @Serialize({ dto: TrendingContentDto })
   async getTrendingContent(
     @Query('hours') hours: number = 24,
     @Query('limit') limit: number = 50
-  ): Promise<ContentSearchResultDto[]> {
-    return this.contentService.getTrendingContent(hours, limit);
+  ): Promise<TrendingContentDto[]> {
+    try {
+      return await this.contentOrchestrationService.getTrendingContent(hours, limit);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '트렌딩 콘텐츠 조회 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Get('recent')
-  @HttpCode(200)
+  @HttpCode(HttpStatus.OK)
   @SwaggerApiOperation({ summary: '최신 콘텐츠 조회' })
   @SwaggerApiOkResponse({
-    status: 200,
+    status: HttpStatus.OK,
     description: '최신 콘텐츠 조회 성공',
     dto: ContentSearchResultDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: '잘못된 크리에이터 ID 형식입니다.',
+  })
+  @SwaggerApiErrorResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: '최신 콘텐츠 조회 중 오류가 발생했습니다.',
   })
   @Serialize({ dto: ContentSearchResultDto })
   async getRecentContent(
     @Query('creatorIds') creatorIds: string,
     @Query('limit') limit: number = 20
   ): Promise<ContentSearchResultDto[]> {
-    const creatorIdArray = creatorIds ? creatorIds.split(',') : [];
-    return this.contentService.getRecentContent(creatorIdArray, limit);
+    try {
+      const creatorIdArray = creatorIds ? creatorIds.split(',').filter(id => id.trim()) : [];
+      return await this.contentOrchestrationService.getRecentContent(creatorIdArray, limit);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '최신 콘텐츠 조회 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Get(':id')
-  @HttpCode(200)
+  @HttpCode(HttpStatus.OK)
   @SwaggerApiOperation({ summary: '콘텐츠 상세 조회' })
   @SwaggerApiParam({
     name: 'id',
@@ -119,21 +164,35 @@ export class ContentController {
     type: String,
   })
   @SwaggerApiOkResponse({
-    status: 200,
+    status: HttpStatus.OK,
     description: '콘텐츠 상세 조회 성공',
     dto: ContentDetailDto,
   })
   @SwaggerApiErrorResponse({
-    status: 404,
+    status: HttpStatus.NOT_FOUND,
     description: '콘텐츠를 찾을 수 없습니다.',
+  })
+  @SwaggerApiErrorResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: '잘못된 콘텐츠 ID 형식입니다.',
   })
   @Serialize({ dto: ContentDetailDto })
   async getContentById(
     @Param('id', ParseUUIDPipe) contentId: string,
     @CurrentJwt() jwt?: JwtPayload
   ): Promise<ContentDetailDto> {
-    const userId = jwt?.id; // 선택적 인증: 로그인하지 않은 사용자도 볼 수 있음
-    return this.contentService.getContentById(contentId, userId);
+    try {
+      const userId = jwt?.id; // 선택적 인증: 로그인하지 않은 사용자도 볼 수 있음
+      return await this.contentService.getContentById(contentId, userId);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '콘텐츠 조회 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post(':id/bookmark')
@@ -158,14 +217,24 @@ export class ContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    await this.contentService.findByIdOrFail(contentId);
+    try {
+      await this.contentService.findByIdOrFail(contentId);
 
-    const dto: BookmarkContentDto = {
-      userId: id,
-      contentId,
-    };
+      const dto: BookmarkContentDto = {
+        userId: id,
+        contentId,
+      };
 
-    await this.userInteractionService.bookmarkContent(dto);
+      await this.userInteractionService.bookmarkContent(dto);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '북마크 추가 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Delete(':id/bookmark')
@@ -176,7 +245,17 @@ export class ContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    await this.userInteractionService.removeBookmark(id, contentId);
+    try {
+      await this.userInteractionService.removeBookmark(id, contentId);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '북마크 제거 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post(':id/like')
@@ -187,15 +266,25 @@ export class ContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    // 콘텐츠 존재 확인
-    await this.contentService.findByIdOrFail(contentId);
+    try {
+      // 콘텐츠 존재 확인
+      await this.contentService.findByIdOrFail(contentId);
 
-    const dto: LikeContentDto = {
-      userId: id,
-      contentId,
-    };
+      const dto: LikeContentDto = {
+        userId: id,
+        contentId,
+      };
 
-    await this.userInteractionService.likeContent(dto);
+      await this.userInteractionService.likeContent(dto);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '좋아요 추가 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Delete(':id/like')
@@ -206,7 +295,17 @@ export class ContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    await this.userInteractionService.removeLike(id, contentId);
+    try {
+      await this.userInteractionService.removeLike(id, contentId);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '좋아요 제거 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post(':id/watch')
@@ -215,19 +314,44 @@ export class ContentController {
   @SwaggerApiBearerAuth()
   async watchContent(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @Body() body: { watchDuration?: number } = {},
+    @Body() body: { watchDuration?: number; watchPercentage?: number } = {},
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    // 콘텐츠 존재 확인
-    await this.contentService.findByIdOrFail(contentId);
+    try {
+      // 콘텐츠 존재 확인
+      await this.contentService.findByIdOrFail(contentId);
 
-    const dto: WatchContentDto = {
-      userId: id,
-      contentId,
-      watchDuration: body.watchDuration,
-    };
+      // 입력값 검증
+      if (body.watchDuration !== undefined && body.watchDuration < 0) {
+        throw new HttpException(
+          '시청 시간은 0 이상이어야 합니다.',
+          HttpStatus.BAD_REQUEST
+        );
+      }
 
-    await this.userInteractionService.watchContent(dto);
+      if (body.watchPercentage !== undefined && (body.watchPercentage < 0 || body.watchPercentage > 100)) {
+        throw new HttpException(
+          '시청 비율은 0-100% 범위여야 합니다.',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      const dto: WatchContentDto = {
+        userId: id,
+        contentId,
+        watchDuration: body.watchDuration,
+      };
+
+      await this.userInteractionService.watchContent(dto);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '시청 기록 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post(':id/rate')
@@ -239,16 +363,34 @@ export class ContentController {
     @Body() body: { rating: number },
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    // 콘텐츠 존재 확인
-    await this.contentService.findByIdOrFail(contentId);
+    try {
+      // 입력값 검증
+      if (body.rating < 1 || body.rating > 5) {
+        throw new HttpException(
+          '평점은 1-5 범위여야 합니다.',
+          HttpStatus.BAD_REQUEST
+        );
+      }
 
-    const dto: RateContentDto = {
-      userId: id,
-      contentId,
-      rating: body.rating,
-    };
+      // 콘텐츠 존재 확인
+      await this.contentService.findByIdOrFail(contentId);
 
-    await this.userInteractionService.rateContent(dto);
+      const dto: RateContentDto = {
+        userId: id,
+        contentId,
+        rating: body.rating,
+      };
+
+      await this.userInteractionService.rateContent(dto);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '평점 등록 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   // ==================== 실시간 토글 API ====================
@@ -271,10 +413,20 @@ export class ContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<{ isBookmarked: boolean }> {
-    // 콘텐츠 존재 확인
-    await this.contentService.findByIdOrFail(contentId);
+    try {
+      // 콘텐츠 존재 확인
+      await this.contentService.findByIdOrFail(contentId);
 
-    return this.userInteractionService.toggleBookmark(id, contentId);
+      return await this.userInteractionService.toggleBookmark(id, contentId);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '북마크 토글 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post(':id/like/toggle')
@@ -295,10 +447,20 @@ export class ContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<{ isLiked: boolean }> {
-    // 콘텐츠 존재 확인
-    await this.contentService.findByIdOrFail(contentId);
+    try {
+      // 콘텐츠 존재 확인
+      await this.contentService.findByIdOrFail(contentId);
 
-    return this.userInteractionService.toggleLike(id, contentId);
+      return await this.userInteractionService.toggleLike(id, contentId);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '좋아요 토글 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   // ==================== 카테고리 관련 엔드포인트 ====================
@@ -306,37 +468,75 @@ export class ContentController {
   @Get(':id/categories')
   @SwaggerApiOperation({ summary: '콘텐츠 카테고리 조회' })
   @SwaggerApiParam({ name: 'id', description: '콘텐츠 ID', type: String })
-  @SwaggerApiOkResponse({ description: '콘텐츠 카테고리 목록', status: 200 })
+  @SwaggerApiOkResponse({ description: '콘텐츠 카테고리 목록', status: HttpStatus.OK })
+  @SwaggerApiErrorResponse({ 
+    status: HttpStatus.NOT_FOUND,
+    description: '콘텐츠를 찾을 수 없습니다.',
+  })
   async getContentCategories(
     @Param('id', ParseUUIDPipe) contentId: string
   ): Promise<Array<{ category: string; isPrimary: boolean; confidence: number }>> {
-    const categories = await this.contentCategoryService.findByContentId(contentId);
-    return categories.map((cat) => ({
-      category: cat.category,
-      isPrimary: cat.isPrimary,
-      confidence: cat.confidence,
-    }));
+    try {
+      // 콘텐츠 존재 확인
+      await this.contentService.findByIdOrFail(contentId);
+      
+      const categories = await this.contentCategoryService.findByContentId(contentId);
+      return categories.map((cat) => ({
+        category: cat.category,
+        isPrimary: cat.isPrimary,
+        confidence: cat.confidence,
+      }));
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '콘텐츠 카테고리 조회 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Get(':id/tags')
   @SwaggerApiOperation({ summary: '콘텐츠 태그 조회' })
   @SwaggerApiParam({ name: 'id', description: '콘텐츠 ID', type: String })
-  @SwaggerApiOkResponse({ description: '콘텐츠 태그 목록', status: 200 })
+  @SwaggerApiOkResponse({ description: '콘텐츠 태그 목록', status: HttpStatus.OK })
+  @SwaggerApiErrorResponse({ 
+    status: HttpStatus.NOT_FOUND,
+    description: '콘텐츠를 찾을 수 없습니다.',
+  })
   async getContentTags(
     @Param('id', ParseUUIDPipe) contentId: string
   ): Promise<Array<{ tag: string; source: string; relevanceScore: number }>> {
-    const tags = await this.contentTagService.findByContentId(contentId);
-    return tags.map((tag) => ({
-      tag: tag.tag,
-      source: tag.source,
-      relevanceScore: tag.relevanceScore,
-    }));
+    try {
+      // 콘텐츠 존재 확인
+      await this.contentService.findByIdOrFail(contentId);
+      
+      const tags = await this.contentTagService.findByContentId(contentId);
+      return tags.map((tag) => ({
+        tag: tag.tag,
+        source: tag.source,
+        relevanceScore: tag.relevanceScore,
+      }));
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '콘텐츠 태그 조회 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Get(':id/performance')
   @SwaggerApiOperation({ summary: '콘텐츠 성과 조회' })
   @SwaggerApiParam({ name: 'id', description: '콘텐츠 ID', type: String })
-  @SwaggerApiOkResponse({ description: '콘텐츠 성과 정보', status: 200 })
+  @SwaggerApiOkResponse({ description: '콘텐츠 성과 정보', status: HttpStatus.OK })
+  @SwaggerApiErrorResponse({ 
+    status: HttpStatus.NOT_FOUND,
+    description: '콘텐츠를 찾을 수 없습니다.',
+  })
   async getContentPerformance(@Param('id', ParseUUIDPipe) contentId: string): Promise<{
     viewCount: number;
     likeCount: number;
@@ -346,7 +546,20 @@ export class ContentController {
     avgWatchPercentage: number;
     avgRating: number;
   } | null> {
-    return await this.contentInteractionService.getContentPerformance(contentId);
+    try {
+      // 콘텐츠 존재 확인
+      await this.contentService.findByIdOrFail(contentId);
+      
+      return await this.contentInteractionService.getContentPerformance(contentId);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '콘텐츠 성과 조회 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   // ==================== 새로운 상호작용 메서드 (ContentInteractionService 활용) ====================
@@ -367,8 +580,33 @@ export class ContentController {
     },
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    await this.contentService.findByIdOrFail(contentId);
-    await this.contentInteractionService.recordView(contentId, id, body);
+    try {
+      // 입력값 검증
+      if (body.watchDuration !== undefined && body.watchDuration < 0) {
+        throw new HttpException(
+          '시청 시간은 0 이상이어야 합니다.',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      if (body.watchPercentage !== undefined && (body.watchPercentage < 0 || body.watchPercentage > 100)) {
+        throw new HttpException(
+          '시청 비율은 0-100% 범위여야 합니다.',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      await this.contentService.findByIdOrFail(contentId);
+      await this.contentInteractionService.recordView(contentId, id, body);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '시청 기록 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post(':id/interaction/bookmark/toggle')
@@ -380,8 +618,18 @@ export class ContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<{ isBookmarked: boolean }> {
-    await this.contentService.findByIdOrFail(contentId);
-    return await this.contentInteractionService.toggleBookmark(contentId, id);
+    try {
+      await this.contentService.findByIdOrFail(contentId);
+      return await this.contentInteractionService.toggleBookmark(contentId, id);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '북마크 토글 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post(':id/interaction/like/toggle')
@@ -393,8 +641,18 @@ export class ContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<{ isLiked: boolean }> {
-    await this.contentService.findByIdOrFail(contentId);
-    return await this.contentInteractionService.toggleLike(contentId, id);
+    try {
+      await this.contentService.findByIdOrFail(contentId);
+      return await this.contentInteractionService.toggleLike(contentId, id);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '좋아요 토글 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post(':id/interaction/share')
@@ -406,8 +664,18 @@ export class ContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    await this.contentService.findByIdOrFail(contentId);
-    await this.contentInteractionService.markAsShared(contentId, id);
+    try {
+      await this.contentService.findByIdOrFail(contentId);
+      await this.contentInteractionService.markAsShared(contentId, id);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '공유 기록 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post(':id/interaction/rating')
@@ -420,8 +688,33 @@ export class ContentController {
     @Body() body: { rating: number; comment?: string },
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    await this.contentService.findByIdOrFail(contentId);
-    await this.contentInteractionService.submitRating(contentId, id, body.rating, body.comment);
+    try {
+      // 입력값 검증
+      if (body.rating < 1 || body.rating > 5) {
+        throw new HttpException(
+          '평점은 1-5 범위여야 합니다.',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      if (body.comment && body.comment.length > 500) {
+        throw new HttpException(
+          '코멘트는 500자 이하로 작성해 주세요.',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      await this.contentService.findByIdOrFail(contentId);
+      await this.contentInteractionService.submitRating(contentId, id, body.rating, body.comment);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '평점 등록 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 }
 
@@ -436,31 +729,62 @@ export class ContentBookmarkController {
   ) {}
 
   @Get()
+  @HttpCode(HttpStatus.OK)
+  @SwaggerApiOperation({ summary: '북마크한 콘텐츠 목록 조회' })
+  @SwaggerApiOkResponse({ 
+    description: '북마크한 콘텐츠 목록',
+    status: HttpStatus.OK,
+  })
   async getBookmarkedContent(
-    @Query('page') _page: number = 1,
-    @Query('limit') _limit: number = 20,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<ContentSearchResultDto[]> {
-    const bookmarkedContentIds = await this.userInteractionService.getBookmarkedContentIds(id);
+    try {
+      // 입력값 검증
+      if (page < 1) {
+        throw new HttpException(
+          '페이지는 1 이상이어야 합니다.',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      
+      if (limit < 1 || limit > 100) {
+        throw new HttpException(
+          '제한 수는 1-100 범위여야 합니다.',
+          HttpStatus.BAD_REQUEST
+        );
+      }
 
-    if (bookmarkedContentIds.length === 0) {
-      return [];
+      const bookmarkedContentIds = await this.userInteractionService.getBookmarkedContentIds(id);
+
+      if (bookmarkedContentIds.length === 0) {
+        return [];
+      }
+
+      const contents = await this.contentService.findByIds(bookmarkedContentIds);
+
+      return contents.map((content) =>
+        plainToInstance(
+          ContentSearchResultDto,
+          {
+            ...content,
+            isBookmarked: true,
+          },
+          {
+            excludeExtraneousValues: true,
+          }
+        )
+      );
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        '북마크 목록 조회 중 오류가 발생했습니다.',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
-
-    const contents = await this.contentService.findByIds(bookmarkedContentIds);
-
-    return contents.map((content) =>
-      plainToInstance(
-        ContentSearchResultDto,
-        {
-          ...content,
-          isBookmarked: true,
-        },
-        {
-          excludeExtraneousValues: true,
-        }
-      )
-    );
   }
 }
 

@@ -9,11 +9,14 @@ import {
   Query,
   Body,
   UseGuards,
+  UseInterceptors,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
   Logger,
 } from '@nestjs/common';
+
+import { EntityManager } from 'typeorm';
 
 import {
   SwaggerApiTags,
@@ -29,9 +32,14 @@ import {
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
+import { TransactionManager } from '@krgeobuk/core/decorators';
+import { TransactionInterceptor } from '@krgeobuk/core/interceptors';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
+import { PlatformType } from '@common/enums/index.js';
+
 import { CreatorService } from '../../creator/services/index.js';
+import { CreatorOrchestrationService } from '../../creator/services/creator-orchestration.service.js';
 import { UserSubscriptionService } from '../../user-subscription/services/index.js';
 import {
   CreatorSearchQueryDto,
@@ -40,6 +48,7 @@ import {
   CreateCreatorDto,
   UpdateCreatorDto,
 } from '../../creator/dto/index.js';
+import { ConsentType } from '../../creator/entities/index.js';
 
 // 관리자 전용 크리에이터 상태 DTO
 export class UpdateCreatorStatusDto {
@@ -69,6 +78,7 @@ export class AdminCreatorController {
 
   constructor(
     private readonly creatorService: CreatorService,
+    private readonly orchestrationService: CreatorOrchestrationService,
     private readonly userSubscriptionService: UserSubscriptionService
   ) {}
 
@@ -92,16 +102,30 @@ export class AdminCreatorController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(TransactionInterceptor)
   @SwaggerApiOperation({
-    summary: '관리자용 크리에이터 수동 생성',
+    summary: '관리자용 크리에이터 완전 생성 (플랫폼, 동의 포함)',
     description:
-      '관리자가 크리에이터를 수동으로 생성합니다. 크리에이터 신청 승인과 별개로 직접 생성할 때 사용합니다.',
+      '관리자가 크리에이터를 생성하고 플랫폼 및 동의 정보를 함께 설정합니다. 트랜잭션을 통해 안전하게 처리됩니다.',
   })
-  @SwaggerApiBody({ dto: CreateCreatorDto })
   @SwaggerApiOkResponse({ status: 201, description: '크리에이터 생성 완료' })
   @RequirePermission('creator:write')
-  async createCreator(@Body() dto: CreateCreatorDto): Promise<void> {
-    await this.creatorService.createCreator(dto);
+  async createCreatorComplete(
+    @Body() body: {
+      creator: CreateCreatorDto;
+      platforms?: { type: PlatformType; platformId: string; url?: string; displayName?: string; }[];
+      consents?: ConsentType[];
+    },
+    @TransactionManager() transactionManager: EntityManager
+  ): Promise<{ creatorId: string }> {
+    const { creator, platforms = [], consents = [] } = body;
+    const creatorId = await this.orchestrationService.createCreatorWithPlatforms(
+      creator,
+      platforms,
+      consents,
+      transactionManager
+    );
+    return { creatorId };
   }
 
   @Get(':id')
@@ -178,12 +202,19 @@ export class AdminCreatorController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @SwaggerApiOperation({ summary: '관리자용 크리에이터 삭제' })
+  @UseInterceptors(TransactionInterceptor)
+  @SwaggerApiOperation({
+    summary: '관리자용 크리에이터 완전 삭제',
+    description: '크리에이터와 관련된 모든 데이터(플랫폼, 동의, 통계 등)를 안전하게 삭제합니다.'
+  })
   @SwaggerApiParam({ name: 'id', type: String, description: '크리에이터 ID' })
   @SwaggerApiOkResponse({ status: 204, description: '크리에이터 삭제 완료' })
   @RequirePermission('creator:delete')
-  async deleteCreator(@Param('id', ParseUUIDPipe) creatorId: string): Promise<void> {
-    await this.creatorService.deleteCreator(creatorId);
+  async deleteCreatorComplete(
+    @Param('id', ParseUUIDPipe) creatorId: string,
+    @TransactionManager() transactionManager: EntityManager
+  ): Promise<void> {
+    await this.orchestrationService.deleteCreatorComplete(creatorId, transactionManager);
   }
 
   @Get(':id/statistics')

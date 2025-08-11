@@ -11,6 +11,8 @@ import {
   CreatorPlatformSyncEntity,
   CreatorConsentEntity,
   CreatorStatisticsEntity,
+  CreatorPlatformStatisticsEntity,
+  CreatorCategoryStatisticsEntity,
 } from './entities/index.js';
 import {
   CreatorRepository,
@@ -18,13 +20,21 @@ import {
   CreatorPlatformSyncRepository,
   CreatorConsentRepository,
   CreatorStatisticsRepository,
+  CreatorPlatformStatisticsRepository,
+  CreatorCategoryStatisticsRepository,
 } from './repositories/index.js';
 import {
   CreatorService,
   CreatorPlatformService,
   CreatorPlatformSyncService,
+  CreatorSyncProcessorService,
+  CreatorSyncSchedulerService,
   CreatorConsentService,
   CreatorStatisticsService,
+  CreatorPlatformStatisticsService,
+  CreatorCategoryStatisticsService,
+  CreatorOrchestrationService,
+  CreatorAggregateService,
 } from './services/index.js';
 import { CreatorController } from './controllers/index.js';
 
@@ -36,6 +46,8 @@ import { CreatorController } from './controllers/index.js';
       CreatorPlatformSyncEntity,
       CreatorConsentEntity,
       CreatorStatisticsEntity,
+      CreatorPlatformStatisticsEntity,
+      CreatorCategoryStatisticsEntity,
     ]),
     RedisModule,
     UserSubscriptionModule,
@@ -48,21 +60,35 @@ import { CreatorController } from './controllers/index.js';
     CreatorPlatformSyncRepository,
     CreatorConsentRepository,
     CreatorStatisticsRepository,
+    CreatorPlatformStatisticsRepository,
+    CreatorCategoryStatisticsRepository,
 
     // Services
     CreatorService,
     CreatorPlatformService,
     CreatorPlatformSyncService,
+    CreatorSyncProcessorService,
+    CreatorSyncSchedulerService,
     CreatorConsentService,
     CreatorStatisticsService,
+    CreatorPlatformStatisticsService,
+    CreatorCategoryStatisticsService,
+    CreatorOrchestrationService,
+    CreatorAggregateService,
   ],
   exports: [
     // 다른 모듈에서 사용할 수 있도록 서비스 export
     CreatorService,
     CreatorPlatformService,
     CreatorPlatformSyncService,
+    CreatorSyncProcessorService,
+    CreatorSyncSchedulerService,
     CreatorConsentService,
     CreatorStatisticsService,
+    CreatorPlatformStatisticsService,
+    CreatorCategoryStatisticsService,
+    CreatorOrchestrationService,
+    CreatorAggregateService,
   ],
 })
 export class CreatorModule {}

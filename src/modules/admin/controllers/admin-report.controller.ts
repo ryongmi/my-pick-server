@@ -29,7 +29,7 @@ import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import type { JwtPayload } from '@krgeobuk/jwt/interfaces';
 
-import { ReportService } from '../../report/services/index.js';
+import { ReportService, ReportStatisticsService, ReportReviewService } from '../../report/services/index.js';
 import { ReportTargetType, ReportStatus } from '../../report/enums/index.js';
 import { ReportSearchQueryDto, ReviewReportDto, ReportDetailDto } from '../../report/dto/index.js';
 import { UpdatePriorityDto } from '../dto/index.js';
@@ -42,7 +42,11 @@ import { UpdatePriorityDto } from '../dto/index.js';
 export class AdminReportController {
   private readonly logger = new Logger(AdminReportController.name);
 
-  constructor(private readonly reportService: ReportService) {}
+  constructor(
+    private readonly reportService: ReportService,
+    private readonly statisticsService: ReportStatisticsService,
+    private readonly reviewService: ReportReviewService,
+  ) {}
 
   @Get()
   @SwaggerApiOperation({
@@ -96,7 +100,7 @@ export class AdminReportController {
     reportsByTargetType: Array<{ targetType: string; count: number }>;
     reportsByStatus: Array<{ status: string; count: number }>;
   }> {
-    return await this.reportService.getReportStatistics();
+    return await this.statisticsService.getReportStatistics();
   }
 
   @Get(':id')
@@ -126,7 +130,7 @@ export class AdminReportController {
     @Body() dto: ReviewReportDto,
     @CurrentJwt() { id }: JwtPayload
   ): Promise<void> {
-    await this.reportService.reviewReport(reportId, id, dto);
+    await this.reviewService.reviewReport(reportId, id, dto);
   }
 
   @Delete(':id')

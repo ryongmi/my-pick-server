@@ -15,4 +15,8 @@ export class CreatorApplicationReviewRepository extends BaseRepository<CreatorAp
   async findByApplicationId(applicationId: string): Promise<CreatorApplicationReviewEntity | null> {
     return this.findOne({ where: { applicationId } });
   }
+
+  async deleteByApplicationId(applicationId: string): Promise<void> {
+    await this.delete({ applicationId });
+  }
 }

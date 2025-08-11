@@ -17,4 +17,8 @@ export class CreatorApplicationChannelInfoRepository extends BaseRepository<Crea
   ): Promise<CreatorApplicationChannelInfoEntity | null> {
     return this.findOne({ where: { applicationId } });
   }
+
+  async deleteByApplicationId(applicationId: string): Promise<void> {
+    await this.delete({ applicationId });
+  }
 }

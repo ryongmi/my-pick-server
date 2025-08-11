@@ -1,4 +1,6 @@
 export { ContentService } from './content.service.js';
+export { ContentOrchestrationService } from './content-orchestration.service.js';
+export { ContentAdminStatisticsService } from './content-admin-statistics.service.js';
 export { ContentCategoryService } from './content-category.service.js';
 export { ContentTagService } from './content-tag.service.js';
 export { ContentInteractionService } from './content-interaction.service.js';

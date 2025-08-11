@@ -343,7 +343,8 @@ export class ContentStatisticsService {
       ]);
 
       // ContentService에서 콘텐츠 수 조회 (순환 의존성 방지를 위해 별도 조회 필요)
-      const contentCount = 0; // TODO: ContentService 연동 필요
+      // 향후 ContentRepository를 직접 주입하거나 별도 이벤트 기반으로 구현
+      const contentCount = 0; // 순환 의존성으로 인해 현재 미구현
 
       return {
         totalViews,

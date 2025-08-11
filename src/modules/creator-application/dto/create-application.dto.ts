@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-import { IsString, IsNumber, IsArray, ValidateNested, Min } from 'class-validator';
+import { IsString, IsNumber, IsArray, ValidateNested, Min, IsOptional } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class ChannelInfoDto {
@@ -98,4 +98,24 @@ export class CreateApplicationDto {
   })
   @IsString()
   description!: string;
+
+  @ApiProperty({
+    description: '신청자 메시지',
+    example: '안녕하세요, 크리에이터로 활동하고 싶습니다.',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  applicantMessage?: string;
+
+  @ApiProperty({
+    description: '우선순위 (높을수록 우선 처리)',
+    example: 1,
+    minimum: 0,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  priority?: number;
 }
