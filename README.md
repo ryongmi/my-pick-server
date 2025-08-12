@@ -1,2 +1,199 @@
-# authz-server
-krgeobuk 인가 서버
+# MyPick Server
+
+> 크리에이터 콘텐츠 허브 플랫폼의 백엔드 API 서버
+
+MyPick은 YouTube, Twitter 등 다양한 플랫폼의 크리에이터 콘텐츠를 통합하여 팬들에게 개인화된 피드를 제공하는 서비스입니다.
+
+## ✨ 주요 기능
+
+### 🎯 크리에이터 관리
+- 다중 플랫폼 크리에이터 프로필 통합 관리
+- YouTube, Twitter 등 플랫폼별 계정 연동
+- 크리에이터 신청 및 승인 시스템
+- 실시간 통계 및 성과 분석
+
+### 📺 콘텐츠 통합
+- 여러 플랫폼의 콘텐츠 자동 동기화
+- 통합 피드를 통한 콘텐츠 큐레이션
+- 개인화된 추천 알고리즘
+- 콘텐츠 검색 및 필터링
+
+### 👥 사용자 상호작용
+- 크리에이터 구독 시스템
+- 콘텐츠 북마크 및 좋아요
+- 시청 기록 및 선호도 분석
+- 개인화된 알림
+
+### 🛡️ 관리 및 보안
+- 관리자 대시보드 및 통계
+- 콘텐츠 신고 및 모더레이션
+- 사용자 권한 관리
+- 시스템 모니터링
+
+## 🏗 기술 아키텍처
+
+### 백엔드 기술
+- **Framework**: NestJS + TypeScript
+- **Database**: MySQL 8.0 (메인), Redis (캐시)
+- **Architecture**: 마이크로서비스 아키텍처
+- **Communication**: TCP (내부), REST API (외부)
+
+### 외부 연동
+- **YouTube Data API v3**: 유튜브 채널/영상 정보 수집
+- **Twitter API v2**: 트위터 계정/트윗 정보 수집
+- **krgeobuk 생태계**: auth-server, authz-server 연동
+
+### 인프라
+- **Container**: Docker + Docker Compose
+- **Logging**: Winston (구조화된 로깅)
+- **Monitoring**: Health Check API
+
+## 🚀 빠른 시작
+
+### 필수 요구사항
+- Node.js 18+
+- Docker & Docker Compose
+- MySQL 8.0
+- Redis
+
+### 설치 및 실행
+
+```bash
+# 1. 프로젝트 클론
+git clone https://github.com/krgeobuk/krgeobuk-infra.git
+cd krgeobuk-infra/my-pick-server
+
+# 2. 의존성 설치
+npm install
+
+# 3. 환경 설정
+cp envs/.env.local.example envs/.env.local
+# .env.local 파일에서 데이터베이스 및 API 키 설정
+
+# 4. 데이터베이스 시작
+docker-compose up mysql redis -d
+
+# 5. 서버 실행
+npm run start:dev
+```
+
+### 기본 API 테스트
+
+```bash
+# Health Check
+curl http://localhost:4000/health
+
+# 크리에이터 목록 조회
+curl http://localhost:4000/creators
+
+# 콘텐츠 피드 조회
+curl http://localhost:4000/content
+```
+
+## 📡 API 엔드포인트
+
+### 인증 (auth-server 연동)
+- `POST /auth/login` - 로그인
+- `POST /auth/register` - 회원가입
+- `GET /auth/profile` - 프로필 조회
+
+### 크리에이터
+- `GET /creators` - 크리에이터 목록/검색
+- `GET /creators/:id` - 크리에이터 상세
+- `GET /creators/:id/stats` - 크리에이터 통계
+
+### 사용자 구독
+- `GET /users/:id/subscriptions` - 구독 목록
+- `POST /users/:userId/subscriptions/:creatorId` - 구독
+- `DELETE /users/:userId/subscriptions/:creatorId` - 구독 취소
+
+### 콘텐츠
+- `GET /content` - 콘텐츠 피드
+- `GET /content/:id` - 콘텐츠 상세
+- `POST /content/:id/bookmark` - 북마크
+- `POST /content/:id/like` - 좋아요
+
+### 관리자
+- `GET /admin/dashboard` - 관리자 대시보드
+- `GET /admin/creator-applications` - 신청 관리
+
+## 🔧 개발 환경
+
+### 로컬 개발
+```bash
+# 개발 서버 (Hot Reload)
+npm run start:dev
+
+# 디버그 모드
+npm run start:debug
+
+# 테스트
+npm run test
+npm run test:e2e
+```
+
+### 코드 품질
+```bash
+# 린팅
+npm run lint
+npm run lint-fix
+
+# 포맷팅
+npm run format
+```
+
+### Docker 환경
+```bash
+# 전체 스택 실행 (MySQL, Redis 포함)
+npm run docker:local:up
+
+# 프로덕션 환경
+npm run docker:prod:up
+```
+
+## 🗂 프로젝트 구조
+
+```
+my-pick-server/
+├── src/
+│   ├── modules/              # 9개 도메인 모듈
+│   │   ├── creator/          # 크리에이터 관리
+│   │   ├── content/          # 콘텐츠 관리
+│   │   ├── user-subscription/ # 구독 관리
+│   │   ├── user-interaction/  # 사용자 상호작용
+│   │   ├── external-api/     # 외부 API 연동
+│   │   ├── admin/            # 관리자 기능
+│   │   └── ...
+│   ├── common/               # 공통 모듈
+│   ├── config/               # 환경 설정
+│   └── database/             # DB 및 마이그레이션
+├── docker-compose.yaml       # Docker 환경
+├── envs/                     # 환경별 설정 파일
+└── docs/                     # 추가 문서
+```
+
+## 🤝 krgeobuk 생태계
+
+MyPick Server는 krgeobuk 마이크로서비스 아키텍처의 일부입니다:
+
+- **auth-server**: 사용자 인증 및 계정 관리
+- **authz-server**: 권한 및 역할 관리  
+- **portal-client**: 통합 관리자 포털
+- **shared-lib**: 공통 라이브러리 모노레포
+
+각 서비스는 TCP 통신으로 연결되며, 독립적인 배포와 확장이 가능합니다.
+
+## 📚 문서
+
+- **[개발 가이드](CLAUDE.md)**: 상세한 개발 가이드 및 코딩 표준
+- **[API 명세서](API_SPECIFICATION.md)**: REST API 상세 명세
+- **[배포 가이드](README.deployment.md)**: 프로덕션 배포 가이드
+- **[아키텍처 문서](DOMAIN_ARCHITECTURE.md)**: 시스템 아키텍처 설계
+
+## 📄 라이선스
+
+이 프로젝트는 비공개 라이선스입니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
+
+---
+
+**MyPick Team** - 크리에이터와 팬을 연결하는 플랫폼
