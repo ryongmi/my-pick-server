@@ -29,7 +29,7 @@ import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorato
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import { Serialize } from '@krgeobuk/core/decorators';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
-import type { JwtPayload } from '@krgeobuk/jwt/interfaces';
+import type { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 
 import { ReportService, ReportReviewService, ReportStatisticsService } from '../services/index.js';
 import {
@@ -76,7 +76,7 @@ export class ReportController {
   })
   async createReport(
     @Body() dto: CreateReportDto,
-    @CurrentJwt() { id: userId }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     this.logger.debug('Creating new report', {
       userId,
@@ -183,7 +183,7 @@ export class ReportController {
   async reviewReport(
     @Param('id', ParseUUIDPipe) reportId: string,
     @Body() dto: ReviewReportDto,
-    @CurrentJwt() { id: reviewerId }: JwtPayload
+    @CurrentJwt() { userId: reviewerId }: AuthenticatedJwt
   ): Promise<void> {
     this.logger.debug('Reviewing report', {
       reportId,

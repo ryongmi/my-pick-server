@@ -21,7 +21,7 @@ import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
-import type { JwtPayload } from '@krgeobuk/jwt/interfaces';
+import type { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 
 import { 
   ContentService,
@@ -53,11 +53,11 @@ export class AdminContentController {
   @RequirePermission('content:read')
   async getContentList(
     @Query() query: AdminContentSearchQueryDto,
-    @CurrentJwt() jwt: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<PaginatedResult<AdminContentListItemDto>> {
     try {
       this.logger.debug('Admin content list request', {
-        adminId: jwt.id,
+        adminId: userId,
         query: {
           creatorId: query.creatorId,
           type: query.type,
@@ -115,7 +115,7 @@ export class AdminContentController {
       });
 
       this.logger.log('Admin content list fetched successfully', {
-        adminId: jwt.id,
+        adminId: userId,
         totalItems: result.pageInfo.totalItems,
         returnedItems: adminItems.length,
       });
@@ -131,7 +131,7 @@ export class AdminContentController {
       
       this.logger.error('Admin content list fetch failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        adminId: jwt?.id,
+        adminId: userId,
         query,
       });
       throw AdminException.contentDataFetchError();
@@ -142,18 +142,18 @@ export class AdminContentController {
   @RequirePermission('content:read')
   async getContentDetail(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() jwt: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<AdminContentDetailDto> {
     try {
       this.logger.debug('Admin content detail request', {
-        adminId: jwt.id,
+        adminId: userId,
         contentId,
       });
 
       const content = await this.contentService.getContentById(contentId);
 
       this.logger.log('Admin content detail fetched successfully', {
-        adminId: jwt.id,
+        adminId: userId,
         contentId,
         contentType: content.type,
         platform: content.platform,
@@ -200,7 +200,7 @@ export class AdminContentController {
       
       this.logger.error('Admin content detail fetch failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        adminId: jwt?.id,
+        adminId: userId,
         contentId,
       });
       throw AdminException.contentDataFetchError();
@@ -213,7 +213,7 @@ export class AdminContentController {
   async updateContentStatus(
     @Param('id', ParseUUIDPipe) contentId: string,
     @Body() dto: UpdateContentStatusDto,
-    @CurrentJwt() { id: adminId }: JwtPayload
+    @CurrentJwt() { userId: adminId }: AuthenticatedJwt
   ): Promise<void> {
     try {
       this.logger.log('Admin content status update request', {
@@ -259,7 +259,7 @@ export class AdminContentController {
   @RequirePermission('content:delete')
   async deleteContent(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id: adminId }: JwtPayload
+    @CurrentJwt() { userId: adminId }: AuthenticatedJwt
   ): Promise<void> {
     try {
       this.logger.log('Admin content deletion request', {
@@ -318,7 +318,7 @@ export class AdminContentController {
     @Param('id', ParseUUIDPipe) contentId: string,
     @Param('flagId', ParseUUIDPipe) flagId: string,
     @Body() body: { action: 'dismiss' | 'approve'; reason?: string },
-    @CurrentJwt() { id: _id }: JwtPayload
+    @CurrentJwt() { userId: _id }: AuthenticatedJwt
   ): Promise<void> {
     try {
       // TODO: ReportService 구현 후 신고 처리 로직 구현

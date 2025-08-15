@@ -26,7 +26,7 @@ import {
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 // import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
-import { JwtPayload } from '@krgeobuk/jwt/interfaces';
+import { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
@@ -74,10 +74,10 @@ export class ContentController {
   @Serialize({ dto: ContentSearchResultDto })
   async getContent(
     @Query() query: ContentSearchQueryDto,
-    @CurrentJwt() jwt?: JwtPayload
+    @CurrentJwt() jwt?: AuthenticatedJwt
   ): Promise<PaginatedResult<ContentSearchResultDto>> {
     try {
-      const userId = jwt?.id; // 선택적 인증: 로그인하지 않은 사용자도 볼 수 있음
+      const userId = jwt?.userId; // 선택적 인증: 로그인하지 않은 사용자도 볼 수 있음
       return await this.contentOrchestrationService.searchContent(query, userId);
     } catch (error: unknown) {
       if (error instanceof HttpException) {
@@ -179,10 +179,10 @@ export class ContentController {
   @Serialize({ dto: ContentDetailDto })
   async getContentById(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() jwt?: JwtPayload
+    @CurrentJwt() jwt?: AuthenticatedJwt
   ): Promise<ContentDetailDto> {
     try {
-      const userId = jwt?.id; // 선택적 인증: 로그인하지 않은 사용자도 볼 수 있음
+      const userId = jwt?.userId; // 선택적 인증: 로그인하지 않은 사용자도 볼 수 있음
       return await this.contentService.getContentById(contentId, userId);
     } catch (error: unknown) {
       if (error instanceof HttpException) {
@@ -215,13 +215,13 @@ export class ContentController {
   })
   async bookmarkContent(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     try {
       await this.contentService.findByIdOrFail(contentId);
 
       const dto: BookmarkContentDto = {
-        userId: id,
+        userId: userId,
         contentId,
       };
 
@@ -243,10 +243,10 @@ export class ContentController {
   @SwaggerApiBearerAuth()
   async removeBookmark(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     try {
-      await this.userInteractionService.removeBookmark(id, contentId);
+      await this.userInteractionService.removeBookmark(userId, contentId);
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -264,14 +264,14 @@ export class ContentController {
   @SwaggerApiBearerAuth()
   async likeContent(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     try {
       // 콘텐츠 존재 확인
       await this.contentService.findByIdOrFail(contentId);
 
       const dto: LikeContentDto = {
-        userId: id,
+        userId: userId,
         contentId,
       };
 
@@ -293,10 +293,10 @@ export class ContentController {
   @SwaggerApiBearerAuth()
   async removeLike(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     try {
-      await this.userInteractionService.removeLike(id, contentId);
+      await this.userInteractionService.removeLike(userId, contentId);
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -315,7 +315,7 @@ export class ContentController {
   async watchContent(
     @Param('id', ParseUUIDPipe) contentId: string,
     @Body() body: { watchDuration?: number; watchPercentage?: number } = {},
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     try {
       // 콘텐츠 존재 확인
@@ -337,7 +337,7 @@ export class ContentController {
       }
 
       const dto: WatchContentDto = {
-        userId: id,
+        userId: userId,
         contentId,
         watchDuration: body.watchDuration,
       };
@@ -361,7 +361,7 @@ export class ContentController {
   async rateContent(
     @Param('id', ParseUUIDPipe) contentId: string,
     @Body() body: { rating: number },
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     try {
       // 입력값 검증
@@ -376,7 +376,7 @@ export class ContentController {
       await this.contentService.findByIdOrFail(contentId);
 
       const dto: RateContentDto = {
-        userId: id,
+        userId: userId,
         contentId,
         rating: body.rating,
       };
@@ -411,13 +411,13 @@ export class ContentController {
   })
   async toggleBookmark(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<{ isBookmarked: boolean }> {
     try {
       // 콘텐츠 존재 확인
       await this.contentService.findByIdOrFail(contentId);
 
-      return await this.userInteractionService.toggleBookmark(id, contentId);
+      return await this.userInteractionService.toggleBookmark(userId, contentId);
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -445,13 +445,13 @@ export class ContentController {
   })
   async toggleLike(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<{ isLiked: boolean }> {
     try {
       // 콘텐츠 존재 확인
       await this.contentService.findByIdOrFail(contentId);
 
-      return await this.userInteractionService.toggleLike(id, contentId);
+      return await this.userInteractionService.toggleLike(userId, contentId);
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -578,7 +578,7 @@ export class ContentController {
       deviceType?: string;
       referrer?: string;
     },
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     try {
       // 입력값 검증
@@ -597,7 +597,7 @@ export class ContentController {
       }
 
       await this.contentService.findByIdOrFail(contentId);
-      await this.contentInteractionService.recordView(contentId, id, body);
+      await this.contentInteractionService.recordView(contentId, userId, body);
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -616,11 +616,11 @@ export class ContentController {
   @SwaggerApiOperation({ summary: '북마크 토글 (새 구현)' })
   async toggleBookmarkNew(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<{ isBookmarked: boolean }> {
     try {
       await this.contentService.findByIdOrFail(contentId);
-      return await this.contentInteractionService.toggleBookmark(contentId, id);
+      return await this.contentInteractionService.toggleBookmark(contentId, userId);
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -639,11 +639,11 @@ export class ContentController {
   @SwaggerApiOperation({ summary: '좋아요 토글 (새 구현)' })
   async toggleLikeNew(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<{ isLiked: boolean }> {
     try {
       await this.contentService.findByIdOrFail(contentId);
-      return await this.contentInteractionService.toggleLike(contentId, id);
+      return await this.contentInteractionService.toggleLike(contentId, userId);
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -662,11 +662,11 @@ export class ContentController {
   @SwaggerApiOperation({ summary: '콘텐츠 공유 기록' })
   async markAsShared(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     try {
       await this.contentService.findByIdOrFail(contentId);
-      await this.contentInteractionService.markAsShared(contentId, id);
+      await this.contentInteractionService.markAsShared(contentId, userId);
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -686,7 +686,7 @@ export class ContentController {
   async submitRating(
     @Param('id', ParseUUIDPipe) contentId: string,
     @Body() body: { rating: number; comment?: string },
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     try {
       // 입력값 검증
@@ -705,7 +705,7 @@ export class ContentController {
       }
 
       await this.contentService.findByIdOrFail(contentId);
-      await this.contentInteractionService.submitRating(contentId, id, body.rating, body.comment);
+      await this.contentInteractionService.submitRating(contentId, userId, body.rating, body.comment);
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -738,7 +738,7 @@ export class ContentBookmarkController {
   async getBookmarkedContent(
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 20,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<ContentSearchResultDto[]> {
     try {
       // 입력값 검증
@@ -756,7 +756,7 @@ export class ContentBookmarkController {
         );
       }
 
-      const bookmarkedContentIds = await this.userInteractionService.getBookmarkedContentIds(id);
+      const bookmarkedContentIds = await this.userInteractionService.getBookmarkedContentIds(userId);
 
       if (bookmarkedContentIds.length === 0) {
         return [];

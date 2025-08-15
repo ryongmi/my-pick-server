@@ -25,7 +25,7 @@ import {
   SwaggerApiErrorResponse,
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
-import { JwtPayload } from '@krgeobuk/jwt/interfaces';
+import { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 
 import { CreatorApplicationService, CreatorApplicationOrchestrationService } from '../services/index.js';
@@ -63,10 +63,10 @@ export class CreatorApplicationController {
   })
   async createApplication(
     @Body() dto: CreateApplicationDto,
-    @CurrentJwt() { id }: JwtPayload,
+    @CurrentJwt() { userId }: AuthenticatedJwt,
     @TransactionManager() transactionManager: EntityManager
   ): Promise<{ applicationId: string }> {
-    dto.userId = id;
+    dto.userId = userId;
 
     const applicationId = await this.orchestrationService.createApplicationComplete(dto, transactionManager);
     return { applicationId };
@@ -87,9 +87,9 @@ export class CreatorApplicationController {
   })
   @Serialize({ dto: ApplicationDetailDto })
   async getApplicationStatus(
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<ApplicationDetailDto | { status: 'none' }> {
-    const application = await this.creatorApplicationService.getApplicationStatus(id);
+    const application = await this.creatorApplicationService.getApplicationStatus(userId);
 
     if (!application) {
       return { status: 'none' };
@@ -123,8 +123,8 @@ export class CreatorApplicationController {
   @Serialize({ dto: ApplicationDetailDto })
   async getApplicationById(
     @Param('id', ParseUUIDPipe) applicationId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<ApplicationDetailDto> {
-    return this.creatorApplicationService.getApplicationById(applicationId, id);
+    return this.creatorApplicationService.getApplicationById(applicationId, userId);
   }
 }

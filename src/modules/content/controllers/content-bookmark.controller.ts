@@ -11,7 +11,7 @@ import {
   SwaggerApiErrorResponse,
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
-import { JwtPayload } from '@krgeobuk/jwt/interfaces';
+import { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 
 import { UserInteractionService } from '@modules/user-interaction/index.js';
@@ -49,9 +49,9 @@ export class ContentBookmarkController {
   async getBookmarkedContent(
     @Query('page') _page: number = 1,
     @Query('limit') _limit: number = 20,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<ContentSearchResultDto[]> {
-    const bookmarkedContentIds = await this.userInteractionService.getBookmarkedContentIds(id);
+    const bookmarkedContentIds = await this.userInteractionService.getBookmarkedContentIds(userId);
 
     if (bookmarkedContentIds.length === 0) {
       return [];

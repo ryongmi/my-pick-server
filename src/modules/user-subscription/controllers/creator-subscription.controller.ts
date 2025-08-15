@@ -12,7 +12,7 @@ import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { RequireRole } from '@krgeobuk/authorization/decorators';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
-import { JwtPayload } from '@krgeobuk/jwt/interfaces';
+import { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 
 import { UserSubscriptionService } from '../services/index.js';
 import { CreatorService } from '../../creator/services/index.js';
@@ -53,7 +53,7 @@ export class CreatorSubscriptionController {
   })
   async getCreatorSubscribers(
     @Param('creatorId', ParseUUIDPipe) creatorId: string,
-    @CurrentJwt() _jwt: JwtPayload
+    @CurrentJwt() _jwt: AuthenticatedJwt
   ): Promise<{ creatorId: string; userIds: string[]; totalCount: number }> {
     // Creator 존재 확인
     await this.creatorService.findByIdOrFail(creatorId);
@@ -90,7 +90,7 @@ export class CreatorSubscriptionController {
   })
   async getSubscriberCount(
     @Param('creatorId', ParseUUIDPipe) creatorId: string,
-    @CurrentJwt() _jwt: JwtPayload
+    @CurrentJwt() _jwt: AuthenticatedJwt
   ): Promise<{ creatorId: string; subscriberCount: number }> {
     // Creator 존재 확인
     await this.creatorService.findByIdOrFail(creatorId);
@@ -127,7 +127,7 @@ export class CreatorSubscriptionController {
   })
   async getSubscriptionStats(
     @Param('creatorId', ParseUUIDPipe) creatorId: string,
-    @CurrentJwt() _jwt: JwtPayload
+    @CurrentJwt() _jwt: AuthenticatedJwt
   ): Promise<{
     creatorId: string;
     subscriberCount: number;

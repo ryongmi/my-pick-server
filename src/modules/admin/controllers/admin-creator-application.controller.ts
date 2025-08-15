@@ -27,7 +27,7 @@ import {
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
-import { JwtPayload } from '@krgeobuk/jwt/interfaces';
+import { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
 import { LimitType } from '@krgeobuk/core/enum';
@@ -111,13 +111,13 @@ export class AdminCreatorApplicationController {
     return this.statisticsService.getApplicationStats();
   }
 
-  @Get(':id')
+  @Get(':userId')
   @SwaggerApiOperation({
     summary: '크리에이터 신청 상세 조회 (관리자)',
     description: '관리자가 특정 크리에이터 신청서를 상세 조회합니다.',
   })
   @SwaggerApiParam({
-    name: 'id',
+    name: 'userId',
     description: '신청서 ID',
     type: String,
   })
@@ -130,13 +130,13 @@ export class AdminCreatorApplicationController {
   @RequirePermission('creator-application:read')
   @Serialize({ dto: ApplicationDetailDto })
   async getApplicationById(
-    @Param('id', ParseUUIDPipe) applicationId: string
+    @Param('userId', ParseUUIDPipe) applicationId: string
   ): Promise<ApplicationDetailDto> {
     // 관리자는 모든 신청서 조회 가능 (userId 검증 없음)
     return this.creatorApplicationService.getApplicationById(applicationId);
   }
 
-  @Post(':id/approve')
+  @Post(':userId/approve')
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseInterceptors(TransactionInterceptor)
   @SwaggerApiOperation({
@@ -144,7 +144,7 @@ export class AdminCreatorApplicationController {
     description: '관리자가 크리에이터 신청을 승인하고 Creator 엔티티를 생성합니다. 트랜잭션을 통해 데이터 일관성을 보장합니다.',
   })
   @SwaggerApiParam({
-    name: 'id',
+    name: 'userId',
     description: '신청서 ID',
     type: String,
   })
@@ -155,13 +155,13 @@ export class AdminCreatorApplicationController {
   // @UseGuards(AuthGuard)
   @RequirePermission('creator-application:approve')
   async approveApplication(
-    @Param('id', ParseUUIDPipe) applicationId: string,
+    @Param('userId', ParseUUIDPipe) applicationId: string,
     @Body() body: { comment?: string; requirements?: string[] },
-    @CurrentJwt() { id }: JwtPayload,
+    @CurrentJwt() { userId }: AuthenticatedJwt,
     @TransactionManager() transactionManager: EntityManager
   ): Promise<void> {
-    // 실제로는 CurrentUser에서 가져온 admin.id 사용
-    const reviewerId = id; // JWT에서 관리자 ID 사용
+    // 실제로는 CurrentUser에서 가져온 admin.userId 사용
+    const reviewerId = userId; // JWT에서 관리자 ID 사용
 
     const dto: ReviewApplicationDto = {
       status: ApplicationStatus.APPROVED,
@@ -173,7 +173,7 @@ export class AdminCreatorApplicationController {
     await this.orchestrationService.reviewApplicationComplete(applicationId, dto, transactionManager);
   }
 
-  @Post(':id/reject')
+  @Post(':userId/reject')
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseInterceptors(TransactionInterceptor)
   @SwaggerApiOperation({
@@ -181,7 +181,7 @@ export class AdminCreatorApplicationController {
     description: '관리자가 크리에이터 신청을 거부하고 검토 데이터를 저장합니다. 트랜잭션을 통해 데이터 일관성을 보장합니다.',
   })
   @SwaggerApiParam({
-    name: 'id',
+    name: 'userId',
     description: '신청서 ID',
     type: String,
   })
@@ -192,13 +192,13 @@ export class AdminCreatorApplicationController {
   // @UseGuards(AuthGuard)
   @RequirePermission('creator-application:reject')
   async rejectApplication(
-    @Param('id', ParseUUIDPipe) applicationId: string,
+    @Param('userId', ParseUUIDPipe) applicationId: string,
     @Body() body: { reason?: string; comment?: string; requirements?: string[] },
-    @CurrentJwt() { id }: JwtPayload,
+    @CurrentJwt() { userId }: AuthenticatedJwt,
     @TransactionManager() transactionManager: EntityManager
   ): Promise<void> {
-    // 실제로는 CurrentUser에서 가져온 admin.id 사용
-    const reviewerId = id; // JWT에서 관리자 ID 사용
+    // 실제로는 CurrentUser에서 가져온 admin.userId 사용
+    const reviewerId = userId; // JWT에서 관리자 ID 사용
 
     const dto: ReviewApplicationDto = {
       status: ApplicationStatus.REJECTED,

@@ -27,7 +27,7 @@ import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
-import type { JwtPayload } from '@krgeobuk/jwt/interfaces';
+import type { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 
 import { ReportService, ReportStatisticsService, ReportReviewService } from '../../report/services/index.js';
 import { ReportTargetType, ReportStatus } from '../../report/enums/index.js';
@@ -128,9 +128,9 @@ export class AdminReportController {
   async reviewReport(
     @Param('id', ParseUUIDPipe) reportId: string,
     @Body() dto: ReviewReportDto,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
-    await this.reviewService.reviewReport(reportId, id, dto);
+    await this.reviewService.reviewReport(reportId, userId, dto);
   }
 
   @Delete(':id')

@@ -20,7 +20,7 @@ import {
   SwaggerApiErrorResponse,
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
-import { JwtPayload } from '@krgeobuk/jwt/interfaces';
+import { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 
 import {
@@ -65,12 +65,12 @@ export class ContentInteractionController {
   })
   async bookmarkContent(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     await this.contentService.findByIdOrFail(contentId);
 
     const dto: BookmarkContentDto = {
-      userId: id,
+      userId: userId,
       contentId,
     };
 
@@ -91,9 +91,9 @@ export class ContentInteractionController {
   })
   async removeBookmark(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
-    await this.userInteractionService.removeBookmark(id, contentId);
+    await this.userInteractionService.removeBookmark(userId, contentId);
   }
 
   @Post(':id/bookmark/toggle')
@@ -110,12 +110,12 @@ export class ContentInteractionController {
   })
   async toggleBookmark(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<{ isBookmarked: boolean }> {
     // 콘텐츠 존재 확인
     await this.contentService.findByIdOrFail(contentId);
 
-    return this.userInteractionService.toggleBookmark(id, contentId);
+    return this.userInteractionService.toggleBookmark(userId, contentId);
   }
 
   // ==================== 좋아요 관리 ====================
@@ -138,13 +138,13 @@ export class ContentInteractionController {
   })
   async likeContent(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     // 콘텐츠 존재 확인
     await this.contentService.findByIdOrFail(contentId);
 
     const dto: LikeContentDto = {
-      userId: id,
+      userId: userId,
       contentId,
     };
 
@@ -165,9 +165,9 @@ export class ContentInteractionController {
   })
   async removeLike(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
-    await this.userInteractionService.removeLike(id, contentId);
+    await this.userInteractionService.removeLike(userId, contentId);
   }
 
   @Post(':id/like/toggle')
@@ -184,12 +184,12 @@ export class ContentInteractionController {
   })
   async toggleLike(
     @Param('id', ParseUUIDPipe) contentId: string,
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<{ isLiked: boolean }> {
     // 콘텐츠 존재 확인
     await this.contentService.findByIdOrFail(contentId);
 
-    return this.userInteractionService.toggleLike(id, contentId);
+    return this.userInteractionService.toggleLike(userId, contentId);
   }
 
   // ==================== 시청 기록 ====================
@@ -217,13 +217,13 @@ export class ContentInteractionController {
   async watchContent(
     @Param('id', ParseUUIDPipe) contentId: string,
     @Body() body: { watchDuration?: number } = {},
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     // 콘텐츠 존재 확인
     await this.contentService.findByIdOrFail(contentId);
 
     const dto: WatchContentDto = {
-      userId: id,
+      userId: userId,
       contentId,
       watchDuration: body.watchDuration,
     };
@@ -256,13 +256,13 @@ export class ContentInteractionController {
   async rateContent(
     @Param('id', ParseUUIDPipe) contentId: string,
     @Body() body: { rating: number },
-    @CurrentJwt() { id }: JwtPayload
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     // 콘텐츠 존재 확인
     await this.contentService.findByIdOrFail(contentId);
 
     const dto: RateContentDto = {
-      userId: id,
+      userId: userId,
       contentId,
       rating: body.rating,
     };
