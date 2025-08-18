@@ -14,8 +14,8 @@ import { ClientConfig } from '@common/interfaces/config.interfaces.js';
         useFactory: (configService: ConfigService): ClientOptions => ({
           transport: Transport.TCP,
           options: {
-            host: configService.get<ClientConfig['authServiceHost']>('authServiceHost')!,
-            port: configService.get<ClientConfig['authServicePort']>('authServicePort')!,
+            host: configService.get<ClientConfig['authServiceHost']>('client.authServiceHost')!,
+            port: configService.get<ClientConfig['authServicePort']>('client.authServicePort')!,
           },
         }),
       },
@@ -25,8 +25,8 @@ import { ClientConfig } from '@common/interfaces/config.interfaces.js';
         useFactory: (configService: ConfigService): ClientOptions => ({
           transport: Transport.TCP,
           options: {
-            host: configService.get<ClientConfig['authzServiceHost']>('authzServiceHost')!,
-            port: configService.get<ClientConfig['authzServicePort']>('authzServicePort')!,
+            host: configService.get<ClientConfig['authzServiceHost']>('client.authzServiceHost')!,
+            port: configService.get<ClientConfig['authzServicePort']>('client.authzServicePort')!,
           },
         }),
       },
@@ -36,8 +36,8 @@ import { ClientConfig } from '@common/interfaces/config.interfaces.js';
         useFactory: (configService: ConfigService): ClientOptions => ({
           transport: Transport.TCP,
           options: {
-            host: configService.get<ClientConfig['portalServiceHost']>('portalServiceHost')!,
-            port: configService.get<ClientConfig['portalServicePort']>('portalServicePort')!,
+            host: configService.get<ClientConfig['portalServiceHost']>('client.portalServiceHost')!,
+            port: configService.get<ClientConfig['portalServicePort']>('client.portalServicePort')!,
           },
         }),
       },
@@ -46,3 +46,4 @@ import { ClientConfig } from '@common/interfaces/config.interfaces.js';
   exports: [ClientsModule],
 })
 export class SharedClientsModule {}
+

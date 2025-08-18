@@ -2,7 +2,8 @@ import Joi from 'joi';
 
 const defaultConfigSchema = {
   NODE_ENV: Joi.string().valid('local', 'development', 'production').required(),
-  PORT: Joi.number().default(8100),
+  PORT: Joi.number().required(),
+  TCP_PORT: Joi.number().required(),
   CORS_ORIGINS: Joi.string().required(),
 };
 
@@ -45,3 +46,4 @@ export const validationSchema = Joi.object({
   ...youtubeConfigSchema,
   ...jwtConfigSchema,
 });
+
