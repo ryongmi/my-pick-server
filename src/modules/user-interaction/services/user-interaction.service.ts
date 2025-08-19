@@ -140,12 +140,13 @@ export class UserInteractionService {
 
   // ==================== 변경 메서드 ====================
 
-  async bookmarkContent(dto: BookmarkContentDto, _transactionManager?: EntityManager): Promise<void> {
+  async bookmarkContent(dto: BookmarkContentDto, transactionManager?: EntityManager): Promise<void> {
     try {
       const interaction = await this.userInteractionRepo.upsertInteraction(
         dto.userId,
         dto.contentId,
-        { isBookmarked: true }
+        { isBookmarked: true },
+        transactionManager
       );
 
       // 캐시 무효화 (배치 처리)
@@ -211,12 +212,13 @@ export class UserInteractionService {
     }
   }
 
-  async likeContent(dto: LikeContentDto, _transactionManager?: EntityManager): Promise<void> {
+  async likeContent(dto: LikeContentDto, transactionManager?: EntityManager): Promise<void> {
     try {
       const interaction = await this.userInteractionRepo.upsertInteraction(
         dto.userId,
         dto.contentId,
-        { isLiked: true }
+        { isLiked: true },
+        transactionManager
       );
 
       // 캐시 무효화 (배치 처리)
@@ -282,7 +284,7 @@ export class UserInteractionService {
     }
   }
 
-  async watchContent(dto: WatchContentDto): Promise<void> {
+  async watchContent(dto: WatchContentDto, transactionManager?: EntityManager): Promise<void> {
     try {
       const watchUpdate = {
         watchedAt: new Date(),
@@ -292,7 +294,8 @@ export class UserInteractionService {
       const interaction = await this.userInteractionRepo.upsertInteraction(
         dto.userId,
         dto.contentId,
-        watchUpdate
+        watchUpdate,
+        transactionManager
       );
 
       this.logger.log('Content watch recorded successfully', {
@@ -312,12 +315,13 @@ export class UserInteractionService {
     }
   }
 
-  async rateContent(dto: RateContentDto): Promise<void> {
+  async rateContent(dto: RateContentDto, transactionManager?: EntityManager): Promise<void> {
     try {
       const interaction = await this.userInteractionRepo.upsertInteraction(
         dto.userId,
         dto.contentId,
-        { rating: dto.rating }
+        { rating: dto.rating },
+        transactionManager
       );
 
       this.logger.log('Content rated successfully', {
@@ -340,7 +344,7 @@ export class UserInteractionService {
 
   // ==================== 토글 메서드 (실시간 상호작용) ====================
 
-  async toggleBookmark(userId: string, contentId: string): Promise<{ isBookmarked: boolean }> {
+  async toggleBookmark(userId: string, contentId: string, transactionManager?: EntityManager): Promise<{ isBookmarked: boolean }> {
     try {
       const currentInteraction = await this.userInteractionRepo.findByUserAndContent(
         userId,
@@ -351,7 +355,7 @@ export class UserInteractionService {
 
       await this.userInteractionRepo.upsertInteraction(userId, contentId, {
         isBookmarked: newState,
-      });
+      }, transactionManager);
 
       // 캐시 무효화 (배치 처리)
       await this.cacheService.invalidateUserInteractionCaches(userId);
@@ -374,7 +378,7 @@ export class UserInteractionService {
     }
   }
 
-  async toggleLike(userId: string, contentId: string): Promise<{ isLiked: boolean }> {
+  async toggleLike(userId: string, contentId: string, transactionManager?: EntityManager): Promise<{ isLiked: boolean }> {
     try {
       const currentInteraction = await this.userInteractionRepo.findByUserAndContent(
         userId,
@@ -383,7 +387,7 @@ export class UserInteractionService {
       const currentState = currentInteraction?.isLiked || false;
       const newState = !currentState;
 
-      await this.userInteractionRepo.upsertInteraction(userId, contentId, { isLiked: newState });
+      await this.userInteractionRepo.upsertInteraction(userId, contentId, { isLiked: newState }, transactionManager);
 
       // 캐시 무효화 (배치 처리)
       await this.cacheService.invalidateUserInteractionCaches(userId);

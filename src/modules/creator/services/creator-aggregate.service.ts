@@ -17,9 +17,7 @@ import {
 } from '../dto/index.js';
 
 import { CreatorService } from './creator.service.js';
-import { CreatorStatisticsService } from './creator-statistics.service.js';
-import { CreatorPlatformStatisticsService } from './creator-platform-statistics.service.js';
-import { CreatorCategoryStatisticsService } from './creator-category-statistics.service.js';
+import { CreatorPlatformService } from './creator-platform.service.js';
 
 @Injectable()
 export class CreatorAggregateService {
@@ -28,9 +26,7 @@ export class CreatorAggregateService {
   constructor(
     private readonly creatorRepo: CreatorRepository,
     private readonly creatorService: CreatorService,
-    private readonly creatorStatisticsService: CreatorStatisticsService,
-    private readonly creatorPlatformStatisticsService: CreatorPlatformStatisticsService,
-    private readonly creatorCategoryStatisticsService: CreatorCategoryStatisticsService,
+    private readonly creatorPlatformService: CreatorPlatformService,
     private readonly cacheService: CacheService
   ) {}
 
@@ -203,11 +199,11 @@ export class CreatorAggregateService {
   }
 
   private async buildDetailedPlatformStats(creatorId: string): Promise<DetailedPlatformStatsDto> {
-    // 플랫폼 통계 서비스들을 활용하여 상세 통계 구성
-    const platformStatsRecord = await this.creatorPlatformStatisticsService.groupPlatformStatsByCreatorId([creatorId]);
-    const platformStats = platformStatsRecord[creatorId];
-    
-    if (!platformStats || platformStats.length === 0) {
+    // 플랫폼 서비스를 사용하여 직접 집계된 통계 조회
+    try {
+      return await this.creatorPlatformService.getStatsByCreatorId(creatorId);
+    } catch (error: unknown) {
+      this.logger.warn('Failed to fetch platform stats', { creatorId, error });
       return {
         totalFollowers: 0,
         totalContent: 0,
@@ -215,17 +211,5 @@ export class CreatorAggregateService {
         platformCount: 0,
       };
     }
-
-    // 배열의 통계를 집계
-    const totalFollowers = platformStats.reduce((sum, stat) => sum + (stat.followers || 0), 0);
-    const totalContent = platformStats.reduce((sum, stat) => sum + (stat.content || 0), 0);
-    const totalViews = platformStats.reduce((sum, stat) => sum + Number(stat.views || 0), 0);
-
-    return {
-      totalFollowers,
-      totalContent,
-      totalViews,
-      platformCount: platformStats.length,
-    };
   }
 }

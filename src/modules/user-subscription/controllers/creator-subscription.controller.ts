@@ -14,8 +14,7 @@ import { RequireRole } from '@krgeobuk/authorization/decorators';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 
-import { UserSubscriptionService } from '../services/index.js';
-import { CreatorService } from '../../creator/services/index.js';
+import { UserSubscriptionOrchestrationService } from '../services/index.js';
 
 /**
  * 크리에이터 관점의 구독 관리 컨트롤러
@@ -27,8 +26,7 @@ import { CreatorService } from '../../creator/services/index.js';
 @Controller('creators/:creatorId/subscribers')
 export class CreatorSubscriptionController {
   constructor(
-    private readonly userSubscriptionService: UserSubscriptionService,
-    private readonly creatorService: CreatorService
+    private readonly orchestrationService: UserSubscriptionOrchestrationService
   ) {}
 
   @Get()
@@ -55,17 +53,7 @@ export class CreatorSubscriptionController {
     @Param('creatorId', ParseUUIDPipe) creatorId: string,
     @CurrentJwt() _jwt: AuthenticatedJwt
   ): Promise<{ creatorId: string; userIds: string[]; totalCount: number }> {
-    // Creator 존재 확인
-    await this.creatorService.findByIdOrFail(creatorId);
-
-    // 구독자 ID 목록 조회
-    const userIds = await this.userSubscriptionService.getUserIds(creatorId);
-
-    return {
-      creatorId,
-      userIds,
-      totalCount: userIds.length,
-    };
+    return await this.orchestrationService.getCreatorSubscribersWithValidation(creatorId);
   }
 
   @Get('count')
@@ -92,16 +80,7 @@ export class CreatorSubscriptionController {
     @Param('creatorId', ParseUUIDPipe) creatorId: string,
     @CurrentJwt() _jwt: AuthenticatedJwt
   ): Promise<{ creatorId: string; subscriberCount: number }> {
-    // Creator 존재 확인
-    await this.creatorService.findByIdOrFail(creatorId);
-
-    // 구독자 수 조회
-    const subscriberCount = await this.userSubscriptionService.getSubscriberCount(creatorId);
-
-    return {
-      creatorId,
-      subscriberCount,
-    };
+    return await this.orchestrationService.getSubscriberCountWithValidation(creatorId);
   }
 
   @Get('stats')
@@ -134,38 +113,6 @@ export class CreatorSubscriptionController {
     hasSubscribers: boolean;
     lastSubscribedAt?: Date;
   }> {
-    // Creator 존재 확인
-    await this.creatorService.findByIdOrFail(creatorId);
-
-    const [subscriberCount, subscriptions] = await Promise.all([
-      this.userSubscriptionService.getSubscriberCount(creatorId),
-      this.userSubscriptionService.getSubscriptionsByCreatorId(creatorId),
-    ]);
-
-    // 가장 최근 구독 날짜 찾기
-    const lastSubscribedAt =
-      subscriptions.length > 0
-        ? subscriptions.reduce(
-            (latest, sub) => (sub.subscribedAt > latest ? sub.subscribedAt : latest),
-            subscriptions[0]!.subscribedAt
-          )
-        : undefined;
-
-    const result: {
-      creatorId: string;
-      subscriberCount: number;
-      hasSubscribers: boolean;
-      lastSubscribedAt?: Date;
-    } = {
-      creatorId,
-      subscriberCount,
-      hasSubscribers: subscriberCount > 0,
-    };
-
-    if (lastSubscribedAt) {
-      result.lastSubscribedAt = lastSubscribedAt;
-    }
-
-    return result;
+    return await this.orchestrationService.getSubscriptionStatsWithValidation(creatorId);
   }
 }

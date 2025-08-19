@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { DataSource, In } from 'typeorm';
+import { DataSource, In, EntityManager } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
 
@@ -209,7 +209,8 @@ export class UserInteractionRepository extends BaseRepository<UserInteractionEnt
         UserInteractionEntity,
         'isBookmarked' | 'isLiked' | 'rating' | 'watchedAt' | 'watchDuration'
       >
-    >
+    >,
+    transactionManager?: EntityManager
   ): Promise<UserInteractionEntity> {
     let interaction = await this.findByUserAndContent(userId, contentId);
 
@@ -225,7 +226,7 @@ export class UserInteractionRepository extends BaseRepository<UserInteractionEnt
       Object.assign(interaction, updates);
     }
 
-    return this.save(interaction);
+    return this.saveEntity(interaction, transactionManager);
   }
 
   async getTotalCount(): Promise<number> {

@@ -95,4 +95,62 @@ export class CreatorApplicationException {
       message: '잘못된 신청 데이터입니다.',
     });
   }
+
+  // 채널 정보 관련 (500-599)
+  static channelInfoNotFound(): HttpException {
+    return new NotFoundException({
+      code: 'CREATOR_APPLICATION_501',
+      message: '채널 정보를 찾을 수 없습니다.',
+    });
+  }
+
+  static channelInfoAlreadyExists(): HttpException {
+    return new ConflictException({
+      code: 'CREATOR_APPLICATION_502',
+      message: '채널 정보가 이미 존재합니다.',
+    });
+  }
+
+  static channelInfoCreateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_APPLICATION_503',
+      message: '채널 정보 생성 중 오류가 발생했습니다.',
+    });
+  }
+
+  static channelInfoUpdateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_APPLICATION_504',
+      message: '채널 정보 수정 중 오류가 발생했습니다.',
+    });
+  }
+
+  static channelInfoDeleteError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_APPLICATION_505',
+      message: '채널 정보 삭제 중 오류가 발생했습니다.',
+    });
+  }
+
+  // 샘플 영상 관련 (600-699)
+  static sampleVideoNotFound(): HttpException {
+    return new NotFoundException({
+      code: 'CREATOR_APPLICATION_601',
+      message: '샘플 영상을 찾을 수 없습니다.',
+    });
+  }
+
+  static sampleVideoCreateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_APPLICATION_602',
+      message: '샘플 영상 생성 중 오류가 발생했습니다.',
+    });
+  }
+
+  static sampleVideoDeleteError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'CREATOR_APPLICATION_603',
+      message: '샘플 영상 삭제 중 오류가 발생했습니다.',
+    });
+  }
 }

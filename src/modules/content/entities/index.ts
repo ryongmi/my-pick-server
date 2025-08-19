@@ -5,3 +5,4 @@ export { ContentTagEntity } from './content-tag.entity.js';
 export { ContentInteractionEntity } from './content-interaction.entity.js';
 export { ContentSyncEntity } from './content-sync.entity.js';
 export { ContentSyncMetadataEntity } from './content-sync-metadata.entity.js';
+export { ContentModerationEntity } from './content-moderation.entity.js';

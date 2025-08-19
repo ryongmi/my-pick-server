@@ -287,7 +287,7 @@ export class CreatorPlatformService {
     }
   }
 
-  async deactivatePlatform(platformId: string, _transactionManager?: EntityManager): Promise<void> {
+  async deactivatePlatform(platformId: string, transactionManager?: EntityManager): Promise<void> {
     try {
       const platform = await this.platformRepo.findOne({ where: { id: platformId } });
 
@@ -301,8 +301,8 @@ export class CreatorPlatformService {
         creatorId: platform.creatorId,
       });
 
-      // 소프트 비활성화
-      const _result = await this.platformRepo.softDelete(platformId);
+      // 소프트 비활성화 
+      const _result = await (this.platformRepo as unknown as { softDeleteEntity: (id: string, manager?: EntityManager) => Promise<unknown> }).softDeleteEntity(platformId, transactionManager);
 
       this.logger.log('Platform deactivated successfully', {
         platformId,

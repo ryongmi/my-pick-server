@@ -295,7 +295,7 @@ export class CreatorSyncSchedulerService {
         throw error;
       }
 
-      throw CreatorException.platformStatsFetchError();
+      throw CreatorException.syncStatsFetchError();
     }
   }
 }

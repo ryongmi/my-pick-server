@@ -16,9 +16,19 @@ import { ClientProxy } from '@nestjs/microservices';
 
 import { plainToInstance } from 'class-transformer';
 
+import {
+  SwaggerApiTags,
+  SwaggerApiOperation,
+  SwaggerApiBearerAuth,
+  SwaggerApiParam,
+  SwaggerApiOkResponse,
+  SwaggerApiPaginatedResponse,
+} from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
+import { CurrentJwt } from '@krgeobuk/jwt/decorators';
+import type { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import { LimitType } from '@krgeobuk/core/enum';
 
@@ -35,6 +45,8 @@ import {
 } from '../dto/index.js';
 import { AdminException } from '../exceptions/index.js';
 
+@SwaggerApiTags({ tags: ['admin-users'] })
+@SwaggerApiBearerAuth()
 @Controller('admin/users')
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
 @RequireRole('superAdmin')
@@ -50,11 +62,19 @@ export class AdminUserController {
   ) {}
 
   @Get()
-  // @UseGuards(AuthGuard)
+  @SwaggerApiOperation({
+    summary: '관리자용 사용자 목록 조회',
+    description: '관리자가 모든 사용자 목록을 조회합니다. 검색, 필터링, 페이지네이션을 지원합니다.',
+  })
+  @SwaggerApiPaginatedResponse({
+    dto: AdminUserListItemDto,
+    status: 200,
+    description: '사용자 목록 조회 성공',
+  })
   @RequirePermission('user:read')
   async getUserList(
-    @Query() query: AdminUserSearchQueryDto
-    // @CurrentUser() admin: UserInfo,
+    @Query() query: AdminUserSearchQueryDto,
+    @CurrentJwt() { userId: _adminId }: AuthenticatedJwt
   ): Promise<PaginatedResult<AdminUserListItemDto>> {
     try {
       // Auth-service에서 사용자 목록 조회
@@ -109,7 +129,7 @@ export class AdminUserController {
               ...user,
               subscriptionCount,
               interactionCount,
-              reportCount: 0, // TODO: 신고 수 구현 필요
+              reportCount: await this.getUserReportCount(userId).catch(() => 0),
               isCreator,
             },
             {
@@ -136,11 +156,20 @@ export class AdminUserController {
   }
 
   @Get(':id')
-  // @UseGuards(AuthGuard)
+  @SwaggerApiOperation({
+    summary: '관리자용 사용자 상세 조회',
+    description: '관리자가 특정 사용자의 상세 정보를 조회합니다. 구독, 상호작용, 신고 이력 등을 포함합니다.',
+  })
+  @SwaggerApiParam({ name: 'id', type: String, description: '사용자 ID' })
+  @SwaggerApiOkResponse({
+    dto: AdminUserDetailDto,
+    status: 200,
+    description: '사용자 상세 조회 성공',
+  })
   @RequirePermission('user:read')
   async getUserDetail(
-    @Param('id', ParseUUIDPipe) userId: string
-    // @CurrentUser() admin: UserInfo,
+    @Param('id', ParseUUIDPipe) userId: string,
+    @CurrentJwt() { userId: _adminId }: AuthenticatedJwt
   ): Promise<AdminUserDetailDto> {
     try {
       // Auth-service에서 사용자 상세 정보 조회
@@ -170,7 +199,7 @@ export class AdminUserController {
           ...userDetail,
           subscriptionCount,
           interactionCount,
-          reportCount: 0, // TODO: 신고 수 구현 필요
+          reportCount: await this.getUserReportCount(userId).catch(() => 0),
           isCreator,
           subscriptions,
           recentInteractions,
@@ -188,12 +217,11 @@ export class AdminUserController {
 
   @Put(':id/status')
   @HttpCode(HttpStatus.NO_CONTENT)
-  // @UseGuards(AuthGuard)
   @RequirePermission('user:write')
   async updateUserStatus(
     @Param('id', ParseUUIDPipe) userId: string,
-    @Body() dto: UpdateUserStatusDto
-    // @CurrentUser() admin: UserInfo,
+    @Body() dto: UpdateUserStatusDto,
+    @CurrentJwt() { userId: _adminId }: AuthenticatedJwt
   ): Promise<void> {
     try {
       // 자기 자신 모더레이션 방지
@@ -228,12 +256,11 @@ export class AdminUserController {
   }
 
   @Get(':id/activity')
-  // @UseGuards(AuthGuard)
   @RequirePermission('user:read')
   async getUserActivity(
     @Param('id', ParseUUIDPipe) userId: string,
-    @Query('days') _days: number = 30
-    // @CurrentUser() admin: UserInfo,
+    @Query('days') _days: number = 30,
+    @CurrentJwt() { userId: _adminId }: AuthenticatedJwt
   ): Promise<{
     loginHistory: Array<{
       loginAt: Date;
@@ -267,11 +294,10 @@ export class AdminUserController {
   }
 
   @Get(':id/reports')
-  // @UseGuards(AuthGuard)
   @RequirePermission('user:read')
   async getUserReports(
-    @Param('id', ParseUUIDPipe) userId: string
-    // @CurrentUser() admin: UserInfo,
+    @Param('id', ParseUUIDPipe) userId: string,
+    @CurrentJwt() { userId: _adminId }: AuthenticatedJwt
   ): Promise<{
     reportsByUser: Array<{
       id: string;
@@ -336,10 +362,10 @@ export class AdminUserController {
   }
 
   @Get('statistics/overview')
-  // @UseGuards(AuthGuard)
   @RequirePermission('user:read')
-  async getUserStatistics() // @CurrentUser() admin: UserInfo,
-  : Promise<{
+  async getUserStatistics(
+    @CurrentJwt() { userId: _adminId }: AuthenticatedJwt
+  ): Promise<{
     totalUsers: number;
     activeUsers: number;
     suspendedUsers: number;
@@ -374,15 +400,16 @@ export class AdminUserController {
 
   // ==================== PRIVATE HELPER METHODS ====================
 
-  private async checkIfUserIsCreator(_userId: string): Promise<boolean> {
+  private async checkIfUserIsCreator(userId: string): Promise<boolean> {
     try {
-      // TODO: CreatorService나 CreatorApplicationService에서 확인
-      // const creator = await this.creatorService.findByUserId(userId);
-      // return !!creator;
-
-      // 임시 반환값
-      return Math.random() > 0.8; // 20% 확률로 크리에이터
-    } catch (_error: unknown) {
+      // CreatorService를 통해 userId로 크리에이터 존재 여부 확인
+      const creator = await this.creatorService.findByUserId(userId);
+      return !!creator;
+    } catch (error: unknown) {
+      this.logger.warn('Failed to check if user is creator', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+      });
       return false;
     }
   }
@@ -437,6 +464,26 @@ export class AdminUserController {
       }));
     } catch (_error: unknown) {
       return [];
+    }
+  }
+
+  private async getUserReportCount(userId: string): Promise<number> {
+    try {
+      // 사용자에 대한 신고 수 조회
+      const reportsAgainstUser = await this.reportService.searchReports({
+        targetType: ReportTargetType.USER,
+        targetId: userId,
+        page: 1,
+        limit: 1 as LimitType, // 개수만 필요하므로 limit는 1로 설정
+      });
+
+      return reportsAgainstUser.pageInfo.totalItems;
+    } catch (error: unknown) {
+      this.logger.warn('Failed to get user report count', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+      });
+      return 0;
     }
   }
 }

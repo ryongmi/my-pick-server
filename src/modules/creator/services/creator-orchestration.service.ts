@@ -128,20 +128,20 @@ export class CreatorOrchestrationService {
     }
   }
 
-  async deleteCreatorComplete(creatorId: string, _transactionManager?: EntityManager): Promise<void> {
+  async deleteCreatorComplete(creatorId: string, transactionManager?: EntityManager): Promise<void> {
     try {
       this.logger.log('Starting complete creator deletion', { creatorId });
 
       // 1. 플랫폼 제거
       const platforms = await this.creatorPlatformService.findByCreatorId(creatorId);
       for (const platform of platforms) {
-        await this.creatorPlatformService.deactivatePlatform(platform.id);
+        await this.creatorPlatformService.deactivatePlatform(platform.id, transactionManager);
       }
 
       // 2. 동의 철회
       const consents = await this.creatorConsentService.getActiveConsents(creatorId);
       for (const consentType of consents) {
-        await this.creatorConsentService.revokeConsent(creatorId, consentType);
+        await this.creatorConsentService.revokeConsent(creatorId, consentType, transactionManager);
       }
 
       // 3. 크리에이터 삭제
@@ -174,7 +174,8 @@ export class CreatorOrchestrationService {
     creatorId: string,
     platformType: PlatformType,
     platformId: string,
-    requiredConsents: ConsentType[] = [ConsentType.DATA_COLLECTION]
+    requiredConsents: ConsentType[] = [ConsentType.DATA_COLLECTION],
+    transactionManager?: EntityManager
   ): Promise<void> {
     try {
       // 1. 크리에이터 존재 확인
@@ -194,7 +195,10 @@ export class CreatorOrchestrationService {
       }
 
       // 3. 플랫폼 추가
-      await this.creatorPlatformService.createPlatform({ creatorId, type: platformType, platformId, url: '', displayName: '' });
+      await this.creatorPlatformService.createPlatform(
+        { creatorId, type: platformType, platformId, url: '', displayName: '' },
+        transactionManager
+      );
 
       // 4. 캐시 갱신
       await this.creatorAggregateService.refreshCreatorCache(creatorId);
@@ -225,13 +229,14 @@ export class CreatorOrchestrationService {
   async updateConsentWithCacheRefresh(
     creatorId: string,
     consentType: ConsentType,
-    granted: boolean
+    granted: boolean,
+    transactionManager?: EntityManager
   ): Promise<void> {
     try {
       if (granted) {
-        await this.creatorConsentService.grantConsent({ creatorId, type: consentType });
+        await this.creatorConsentService.grantConsent({ creatorId, type: consentType }, transactionManager);
       } else {
-        await this.creatorConsentService.revokeConsent(creatorId, consentType);
+        await this.creatorConsentService.revokeConsent(creatorId, consentType, transactionManager);
       }
 
       // 동의 상태 변경 시 캐시 즉시 갱신

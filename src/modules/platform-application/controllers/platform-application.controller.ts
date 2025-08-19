@@ -7,12 +7,16 @@ import {
   Body,
   Param,
   UseGuards,
+  UseInterceptors,
   ParseUUIDPipe,
   ForbiddenException,
   HttpCode,
 } from '@nestjs/common';
 
-import { Serialize } from '@krgeobuk/core/decorators';
+import { EntityManager } from 'typeorm';
+
+import { Serialize, TransactionManager } from '@krgeobuk/core/decorators';
+import { TransactionInterceptor } from '@krgeobuk/core/interceptors';
 import {
   SwaggerApiTags,
   SwaggerApiOperation,
@@ -24,20 +28,10 @@ import {
 } from '@krgeobuk/swagger/decorators';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
-// import { CurrentUser } from '@krgeobuk/authorization/decorators';
-// import { UserInfo } from '@krgeobuk/auth/interfaces';
+import { CurrentJwt } from '@krgeobuk/jwt/decorators';
+import type { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 
-// 임시 타입 정의
-interface UserInfo {
-  id: string;
-  email: string;
-  roles: string[];
-}
-
-// 임시 데코레이터
-const CurrentUser = () => (_target: unknown, _propertyKey: string, _parameterIndex: number): void => {};
-
-import { PlatformApplicationService } from '../services/index.js';
+import { PlatformApplicationService, PlatformApplicationOrchestrationService } from '../services/index.js';
 import {
   CreatePlatformApplicationDto,
   UpdatePlatformApplicationDto,
@@ -49,11 +43,18 @@ import {
 @Controller('platform-applications')
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
 export class PlatformApplicationController {
-  constructor(private readonly platformApplicationService: PlatformApplicationService) {}
+  constructor(
+    private readonly platformApplicationService: PlatformApplicationService,
+    private readonly orchestrationService: PlatformApplicationOrchestrationService
+  ) {}
 
   @Post()
   @HttpCode(201)
-  @SwaggerApiOperation({ summary: '플랫폼 추가 신청' })
+  @UseInterceptors(TransactionInterceptor)
+  @SwaggerApiOperation({ 
+    summary: '플랫폼 추가 신청',
+    description: '플랫폼 신청서를 제출하고 정규화된 데이터를 저장합니다. 트랜잭션을 통해 데이터 일관성을 보장합니다.'
+  })
   @SwaggerApiBody({ dto: CreatePlatformApplicationDto })
   @SwaggerApiOkResponse({
     status: 201,
@@ -69,9 +70,11 @@ export class PlatformApplicationController {
   })
   async createApplication(
     @Body() dto: CreatePlatformApplicationDto,
-    @CurrentUser() user: UserInfo
-  ): Promise<void> {
-    await this.platformApplicationService.createApplication(dto, user.id);
+    @CurrentJwt() { userId }: AuthenticatedJwt,
+    @TransactionManager() transactionManager: EntityManager
+  ): Promise<{ applicationId: string }> {
+    const applicationId = await this.orchestrationService.createApplicationComplete(dto, userId, transactionManager);
+    return { applicationId };
   }
 
   @Get('my')
@@ -87,8 +90,8 @@ export class PlatformApplicationController {
     description: '플랫폼 신청 목록 조회 중 오류가 발생했습니다.',
   })
   @Serialize({ dto: ApplicationDetailDto })
-  async getMyApplications(@CurrentUser() user: UserInfo): Promise<ApplicationDetailDto[]> {
-    const applications = await this.platformApplicationService.findByUserId(user.id);
+  async getMyApplications(@CurrentJwt() { userId }: AuthenticatedJwt): Promise<ApplicationDetailDto[]> {
+    const applications = await this.platformApplicationService.findByUserId(userId);
     return applications.map((app) => ({
       id: app.id,
       creatorId: app.creatorId,
@@ -123,12 +126,12 @@ export class PlatformApplicationController {
   @Serialize({ dto: ApplicationDetailDto })
   async getMyApplicationsByCreator(
     @Param('creatorId', ParseUUIDPipe) creatorId: string,
-    @CurrentUser() user: UserInfo
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<ApplicationDetailDto[]> {
     const applications = await this.platformApplicationService.findByCreatorId(creatorId);
 
     // 본인의 신청만 필터링
-    const myApplications = applications.filter((app) => app.userId === user.id);
+    const myApplications = applications.filter((app) => app.userId === userId);
 
     return myApplications.map((app) => ({
       id: app.id,
@@ -168,12 +171,12 @@ export class PlatformApplicationController {
   @Serialize({ dto: ApplicationDetailDto })
   async getApplicationDetail(
     @Param('id', ParseUUIDPipe) applicationId: string,
-    @CurrentUser() user: UserInfo
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<ApplicationDetailDto> {
     const application = await this.platformApplicationService.findByIdOrFail(applicationId);
 
     // 본인의 신청인지 확인
-    if (application.userId !== user.id) {
+    if (application.userId !== userId) {
       throw new ForbiddenException('해당 플랫폼 신청에 대한 접근 권한이 없습니다.');
     }
 
@@ -208,9 +211,9 @@ export class PlatformApplicationController {
   async updateApplication(
     @Param('id', ParseUUIDPipe) applicationId: string,
     @Body() dto: UpdatePlatformApplicationDto,
-    @CurrentUser() user: UserInfo
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
-    await this.platformApplicationService.updateApplication(applicationId, dto, user.id);
+    await this.platformApplicationService.updateApplication(applicationId, dto, userId);
   }
 
   @Delete(':id')
@@ -239,8 +242,8 @@ export class PlatformApplicationController {
   })
   async cancelApplication(
     @Param('id', ParseUUIDPipe) applicationId: string,
-    @CurrentUser() user: UserInfo
+    @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
-    await this.platformApplicationService.cancelApplication(applicationId, user.id);
+    await this.platformApplicationService.cancelApplication(applicationId, userId);
   }
 }

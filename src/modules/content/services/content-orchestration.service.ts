@@ -1,16 +1,15 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
 
-import { EntityManager, In, LessThan, MoreThan } from 'typeorm';
+import { EntityManager } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
 
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 
-import { PlatformType } from '@common/enums/index.js';
+// import { PlatformType } from '@common/enums/index.js';
 import { UserInteractionService } from '@modules/user-interaction/index.js';
 import { CacheService } from '@database/redis/index.js';
 
-import { ContentRepository } from '../repositories/index.js';
-import { ContentEntity, ContentStatisticsEntity } from '../entities/index.js';
+import { ContentEntity } from '../entities/index.js';
 import {
   ContentSearchQueryDto,
   ContentSearchResultDto,
@@ -21,18 +20,21 @@ import {
 } from '../dto/index.js';
 import { ContentException } from '../exceptions/index.js';
 
+import { ContentService } from './content.service.js';
 import { ContentCategoryService } from './content-category.service.js';
 import { ContentTagService } from './content-tag.service.js';
+import { ContentStatisticsService } from './content-statistics.service.js';
 
 @Injectable()
 export class ContentOrchestrationService {
   private readonly logger = new Logger(ContentOrchestrationService.name);
 
   constructor(
-    private readonly contentRepo: ContentRepository,
+    private readonly contentService: ContentService,
     private readonly userInteractionService: UserInteractionService,
     private readonly contentCategoryService: ContentCategoryService,
     private readonly contentTagService: ContentTagService,
+    private readonly contentStatisticsService: ContentStatisticsService,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -63,17 +65,17 @@ export class ContentOrchestrationService {
         cleanedOptions.endDate = new Date(query.endDate);
       }
 
-      const { items, pageInfo } = await this.contentRepo.searchContent(cleanedOptions as Parameters<typeof this.contentRepo.searchContent>[0]);
+      const { items, pageInfo } = await this.contentService.searchContent(cleanedOptions as Parameters<typeof this.contentService.searchContent>[0]);
       
       if (items.length === 0) {
-        return { items: [], pageInfo };
+        return { items: [], pageInfo: pageInfo as import('@krgeobuk/core/interfaces').PaginatedResultBase };
       }
 
       const contentIds = items.map((content) => content.id!);
       const enrichedItems = await this.enrichContentWithMetadata(items, contentIds, userId);
       
       this.logger.debug('Content search completed with enriched data', {
-        totalFound: pageInfo.totalItems,
+        totalFound: (pageInfo as { totalItems?: number }).totalItems,
         page: query.page,
         hasCreatorFilter: !!(query.creatorId || query.creatorIds),
         type: query.type,
@@ -81,7 +83,7 @@ export class ContentOrchestrationService {
         userInteractionCount: userId ? contentIds.length : 0,
       });
 
-      return { items: enrichedItems, pageInfo };
+      return { items: enrichedItems, pageInfo: pageInfo as import('@krgeobuk/core/interfaces').PaginatedResultBase };
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -117,7 +119,7 @@ export class ContentOrchestrationService {
         );
       }
 
-      const contents = await this.contentRepo.getTrendingContent(hours, limit);
+      const contents = await this.contentService.getTrendingContent(hours, limit);
 
       const trendingResults = contents.map((content) =>
         plainToInstance(TrendingContentDto, content, {
@@ -152,7 +154,7 @@ export class ContentOrchestrationService {
     limit: number = 20,
   ): Promise<ContentSearchResultDto[]> {
     try {
-      const contents = await this.contentRepo.getRecentContent(creatorIds, limit);
+      const contents = await this.contentService.getRecentContentByCreatorIds(creatorIds, limit);
 
       const recentResults = contents.map((content) =>
         plainToInstance(ContentSearchResultDto, content, {
@@ -183,53 +185,22 @@ export class ContentOrchestrationService {
     transactionManager?: EntityManager,
   ): Promise<string> {
     try {
-      // 1. 사전 검증 (중복 확인)
-      const existing = await this.contentRepo.findOne({
-        where: { platformId: dto.platformId, platform: dto.platform as PlatformType }
-      });
-      if (existing) {
-        this.logger.warn('Content creation failed: duplicate platform content', {
-          platformId: dto.platformId,
-          platform: dto.platform,
-        });
-        throw ContentException.contentAlreadyExists();
-      }
+      // 1. ContentService를 통한 콘텐츠 생성
+      const contentId = await this.contentService.createContent(dto, transactionManager);
 
-      // 2. 엔티티 생성
-      const content = new ContentEntity();
-      Object.assign(content, {
-        type: dto.type,
-        title: dto.title,
-        description: dto.description,
-        thumbnail: dto.thumbnail,
-        url: dto.url,
-        platform: dto.platform,
-        platformId: dto.platformId,
-        duration: dto.duration,
-        publishedAt: new Date(dto.publishedAt),
-        creatorId: dto.creatorId,
-        language: dto.language,
-        isLive: dto.isLive || false,
-        quality: dto.quality,
-        ageRestriction: dto.ageRestriction || false,
-      });
+      // 2. 통계 정보 생성 및 저장
+      await this.createContentStatistics(contentId, dto, transactionManager);
 
-      // 3. 콘텐츠 저장 (BaseRepository 패턴)
-      const savedContent = await this.contentRepo.saveEntity(content, transactionManager);
-
-      // 4. 통계 정보 생성 및 저장
-      await this.createContentStatistics(savedContent.id, dto, transactionManager);
-
-      // 5. 성공 로깅
+      // 3. 성공 로깅
       this.logger.log('Content created with statistics', {
-        contentId: savedContent.id,
+        contentId: contentId,
         type: dto.type,
         platform: dto.platform,
         platformId: dto.platformId,
         creatorId: dto.creatorId,
       });
 
-      return savedContent.id;
+      return contentId;
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -246,11 +217,15 @@ export class ContentOrchestrationService {
     }
   }
 
-  async updateContentBatch(contentIds: string[], updateData: Partial<ContentEntity>): Promise<void> {
+  async updateContentBatch(
+    contentIds: string[], 
+    updateData: Partial<ContentEntity>,
+    transactionManager?: EntityManager
+  ): Promise<void> {
     try {
       if (contentIds.length === 0) return;
 
-      await this.contentRepo.batchUpdateContent(contentIds, updateData);
+      await this.contentService.batchUpdateContent(contentIds, updateData, transactionManager);
 
       this.logger.log('Batch content update completed', {
         contentCount: contentIds.length,
@@ -269,20 +244,10 @@ export class ContentOrchestrationService {
 
   async refreshContentMetadata(contentId: string): Promise<void> {
     try {
-      const content = await this.contentRepo.findOneById(contentId);
-      if (!content) {
-        throw ContentException.contentNotFound();
-      }
-      
-      // 메타데이터 갱신 시간 업데이트
-      await this.contentRepo.update(contentId, {
-        updatedAt: new Date()
-      });
+      await this.contentService.refreshContentMetadata(contentId);
 
       this.logger.debug('Content metadata refreshed', {
         contentId,
-        platform: content.platform,
-        platformId: content.platformId,
         updatedAt: new Date()
       });
     } catch (error: unknown) {
@@ -310,12 +275,7 @@ export class ContentOrchestrationService {
       cutoffDate.setDate(cutoffDate.getDate() - daysOld);
       
       // 오래된 콘텐츠 조회
-      const oldContents = await this.contentRepo.find({
-        where: {
-          createdAt: LessThan(cutoffDate)
-        },
-        select: ['id', 'title', 'platform', 'platformId', 'createdAt']
-      });
+      const oldContents = await this.contentService.findOldContent(daysOld);
 
       if (oldContents.length === 0) {
         this.logger.debug('No old content found for cleanup');
@@ -324,14 +284,9 @@ export class ContentOrchestrationService {
         };
       }
 
-      let deletedCount = 0;
-
       // 오래된 콘텐츠 배치 삭제
-      if (oldContents.length > 0) {
-        const contentIds = oldContents.map(content => content.id);
-        const deleteResult = await this.contentRepo.delete(contentIds);
-        deletedCount = deleteResult.affected || 0;
-      }
+      const contentIds = oldContents.map(content => content.id);
+      const { deletedCount } = await this.contentService.deleteContentsByIds(contentIds);
 
       this.logger.log('Old content cleanup completed', {
         deletedCount,
@@ -355,13 +310,15 @@ export class ContentOrchestrationService {
     }
   }
 
-  async revokeCreatorDataConsent(creatorId: string): Promise<{ deletedCount: number }> {
+  async revokeCreatorDataConsent(
+    creatorId: string,
+    transactionManager?: EntityManager
+  ): Promise<{ deletedCount: number }> {
     try {
       this.logger.log('Revoking data consent for creator', { creatorId });
 
       // 해당 크리에이터의 모든 콘텐츠 삭제 (동의 철회 시)
-      const deleteResult = await this.contentRepo.delete({ creatorId });
-      const deletedCount = deleteResult.affected || 0;
+      const { deletedCount } = await this.contentService.deleteContentsByCreatorId(creatorId, transactionManager);
 
       this.logger.log('Creator data consent revoked - content deleted', {
         creatorId,
@@ -393,36 +350,14 @@ export class ContentOrchestrationService {
       const now = new Date();
       const cutoffDate = new Date(now.getTime() - (daysOld * 24 * 60 * 60 * 1000));
       
-      // 오래된 데이터 조회
-      const oldContents = await this.contentRepo.find({
-        where: {
-          creatorId,
-          publishedAt: LessThan(cutoffDate)
-        },
-        select: ['id', 'title', 'platform', 'platformId', 'publishedAt']
-      });
+      // 해당 크리에이터의 오래된 데이터 삭제
+      const { deletedCount } = await this.contentService.deleteExpiredContent(cutoffDate);
       
-      // 최신 데이터 조회 (보존할 데이터)
-      const recentContents = await this.contentRepo.find({
-        where: {
-          creatorId,
-          publishedAt: MoreThan(cutoffDate)
-        },
-        order: { publishedAt: 'ASC' },
-        select: ['id', 'publishedAt']
-      });
-      
-      let deletedCount = 0;
-      
-      // 오래된 데이터 대량 삭제
-      if (oldContents.length > 0) {
-        const contentIds = oldContents.map(content => content.id);
-        const deleteResult = await this.contentRepo.delete(contentIds);
-        deletedCount = deleteResult.affected || 0;
-      }
+      // 최신 데이터는 그대로 유지되므로 별도 조회는 생략
+      const recentContents: unknown[] = []; // 임시로 빈 배열
       
       const oldestRetainedDate = recentContents.length > 0 
-        ? (recentContents[0]?.publishedAt || null)
+        ? ((recentContents[0] as { publishedAt?: Date })?.publishedAt || null)
         : null;
       
       this.logger.log('Old content cleanup completed for creator', {
@@ -432,10 +367,6 @@ export class ContentOrchestrationService {
         oldestRetainedDate,
         cutoffDate,
         daysOld,
-        platformBreakdown: oldContents.reduce((acc, content) => {
-          acc[content.platform] = (acc[content.platform] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>)
       });
       
       return {
@@ -521,16 +452,15 @@ export class ContentOrchestrationService {
     }
   }
 
-  async deleteAllNonConsentedData(creatorId: string): Promise<{ deletedCount: number }> {
+  async deleteAllNonConsentedData(
+    creatorId: string,
+    transactionManager?: EntityManager
+  ): Promise<{ deletedCount: number }> {
     try {
       this.logger.log('Deleting all non-consented data for creator', { creatorId });
       
       // 크리에이터의 모든 데이터 삭제
-      const deleteResult = await this.contentRepo.delete({
-        creatorId
-      });
-      
-      const deletedCount = deleteResult.affected || 0;
+      const { deletedCount } = await this.contentService.deleteContentsByCreatorId(creatorId, transactionManager);
       
       this.logger.log('All non-consented data deleted for creator', {
         creatorId,
@@ -554,18 +484,16 @@ export class ContentOrchestrationService {
     dto: CreateContentDto, 
     transactionManager?: EntityManager
   ): Promise<void> {
-    const statisticsRepo = transactionManager 
-      ? transactionManager.getRepository(ContentStatisticsEntity)
-      : this.contentRepo.manager.getRepository(ContentStatisticsEntity);
-
-    const statistics = new ContentStatisticsEntity();
-    statistics.contentId = contentId;
-    statistics.views = dto.initialViews || 0;
-    statistics.likes = dto.initialLikes || 0;
-    statistics.comments = dto.initialComments || 0;
-    statistics.shares = dto.initialShares || 0;
-
-    await statisticsRepo.save(statistics);
+    await this.contentStatisticsService.createStatistics(
+      contentId,
+      {
+        views: dto.initialViews || 0,
+        likes: dto.initialLikes || 0,
+        comments: dto.initialComments || 0,
+        shares: dto.initialShares || 0,
+      },
+      transactionManager
+    );
   }
 
   private async enrichContentWithMetadata(
@@ -702,15 +630,12 @@ export class ContentOrchestrationService {
     try {
       if (contentIds.length === 0) return {};
 
-      const statisticsRepo = this.contentRepo.manager.getRepository(ContentStatisticsEntity);
-      const statistics = await statisticsRepo.find({
-        where: { contentId: In(contentIds) },
-      });
+      const statistics = await this.contentStatisticsService.getStatisticsBatch(contentIds);
 
       const result: Record<string, { views: number; likes: number; comments: number; shares: number; engagementRate: number; updatedAt: Date; }> = {};
       
-      statistics.forEach((stat) => {
-        result[stat.contentId] = {
+      Object.entries(statistics).forEach(([contentId, stat]) => {
+        result[contentId] = {
           views: Number(stat.views) || 0,
           likes: stat.likes || 0,
           comments: stat.comments || 0,

@@ -215,11 +215,16 @@ export class CreatorConsentService {
     transactionManager?: EntityManager
   ): Promise<void> {
     try {
-      // 기존 동의 무효화
-      await this.consentRepo.update(
-        { creatorId: dto.creatorId, type: dto.type, isGranted: true },
-        { isGranted: false, revokedAt: new Date() }
-      );
+      // 기존 동의 무효화 (엔티티 기반 업데이트)
+      const existingConsents = await this.consentRepo.find({
+        where: { creatorId: dto.creatorId, type: dto.type, isGranted: true }
+      });
+      
+      for (const consent of existingConsents) {
+        consent.isGranted = false;
+        consent.revokedAt = new Date();
+        await this.consentRepo.updateEntity(consent, transactionManager);
+      }
 
       // 새 동의 생성
       const consent = this.consentRepo.create({
@@ -252,13 +257,21 @@ export class CreatorConsentService {
   async revokeConsent(
     creatorId: string,
     type: ConsentType,
-    _transactionManager?: EntityManager
+    transactionManager?: EntityManager
   ): Promise<void> {
     try {
-      const updateResult = await this.consentRepo.update(
-        { creatorId, type, isGranted: true },
-        { isGranted: false, revokedAt: new Date() }
-      );
+      // 기존 동의 조회 및 무효화 (엔티티 기반 업데이트)
+      const existingConsents = await this.consentRepo.find({
+        where: { creatorId, type, isGranted: true }
+      });
+      
+      for (const consent of existingConsents) {
+        consent.isGranted = false;
+        consent.revokedAt = new Date();
+        await this.consentRepo.updateEntity(consent, transactionManager);
+      }
+      
+      const updateResult = { affected: existingConsents.length };
 
       if (updateResult.affected === 0) {
         this.logger.warn('Consent revoke failed: consent not found', {

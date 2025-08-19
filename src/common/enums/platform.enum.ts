@@ -1,8 +1,8 @@
 export enum PlatformType {
   YOUTUBE = 'youtube',
   TWITTER = 'twitter',
-  // INSTAGRAM = 'instagram',
-  // TIKTOK = 'tiktok',
+  INSTAGRAM = 'instagram',
+  TIKTOK = 'tiktok',
 }
 
 export enum SyncStatus {

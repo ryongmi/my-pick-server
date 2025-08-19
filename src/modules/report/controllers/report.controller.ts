@@ -8,11 +8,14 @@ import {
   Query,
   Body,
   UseGuards,
+  UseInterceptors,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
   Logger,
 } from '@nestjs/common';
+
+import type { EntityManager } from 'typeorm';
 
 import {
   SwaggerApiTags,
@@ -28,10 +31,12 @@ import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import { Serialize } from '@krgeobuk/core/decorators';
+import { TransactionInterceptor } from '@krgeobuk/core/interceptors';
+import { TransactionManager } from '@krgeobuk/core/decorators';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import type { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 
-import { ReportService, ReportReviewService, ReportStatisticsService } from '../services/index.js';
+import { ReportService, ReportOrchestrationService, ReportStatisticsService } from '../services/index.js';
 import {
   CreateReportDto,
   ReportSearchQueryDto,
@@ -48,15 +53,16 @@ export class ReportController {
 
   constructor(
     private readonly reportService: ReportService,
-    private readonly reportReviewService: ReportReviewService,
+    private readonly orchestrationService: ReportOrchestrationService,
     private readonly reportStatisticsService: ReportStatisticsService,
   ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(TransactionInterceptor)
   @SwaggerApiOperation({
     summary: '신고 접수',
-    description: '새로운 신고를 접수합니다.',
+    description: '새로운 신고를 접수합니다. 트랜잭션을 통해 데이터 일관성을 보장합니다.',
   })
   @SwaggerApiBody({
     dto: CreateReportDto,
@@ -76,7 +82,8 @@ export class ReportController {
   })
   async createReport(
     @Body() dto: CreateReportDto,
-    @CurrentJwt() { userId }: AuthenticatedJwt
+    @CurrentJwt() { userId }: AuthenticatedJwt,
+    @TransactionManager() transactionManager: EntityManager
   ): Promise<void> {
     this.logger.debug('Creating new report', {
       userId,
@@ -85,7 +92,7 @@ export class ReportController {
       reason: dto.reason,
     });
 
-    await this.reportService.createReport(userId, dto);
+    await this.reportService.createReport(userId, dto, transactionManager);
 
     this.logger.log('Report created successfully', {
       userId,
@@ -152,9 +159,10 @@ export class ReportController {
 
   @Patch(':id/review')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseInterceptors(TransactionInterceptor)
   @SwaggerApiOperation({
     summary: '신고 검토',
-    description: '신고를 검토하고 처리 결과를 기록합니다.',
+    description: '신고를 검토하고 처리 결과를 기록합니다. 트랜잭션을 통해 데이터 일관성을 보장합니다.',
   })
   @SwaggerApiParam({
     name: 'id',
@@ -183,7 +191,8 @@ export class ReportController {
   async reviewReport(
     @Param('id', ParseUUIDPipe) reportId: string,
     @Body() dto: ReviewReportDto,
-    @CurrentJwt() { userId: reviewerId }: AuthenticatedJwt
+    @CurrentJwt() { userId: reviewerId }: AuthenticatedJwt,
+    @TransactionManager() transactionManager: EntityManager
   ): Promise<void> {
     this.logger.debug('Reviewing report', {
       reportId,
@@ -191,7 +200,7 @@ export class ReportController {
       newStatus: dto.status,
     });
 
-    await this.reportReviewService.reviewReport(reportId, reviewerId, dto);
+    await this.orchestrationService.reviewReport(reportId, reviewerId, dto, transactionManager);
 
     this.logger.log('Report reviewed successfully', {
       reportId,
@@ -202,9 +211,10 @@ export class ReportController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseInterceptors(TransactionInterceptor)
   @SwaggerApiOperation({
     summary: '신고 삭제',
-    description: '처리되지 않은 신고를 삭제합니다.',
+    description: '처리되지 않은 신고를 삭제합니다. 트랜잭션을 통해 데이터 일관성을 보장합니다.',
   })
   @SwaggerApiParam({
     name: 'id',
@@ -226,10 +236,13 @@ export class ReportController {
   @UseGuards(AuthorizationGuard)
   @RequireRole('superAdmin')
   @RequirePermission('reports:delete')
-  async deleteReport(@Param('id', ParseUUIDPipe) reportId: string): Promise<void> {
+  async deleteReport(
+    @Param('id', ParseUUIDPipe) reportId: string,
+    @TransactionManager() transactionManager: EntityManager
+  ): Promise<void> {
     this.logger.debug('Deleting report', { reportId });
 
-    await this.reportService.deleteReport(reportId);
+    await this.reportService.deleteReport(reportId, transactionManager);
 
     this.logger.log('Report deleted successfully', { reportId });
   }
@@ -263,9 +276,10 @@ export class ReportController {
 
   @Post('batch/process')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(TransactionInterceptor)
   @SwaggerApiOperation({
     summary: '신고 배치 처리',
-    description: '대기 중인 신고들을 자동으로 처리합니다.',
+    description: '대기 중인 신고들을 자동으로 처리합니다. 트랜잭션을 통해 데이터 일관성을 보장합니다.',
   })
   @SwaggerApiOkResponse({
     status: HttpStatus.OK,
@@ -275,11 +289,12 @@ export class ReportController {
   @RequireRole('superAdmin')
   @RequirePermission('reports:write')
   async batchProcessReports(
+    @TransactionManager() transactionManager: EntityManager,
     @Query('limit') limit?: number
   ): Promise<{ processed: number; failed: number }> {
     this.logger.debug('Starting batch report processing', { limit });
 
-    const result = await this.reportReviewService.batchProcessPendingReports(limit);
+    const result = await this.orchestrationService.batchProcessPendingReports(limit);
 
     this.logger.log('Batch processing completed', result);
 

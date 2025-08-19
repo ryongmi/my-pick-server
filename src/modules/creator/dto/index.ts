@@ -17,9 +17,7 @@ export { UpdatePlatformSyncDto } from './update-platform-sync.dto.js';
 export { PlatformSyncDetailDto } from './platform-sync-detail.dto.js';
 export { PlatformSyncStatsDto, PlatformSyncStatusCountsDto } from './platform-sync-stats.dto.js';
 
-// Statistics 관련 DTO (신규)
-export { CreatorPlatformStatsDto } from './creator-platform-stats.dto.js';
-export { CreatorCategoryStatsDto } from './creator-category-stats.dto.js';
+// Statistics 관련 DTO (신규) - 제거됨 (플랫폼 직접 집계 사용)
 
 // Consent 관련 DTO
 export { CreatorConsentDto } from './creator-consent.dto.js';

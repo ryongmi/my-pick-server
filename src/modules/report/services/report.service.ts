@@ -8,12 +8,7 @@ import { LimitType } from '@krgeobuk/core/enum';
 
 import { CacheService } from '@database/redis/cache.service.js';
 
-import {
-  ReportRepository,
-  ReportEvidenceRepository,
-  ReportReviewRepository,
-  ReportActionRepository,
-} from '../repositories/index.js';
+import { ReportRepository } from '../repositories/index.js';
 import {
   ReportEntity,
 } from '../entities/index.js';
@@ -31,9 +26,6 @@ export class ReportService {
 
   constructor(
     private readonly reportRepo: ReportRepository,
-    private readonly evidenceRepo: ReportEvidenceRepository,
-    private readonly reviewRepo: ReportReviewRepository,
-    private readonly actionRepo: ReportActionRepository,
     private readonly cacheService: CacheService,
     @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy
   ) {}
@@ -147,7 +139,7 @@ export class ReportService {
     reporterId: string,
     dto: CreateReportDto,
     _transactionManager?: EntityManager
-  ): Promise<void> {
+  ): Promise<string> {
     try {
       this.logger.log('Creating new report', {
         reporterId,
@@ -200,17 +192,6 @@ export class ReportService {
 
       const report = await this.reportRepo.createReport(reportData);
 
-      // 증거 정보가 있다면 별도 엔티티로 저장
-      if (
-        dto.evidence &&
-        (dto.evidence.screenshots || dto.evidence.urls || dto.evidence.additionalInfo)
-      ) {
-        await this.evidenceRepo.saveEvidence(report.id, dto.evidence);
-      }
-
-      // 신고 관련 캐시 무효화
-      await this.cacheService.invalidateReportRelatedCaches();
-
       this.logger.log('Report created successfully', {
         reportId: report.id,
         reporterId,
@@ -218,8 +199,9 @@ export class ReportService {
         targetId: dto.targetId,
         reason: dto.reason,
         priority,
-        hasEvidence: !!dto.evidence,
       });
+
+      return report.id;
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -236,7 +218,7 @@ export class ReportService {
   }
 
 
-  async deleteReport(reportId: string): Promise<void> {
+  async deleteReport(reportId: string, _transactionManager?: EntityManager): Promise<void> {
     try {
       const report = await this.findByIdOrFail(reportId);
 
@@ -245,17 +227,7 @@ export class ReportService {
         throw ReportException.cannotDeleteReviewedReport();
       }
 
-      // 관련 엔티티들도 함께 삭제
-      await Promise.all([
-        this.evidenceRepo.deleteByReportId(reportId),
-        this.reviewRepo.deleteByReportId(reportId),
-        this.actionRepo.deleteByReportId(reportId),
-      ]);
-
       await this.reportRepo.deleteReport(reportId);
-
-      // 신고 관련 캐시 무효화
-      await this.cacheService.invalidateReportRelatedCaches();
 
       this.logger.log('Report deleted successfully', { reportId });
     } catch (error: unknown) {
@@ -266,6 +238,32 @@ export class ReportService {
       this.logger.error('Report deletion failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
         reportId,
+      });
+      throw ReportException.reportUpdateError();
+    }
+  }
+
+  async updateReportStatus(
+    reportId: string,
+    status: ReportStatus,
+    _transactionManager?: EntityManager
+  ): Promise<void> {
+    try {
+      await this.reportRepo.updateReport(reportId, { status });
+
+      this.logger.log('Report status updated successfully', {
+        reportId,
+        status,
+      });
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Report status update failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        reportId,
+        status,
       });
       throw ReportException.reportUpdateError();
     }
@@ -310,9 +308,8 @@ export class ReportService {
   private async buildReportDetail(report: ReportEntity): Promise<ReportDetailDto> {
     return await this.executeWithErrorHandling(
       async () => {
-        // 관련 엔티티 정보 조회
-        const [evidence, reporterInfo, targetInfo] = await Promise.all([
-          this.evidenceRepo.findByReportId(report.id),
+        // 외부 정보만 조회 (증거는 OrchestrationService에서 처리)
+        const [reporterInfo, targetInfo] = await Promise.all([
           this.getReporterInfo(report.reporterId),
           this.getTargetInfo(report.targetType, report.targetId),
         ]);
@@ -332,24 +329,6 @@ export class ReportService {
         // Handle optional properties conditionally
         if (report.description !== undefined) {
           result.description = report.description || '';
-        }
-
-        if (evidence) {
-          const evidenceData: {
-            screenshots?: string[];
-            urls?: string[];
-            additionalInfo?: Record<string, unknown>;
-          } = {};
-          if (evidence.screenshots !== undefined && evidence.screenshots !== null) {
-            evidenceData.screenshots = evidence.screenshots;
-          }
-          if (evidence.urls !== undefined && evidence.urls !== null) {
-            evidenceData.urls = evidence.urls;
-          }
-          if (evidence.additionalInfo !== undefined && evidence.additionalInfo !== null) {
-            evidenceData.additionalInfo = evidence.additionalInfo;
-          }
-          result.evidence = evidenceData;
         }
 
         if (reporterInfo !== undefined) {
@@ -716,13 +695,7 @@ export class ReportService {
 
     return await this.executeWithErrorHandling(
       async () => {
-        // 1. 각 리포트에 대한 evidence 정보 배치 조회
-        const evidencePromises = reports.map(report => 
-          this.evidenceRepo.findByReportId(report.id)
-        );
-        const evidenceResults = await Promise.all(evidencePromises);
-
-        // 2. 배치 외부 데이터 조회
+        // 1. 배치 외부 데이터 조회 (증거는 OrchestrationService에서 처리)
         const reporterIds = [...new Set(reports.map(r => r.reporterId).filter(id => id))];
         const targets = reports.map(r => ({ targetType: r.targetType, targetId: r.targetId }));
 
@@ -731,9 +704,8 @@ export class ReportService {
           this.getTargetInfoBatch(targets),
         ]);
 
-        // 3. 결과 조합
-        const results = reports.map((report, index) => {
-          const evidence = evidenceResults[index];
+        // 2. 결과 조합
+        const results = reports.map((report) => {
           const reporterInfo = reportersInfo[report.reporterId];
           const targetInfo = targetsInfo[`${report.targetType}:${report.targetId}`];
 
@@ -752,24 +724,6 @@ export class ReportService {
           // 선택적 속성 처리
           if (report.description !== undefined) {
             result.description = report.description || '';
-          }
-
-          if (evidence) {
-            const evidenceData: {
-              screenshots?: string[];
-              urls?: string[];
-              additionalInfo?: Record<string, unknown>;
-            } = {};
-            if (evidence.screenshots !== undefined && evidence.screenshots !== null) {
-              evidenceData.screenshots = evidence.screenshots;
-            }
-            if (evidence.urls !== undefined && evidence.urls !== null) {
-              evidenceData.urls = evidence.urls;
-            }
-            if (evidence.additionalInfo !== undefined && evidence.additionalInfo !== null) {
-              evidenceData.additionalInfo = evidence.additionalInfo;
-            }
-            result.evidence = evidenceData;
           }
 
           if (reporterInfo !== undefined) {
@@ -792,7 +746,7 @@ export class ReportService {
       },
       'Build report details batch',
       { reportCount: reports.length },
-      // fallback: 배치 처리가 실패하면 개별 처리로 폴백
+      // fallback: 배치 처리가 실패하면 기본 정보만 폴백
       reports.map(report => ({
         id: report.id,
         reporterId: report.reporterId,

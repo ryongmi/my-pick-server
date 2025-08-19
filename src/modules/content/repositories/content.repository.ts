@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { DataSource, In } from 'typeorm';
+import { DataSource, In, EntityManager } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
 import { LimitType, SortOrderType } from '@krgeobuk/core/enum';
@@ -233,7 +233,8 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
 
   async batchUpdateContent(
     contentIds: string[],
-    updateData: Partial<ContentEntity>
+    updateData: Partial<ContentEntity>,
+    transactionManager?: EntityManager
   ): Promise<void> {
     if (contentIds.length === 0) return;
 
@@ -242,7 +243,11 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
       updatedAt: new Date(),
     };
 
-    await this.createQueryBuilder()
+    const queryBuilder = transactionManager 
+      ? transactionManager.createQueryBuilder()
+      : this.createQueryBuilder();
+      
+    await queryBuilder
       .update(ContentEntity)
       .set(finalUpdateData)
       .where('id IN (:...contentIds)', { contentIds })

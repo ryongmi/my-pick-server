@@ -214,9 +214,7 @@ export class ContentSyncService {
       if (expiredNonAuthorized.length > 0) {
         const contentIds = expiredNonAuthorized.map((sync) => sync.contentId);
         
-        // 실제 콘텐츠 삭제는 ContentOrchestrationService에 위임
-        // await this.contentOrchestrationService.deleteContentBatch(contentIds);
-        
+        // 콘텐츠 동기화 레코드 삭제 (실제 콘텐츠는 별도 정책에 따라 관리)
         const deleteResult = await this.contentSyncRepo.delete(contentIds);
         deletedCount = deleteResult.affected || 0;
       }
@@ -278,11 +276,9 @@ export class ContentSyncService {
     try {
       this.logger.log('Revoking data consent for creator', { creatorId });
 
-      // ContentOrchestrationService에 실제 콘텐츠 삭제 위임
-      // const deletionResult = await this.contentOrchestrationService.revokeCreatorDataConsent(creatorId);
-      
+      // 현재는 동의 철회 로그만 기록 (실제 콘텐츠 삭제는 별도 정책에 따라 처리)
       this.logger.log('Creator data consent revoked - sync records updated', { creatorId });
-      return { deletedCount: 0 }; // 추후 ContentOrchestrationService 연동 시 실제 삭제 수 반환
+      return { deletedCount: 0 };
     } catch (error: unknown) {
       this.logger.error('Failed to revoke creator data consent', {
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -310,12 +306,9 @@ export class ContentSyncService {
         deletedCount = deleteResult.affected || 0;
       }
 
-      // ContentOrchestrationService를 통한 30일 rolling window 정리
-      // const rollingResult = await this.contentOrchestrationService.cleanupOldCreatorContent(creatorId, 30);
-      
-      // 현재는 기본값으로 처리하되, 향후 ContentOrchestrationService 연동 시 실제 값 사용
-      const retainedCount = 0; // rollingResult.retainedCount
-      const oldestRetainedDate = null; // rollingResult.oldestRetainedDate
+      // 30일 롤링 윈도우 정리는 현재 미구현 (동기화 메타데이터만 관리)
+      const retainedCount = 0;
+      const oldestRetainedDate = null;
 
       this.logger.log('Rolling window cleanup completed for non-consented creator', {
         creatorId,

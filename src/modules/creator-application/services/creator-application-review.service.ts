@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { EntityManager } from 'typeorm';
+
 import { CreatorApplicationReviewRepository } from '../repositories/index.js';
 import {
   CreatorApplicationReviewEntity,
@@ -51,10 +53,13 @@ export class CreatorApplicationReviewService {
     return this.reviewRepo.findByApplicationId(applicationId);
   }
 
-  async createReview(dto: CreateReviewDto): Promise<CreatorApplicationReviewEntity> {
+  async createReview(
+    dto: CreateReviewDto,
+    transactionManager?: EntityManager
+  ): Promise<CreatorApplicationReviewEntity> {
     try {
       const review = this.reviewRepo.create(dto);
-      const savedReview = await this.reviewRepo.save(review);
+      const savedReview = await this.reviewRepo.saveEntity(review, transactionManager);
 
       this.logger.log('Review created successfully', {
         reviewId: savedReview.id,

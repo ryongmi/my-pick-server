@@ -107,6 +107,110 @@ export class ReportException {
     });
   }
 
+  // ==================== 증거 관련 (600-649) ====================
+
+  static evidenceNotFound(): HttpException {
+    return new NotFoundException({
+      code: 'REPORT_601',
+      message: '신고 증거를 찾을 수 없습니다.',
+    });
+  }
+
+  static evidenceAlreadyExists(): HttpException {
+    return new ConflictException({
+      code: 'REPORT_602',
+      message: '해당 신고에 대한 증거가 이미 존재합니다.',
+    });
+  }
+
+  static evidenceCreateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'REPORT_603',
+      message: '증거 생성 중 오류가 발생했습니다.',
+    });
+  }
+
+  static evidenceUpdateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'REPORT_604',
+      message: '증거 수정 중 오류가 발생했습니다.',
+    });
+  }
+
+  static evidenceDeleteError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'REPORT_605',
+      message: '증거 삭제 중 오류가 발생했습니다.',
+    });
+  }
+
+  // ==================== 조치 관련 (650-699) ====================
+
+  static actionNotFound(): HttpException {
+    return new NotFoundException({
+      code: 'REPORT_651',
+      message: '신고 조치를 찾을 수 없습니다.',
+    });
+  }
+
+  static actionCreateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'REPORT_652',
+      message: '조치 생성 중 오류가 발생했습니다.',
+    });
+  }
+
+  static actionUpdateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'REPORT_653',
+      message: '조치 수정 중 오류가 발생했습니다.',
+    });
+  }
+
+  static actionDeleteError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'REPORT_654',
+      message: '조치 삭제 중 오류가 발생했습니다.',
+    });
+  }
+
+  // ==================== 검토 관련 (700-749) ====================
+
+  static reviewNotFound(): HttpException {
+    return new NotFoundException({
+      code: 'REPORT_701',
+      message: '신고 검토 데이터를 찾을 수 없습니다.',
+    });
+  }
+
+  static reviewAlreadyExists(): HttpException {
+    return new ConflictException({
+      code: 'REPORT_702',
+      message: '해당 신고에 대한 검토가 이미 존재합니다.',
+    });
+  }
+
+  static reviewCreateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'REPORT_703',
+      message: '검토 데이터 생성 중 오류가 발생했습니다.',
+    });
+  }
+
+  static reviewUpdateError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'REPORT_704',
+      message: '검토 데이터 수정 중 오류가 발생했습니다.',
+    });
+  }
+
+  static reviewDeleteError(): HttpException {
+    return new InternalServerErrorException({
+      code: 'REPORT_705',
+      message: '검토 데이터 삭제 중 오류가 발생했습니다.',
+    });
+  }
+
   // ==================== 일반 오류 (500-599) ====================
 
   static reportProcessingError(): HttpException {

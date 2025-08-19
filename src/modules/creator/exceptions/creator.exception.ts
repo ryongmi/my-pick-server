@@ -346,12 +346,6 @@ export class CreatorException {
     });
   }
 
-  static platformStatsFetchError(): HttpException {
-    return new InternalServerErrorException({
-      code: 'CREATOR_519',
-      message: '플랫폼별 통계 조회 중 오류가 발생했습니다.',
-    });
-  }
 
   static platformOperationError(): HttpException {
     return new InternalServerErrorException({

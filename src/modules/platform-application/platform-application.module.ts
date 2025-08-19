@@ -18,6 +18,7 @@ import {
   PlatformApplicationDataService,
   PlatformApplicationReviewService,
   PlatformApplicationStatisticsService,
+  PlatformApplicationOrchestrationService,
 } from './services/index.js';
 import { PlatformApplicationController } from './controllers/index.js';
 
@@ -39,12 +40,14 @@ import { PlatformApplicationController } from './controllers/index.js';
     PlatformApplicationDataService,
     PlatformApplicationReviewService,
     PlatformApplicationStatisticsService,
+    PlatformApplicationOrchestrationService,
   ],
   exports: [
     PlatformApplicationService,
     PlatformApplicationDataService,
     PlatformApplicationReviewService,
     PlatformApplicationStatisticsService,
+    PlatformApplicationOrchestrationService,
     PlatformApplicationRepository,
     PlatformApplicationDataRepository,
     PlatformApplicationReviewRepository,

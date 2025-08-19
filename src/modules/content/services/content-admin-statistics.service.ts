@@ -5,14 +5,19 @@ import { LessThan, MoreThan, FindManyOptions } from 'typeorm';
 import { PlatformType } from '@common/enums/index.js';
 
 import { ContentRepository } from '../repositories/index.js';
-import { ContentEntity, ContentStatisticsEntity } from '../entities/index.js';
+import { ContentEntity } from '../entities/index.js';
 import { ContentException } from '../exceptions/index.js';
+
+import { ContentStatisticsService } from './content-statistics.service.js';
 
 @Injectable()
 export class ContentAdminStatisticsService {
   private readonly logger = new Logger(ContentAdminStatisticsService.name);
 
-  constructor(private readonly contentRepo: ContentRepository) {}
+  constructor(
+    private readonly contentRepo: ContentRepository,
+    private readonly contentStatisticsService: ContentStatisticsService
+  ) {}
 
   // ==================== PUBLIC METHODS ====================
 
@@ -44,15 +49,7 @@ export class ContentAdminStatisticsService {
 
   async getTotalViewsByCreatorId(creatorId: string): Promise<number> {
     try {
-      const result = await this.contentRepo.manager
-        .getRepository(ContentStatisticsEntity)
-        .createQueryBuilder('stats')
-        .leftJoin('content', 'content', 'content.id = stats.contentId')
-        .select('SUM(stats.views)', 'totalViews')
-        .where('content.creatorId = :creatorId', { creatorId })
-        .getRawOne();
-
-      return Number(result?.totalViews) || 0;
+      return await this.contentStatisticsService.getTotalViewsByCreatorId(creatorId);
     } catch (error: unknown) {
       this.logger.error('Failed to get total views by creator', {
         error: error instanceof Error ? error.message : 'Unknown error',

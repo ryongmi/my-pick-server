@@ -2,8 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 import { Expose, Type } from 'class-transformer';
 
-import { ReportStatus, ReportTargetType, ReportReason } from '../enums/index.js';
-import { ReportActionType } from '../entities/index.js';
+import { ReportStatus, ReportTargetType, ReportReason, ReportActionType } from '../enums/index.js';
 
 export class ReportReporterInfoDto {
   @ApiProperty({

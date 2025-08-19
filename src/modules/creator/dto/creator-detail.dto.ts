@@ -4,8 +4,6 @@ import { Expose, Type } from 'class-transformer';
 
 import { CreatorPlatformDto } from './creator-platform.dto.js';
 import { CreatorConsentDto } from './creator-consent.dto.js';
-import { CreatorPlatformStatsDto } from './creator-platform-stats.dto.js';
-import { CreatorCategoryStatsDto } from './creator-category-stats.dto.js';
 
 export class DetailedPlatformStatsDto {
   @ApiProperty({
@@ -174,54 +172,7 @@ export class CreatorDetailDto {
   @Type(() => CreatorConsentDto)
   consents?: CreatorConsentDto[];
 
-  @ApiPropertyOptional({
-    description: '플랫폼별 상세 통계',
-    type: [CreatorPlatformStatsDto],
-  })
-  @Expose()
-  @Type(() => CreatorPlatformStatsDto)
-  detailedPlatformStats?: CreatorPlatformStatsDto[];
-
-  @ApiPropertyOptional({
-    description: '카테고리별 상세 통계',
-    type: [CreatorCategoryStatsDto],
-  })
-  @Expose()
-  @Type(() => CreatorCategoryStatsDto)
-  categoryStats?: CreatorCategoryStatsDto[];
-
-  // ==================== 고급 통계 정보 ====================
-
-  @ApiPropertyOptional({
-    description: '확장된 통계 정보',
-    example: {
-      followersGrowthRate: 12.5,
-      contentGrowthRate: 8.3,
-      averageEngagementRate: 7.8,
-      totalLikes: 500000000,
-      totalComments: 75000000,
-      totalShares: 28000000,
-      monthlyAverageViews: 12000000.5,
-      contentQualityScore: 92.3,
-      activePlatformCount: 4,
-      totalCategories: 3,
-      topCategory: 'gaming',
-    },
-  })
-  @Expose()
-  advancedStats?: {
-    followersGrowthRate: number;
-    contentGrowthRate: number;
-    averageEngagementRate: number;
-    totalLikes: number;
-    totalComments: number;
-    totalShares: number;
-    monthlyAverageViews?: number;
-    contentQualityScore?: number;
-    activePlatformCount: number;
-    totalCategories: number;
-    topCategory: string | null;
-  };
+  // ==================== 고급 통계 정보 제거됨 (MVP에서 불필요) ====================
 
   // ==================== 타임스탬프 ====================
 

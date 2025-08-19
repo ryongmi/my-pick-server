@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 
 import { DataSource, Repository, MoreThan } from 'typeorm';
 
-import { ReportActionEntity, ReportActionType } from '../entities/index.js';
+import { ReportActionEntity } from '../entities/index.js';
+import { ReportActionType, ExecutionStatus } from '../enums/index.js';
 
 @Injectable()
 export class ReportActionRepository extends Repository<ReportActionEntity> {
@@ -22,7 +23,7 @@ export class ReportActionRepository extends Repository<ReportActionEntity> {
       reason?: string;
       executedAt?: Date;
       executedBy?: string;
-      executionStatus?: 'pending' | 'executed' | 'failed';
+      executionStatus?: ExecutionStatus;
     }
   ): Promise<void> {
     const action = new ReportActionEntity();
@@ -40,7 +41,7 @@ export class ReportActionRepository extends Repository<ReportActionEntity> {
     if (actionData.executedBy !== undefined) {
       action.executedBy = actionData.executedBy;
     }
-    action.executionStatus = actionData.executionStatus || 'pending';
+    action.executionStatus = actionData.executionStatus || ExecutionStatus.PENDING;
 
     await this.save(action);
   }
@@ -53,7 +54,7 @@ export class ReportActionRepository extends Repository<ReportActionEntity> {
       reason: string;
       executedAt: Date;
       executedBy: string;
-      executionStatus: 'pending' | 'executed' | 'failed';
+      executionStatus: ExecutionStatus;
     }>
   ): Promise<void> {
     await this.update({ reportId }, actionData);
@@ -61,7 +62,7 @@ export class ReportActionRepository extends Repository<ReportActionEntity> {
 
   async findPendingActions(): Promise<ReportActionEntity[]> {
     return this.find({
-      where: { executionStatus: 'pending' },
+      where: { executionStatus: ExecutionStatus.PENDING },
       order: { createdAt: 'ASC' },
     });
   }
@@ -84,7 +85,7 @@ export class ReportActionRepository extends Repository<ReportActionEntity> {
       .where('action.actionType IN (:...types)', {
         types: [ReportActionType.SUSPENSION, ReportActionType.BAN],
       })
-      .andWhere('action.executionStatus = :status', { status: 'executed' })
+      .andWhere('action.executionStatus = :status', { status: ExecutionStatus.EXECUTED })
       .andWhere(
         '(action.duration IS NULL OR DATE_ADD(action.executedAt, INTERVAL action.duration DAY) > :now)',
         { now }

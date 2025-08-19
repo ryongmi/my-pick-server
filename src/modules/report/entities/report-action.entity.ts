@@ -1,12 +1,6 @@
 import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
-export enum ReportActionType {
-  WARNING = 'warning',
-  SUSPENSION = 'suspension',
-  BAN = 'ban',
-  CONTENT_REMOVAL = 'content_removal',
-  NONE = 'none',
-}
+import { ReportActionType, ExecutionStatus } from '../enums/index.js';
 
 @Entity('report_actions')
 @Index(['actionType']) // 조치 타입별 조회 최적화
@@ -50,11 +44,11 @@ export class ReportActionEntity {
 
   @Column({
     type: 'enum',
-    enum: ['pending', 'executed', 'failed'],
-    default: 'pending',
+    enum: ExecutionStatus,
+    default: ExecutionStatus.PENDING,
     comment: '조치 실행 상태',
   })
-  executionStatus!: 'pending' | 'executed' | 'failed';
+  executionStatus!: ExecutionStatus;
 
   @CreateDateColumn()
   createdAt!: Date;

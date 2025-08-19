@@ -11,6 +11,7 @@ import {
   PlatformApplicationRepository,
 } from '../repositories/index.js';
 import { CreatorService } from '../../creator/services/creator.service.js';
+import { CreatorPlatformService } from '../../creator/services/creator-platform.service.js';
 import { PlatformApplicationEntity } from '../entities/index.js';
 import { ApplicationStatus, PlatformType as LocalPlatformType, VerificationProofType } from '../enums/index.js';
 import {
@@ -34,6 +35,7 @@ export class PlatformApplicationService {
     private readonly platformAppDataService: PlatformApplicationDataService,
     private readonly platformAppReviewService: PlatformApplicationReviewService,
     private readonly creatorService: CreatorService,
+    private readonly creatorPlatformService: CreatorPlatformService,
     private readonly cacheService: CacheService
   ) {}
 
@@ -187,7 +189,7 @@ export class PlatformApplicationService {
     dto: CreatePlatformApplicationDto,
     userId: string,
     transactionManager?: EntityManager
-  ): Promise<void> {
+  ): Promise<string> {
     try {
       // 1. 크리에이터 존재 확인
       await this.creatorService.findByIdOrFail(dto.creatorId);
@@ -209,20 +211,19 @@ export class PlatformApplicationService {
       }
 
       // 3. 이미 등록된 플랫폼인지 확인
-      // TODO: Implement platform duplication check after CreatorPlatformService method is available
-      // const existingPlatform = await this.creatorPlatformService.findByCreatorIdAndType(
-      //   dto.creatorId,
-      //   dto.platformData.type as PlatformType
-      // );
+      const existingPlatform = await this.creatorPlatformService.findByCreatorIdAndType(
+        dto.creatorId,
+        dto.platformData.type as LocalPlatformType
+      );
 
-      // if (existingPlatform && existingPlatform.platformId === dto.platformData.platformId) {
-      //   this.logger.warn('Platform already registered', {
-      //     creatorId: dto.creatorId,
-      //     platformType: dto.platformData.type,
-      //     platformId: dto.platformData.platformId,
-      //   });
-      //   throw PlatformApplicationException.duplicatePlatform();
-      // }
+      if (existingPlatform && existingPlatform.platformId === dto.platformData.platformId) {
+        this.logger.warn('Platform already registered', {
+          creatorId: dto.creatorId,
+          platformType: dto.platformData.type,
+          platformId: dto.platformData.platformId,
+        });
+        throw PlatformApplicationException.duplicatePlatform();
+      }
 
       // 4. 신청 엔티티 생성
       const application = new PlatformApplicationEntity();
@@ -280,6 +281,8 @@ export class PlatformApplicationService {
         platformType: dto.platformData.type,
         userId,
       });
+
+      return application.id;
     } catch (error: unknown) {
       if (error instanceof HttpException) {
         throw error;
@@ -425,6 +428,63 @@ export class PlatformApplicationService {
         userId,
       });
       throw PlatformApplicationException.applicationDeleteError();
+    }
+  }
+
+  async updateApplicationStatus(
+    applicationId: string,
+    status: ApplicationStatus,
+    reviewerId: string,
+    transactionManager?: EntityManager
+  ): Promise<void> {
+    try {
+      const application = await this.findByIdOrFail(applicationId);
+
+      // 1. 상태 검증
+      if (application.status !== ApplicationStatus.PENDING) {
+        this.logger.warn('Platform application already reviewed', {
+          applicationId,
+          status: application.status,
+        });
+        throw PlatformApplicationException.applicationAlreadyReviewed();
+      }
+
+      // 2. 자기 신청 검토 방지
+      if (application.userId === reviewerId) {
+        this.logger.warn('Cannot review own platform application', {
+          applicationId,
+          userId: application.userId,
+          reviewerId,
+        });
+        throw PlatformApplicationException.cannotReviewOwnApplication();
+      }
+
+      // 3. 상태 업데이트
+      application.status = status;
+      application.reviewerId = reviewerId;
+      application.reviewedAt = new Date();
+
+      // 4. 저장
+      const manager = transactionManager || this.platformApplyRepo.manager;
+      await manager.save(application);
+
+      this.logger.log('Platform application status updated successfully', {
+        applicationId,
+        status,
+        reviewerId,
+      });
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Platform application status update failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        applicationId,
+        status,
+        reviewerId,
+      });
+      throw PlatformApplicationException.applicationUpdateError();
     }
   }
 

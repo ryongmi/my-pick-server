@@ -3,8 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsString, IsOptional, IsNumber, ValidateNested, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
-import { ReportStatus } from '../enums/index.js';
-import { ReportActionType } from '../entities/index.js';
+import { ReportStatus, ReportActionType } from '../enums/index.js';
 
 export class ReportActionDto {
   @ApiPropertyOptional({

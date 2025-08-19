@@ -196,8 +196,12 @@ export class AdminCreatorController {
     // TODO: 크리에이터 상태 변경 로직 구현
     // 현재는 CreatorEntity에 status 필드가 없으므로 나중에 구현
 
-    // 상태 변경 로그 (예시)
-    console.log(`크리에이터 ${creatorId} 상태를 ${dto.status}로 변경, 사유: ${dto.reason}`);
+    // 상태 변경 로그
+    this.logger.log('Creator status updated', {
+      creatorId,
+      newStatus: dto.status,
+      reason: dto.reason,
+    });
   }
 
   @Delete(':id')

@@ -8,12 +8,14 @@ import {
   CreatorApplicationChannelInfoEntity,
   CreatorApplicationSampleVideoEntity,
   CreatorApplicationReviewEntity,
+  CreatorApplicationRequirementEntity,
 } from './entities/index.js';
 import {
   CreatorApplicationRepository,
   CreatorApplicationChannelInfoRepository,
   CreatorApplicationSampleVideoRepository,
   CreatorApplicationReviewRepository,
+  CreatorApplicationRequirementRepository,
 } from './repositories/index.js';
 import { 
   CreatorApplicationService,
@@ -21,6 +23,8 @@ import {
   CreatorApplicationStatisticsService,
   CreatorApplicationRequirementService,
   CreatorApplicationReviewService,
+  CreatorApplicationChannelInfoService,
+  CreatorApplicationSampleVideoService,
 } from './services/index.js';
 import { CreatorApplicationController } from './controllers/index.js';
 
@@ -31,6 +35,7 @@ import { CreatorApplicationController } from './controllers/index.js';
       CreatorApplicationChannelInfoEntity,
       CreatorApplicationSampleVideoEntity,
       CreatorApplicationReviewEntity,
+      CreatorApplicationRequirementEntity,
     ]),
     CreatorModule, // CreatorService 사용을 위해 필요
   ],
@@ -41,6 +46,7 @@ import { CreatorApplicationController } from './controllers/index.js';
     CreatorApplicationChannelInfoRepository,
     CreatorApplicationSampleVideoRepository,
     CreatorApplicationReviewRepository,
+    CreatorApplicationRequirementRepository,
     
     // Services
     CreatorApplicationService,
@@ -48,6 +54,8 @@ import { CreatorApplicationController } from './controllers/index.js';
     CreatorApplicationStatisticsService,
     CreatorApplicationRequirementService,
     CreatorApplicationReviewService,
+    CreatorApplicationChannelInfoService,
+    CreatorApplicationSampleVideoService,
   ],
   exports: [
     // Services
@@ -56,12 +64,15 @@ import { CreatorApplicationController } from './controllers/index.js';
     CreatorApplicationStatisticsService,
     CreatorApplicationRequirementService,
     CreatorApplicationReviewService,
+    CreatorApplicationChannelInfoService,
+    CreatorApplicationSampleVideoService,
     
     // Repositories  
     CreatorApplicationRepository,
     CreatorApplicationChannelInfoRepository,
     CreatorApplicationSampleVideoRepository,
     CreatorApplicationReviewRepository,
+    CreatorApplicationRequirementRepository,
   ],
 })
 export class CreatorApplicationModule {}

@@ -7,11 +7,14 @@ import {
   Query,
   Body,
   UseGuards,
+  UseInterceptors,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
   Logger,
 } from '@nestjs/common';
+
+import type { EntityManager } from 'typeorm';
 
 import {
   SwaggerApiTags,
@@ -26,10 +29,12 @@ import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
+import { TransactionInterceptor } from '@krgeobuk/core/interceptors';
+import { TransactionManager } from '@krgeobuk/core/decorators';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import type { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 
-import { ReportService, ReportStatisticsService, ReportReviewService } from '../../report/services/index.js';
+import { ReportService, ReportStatisticsService, ReportOrchestrationService } from '../../report/services/index.js';
 import { ReportTargetType, ReportStatus } from '../../report/enums/index.js';
 import { ReportSearchQueryDto, ReviewReportDto, ReportDetailDto } from '../../report/dto/index.js';
 import { UpdatePriorityDto } from '../dto/index.js';
@@ -45,7 +50,7 @@ export class AdminReportController {
   constructor(
     private readonly reportService: ReportService,
     private readonly statisticsService: ReportStatisticsService,
-    private readonly reviewService: ReportReviewService,
+    private readonly orchestrationService: ReportOrchestrationService,
   ) {}
 
   @Get()
@@ -117,9 +122,10 @@ export class AdminReportController {
 
   @Patch(':id/review')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseInterceptors(TransactionInterceptor)
   @SwaggerApiOperation({
     summary: '신고 검토 및 처리',
-    description: '관리자가 신고를 검토하고 적절한 조치를 취합니다.',
+    description: '관리자가 신고를 검토하고 적절한 조치를 취합니다. 트랜잭션을 통해 데이터 일관성을 보장합니다.',
   })
   @SwaggerApiParam({ name: 'id', type: String, description: '신고 ID' })
   @SwaggerApiBody({ dto: ReviewReportDto })
@@ -128,22 +134,27 @@ export class AdminReportController {
   async reviewReport(
     @Param('id', ParseUUIDPipe) reportId: string,
     @Body() dto: ReviewReportDto,
-    @CurrentJwt() { userId }: AuthenticatedJwt
+    @CurrentJwt() { userId }: AuthenticatedJwt,
+    @TransactionManager() _transactionManager: EntityManager
   ): Promise<void> {
-    await this.reviewService.reviewReport(reportId, userId, dto);
+    await this.orchestrationService.reviewReport(reportId, userId, dto, _transactionManager);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseInterceptors(TransactionInterceptor)
   @SwaggerApiOperation({
     summary: '관리자용 신고 삭제',
-    description: '관리자가 신고를 삭제합니다. 검토 완료된 신고는 삭제할 수 없습니다.',
+    description: '관리자가 신고를 삭제합니다. 검토 완료된 신고는 삭제할 수 없습니다. 트랜잭션을 통해 데이터 일관성을 보장합니다.',
   })
   @SwaggerApiParam({ name: 'id', type: String, description: '신고 ID' })
   @SwaggerApiOkResponse({ status: 204, description: '신고 삭제 완료' })
   @RequirePermission('report:delete')
-  async deleteReport(@Param('id', ParseUUIDPipe) reportId: string): Promise<void> {
-    await this.reportService.deleteReport(reportId);
+  async deleteReport(
+    @Param('id', ParseUUIDPipe) reportId: string,
+    @TransactionManager() _transactionManager: EntityManager
+  ): Promise<void> {
+    await this.reportService.deleteReport(reportId, _transactionManager);
   }
 
   @Get('user/:userId')
@@ -194,9 +205,10 @@ export class AdminReportController {
 
   @Patch(':id/priority')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseInterceptors(TransactionInterceptor)
   @SwaggerApiOperation({
     summary: '신고 우선순위 변경',
-    description: '관리자가 신고의 우선순위를 변경합니다.',
+    description: '관리자가 신고의 우선순위를 변경합니다. 트랜잭션을 통해 데이터 일관성을 보장합니다.',
   })
   @SwaggerApiParam({ name: 'id', type: String, description: '신고 ID' })
   @SwaggerApiBody({
@@ -207,7 +219,8 @@ export class AdminReportController {
   @RequirePermission('report:write')
   async updateReportPriority(
     @Param('id', ParseUUIDPipe) reportId: string,
-    @Body() body: UpdatePriorityDto
+    @Body() body: UpdatePriorityDto,
+    @TransactionManager() _transactionManager: EntityManager
   ): Promise<void> {
     await this.reportService.findByIdOrFail(reportId); // 존재 확인
 

@@ -13,22 +13,29 @@ import {
   ContentInteractionEntity,
   ContentSyncEntity,
   ContentSyncMetadataEntity,
+  ContentModerationEntity,
 } from './entities/index.js';
 import {
   ContentRepository,
+  ContentStatisticsRepository,
   ContentCategoryRepository,
   ContentTagRepository,
   ContentInteractionRepository,
   ContentSyncRepository,
   ContentSyncMetadataRepository,
+  ContentModerationRepository,
 } from './repositories/index.js';
 import {
   ContentService,
+  ContentStatisticsService,
   ContentCategoryService,
   ContentTagService,
   ContentInteractionService,
   ContentSyncService,
   ContentSyncMetadataService,
+  ContentOrchestrationService,
+  ContentAdminStatisticsService,
+  ContentModerationService,
 } from './services/index.js';
 import {
   ContentController,
@@ -49,6 +56,7 @@ import {
       ContentInteractionEntity,
       ContentSyncEntity,
       ContentSyncMetadataEntity,
+      ContentModerationEntity,
     ]),
     RedisModule,
     UserInteractionModule,
@@ -64,19 +72,25 @@ import {
   providers: [
     // Repositories
     ContentRepository,
+    ContentStatisticsRepository,
     ContentCategoryRepository,
     ContentTagRepository,
     ContentInteractionRepository,
     ContentSyncRepository,
     ContentSyncMetadataRepository,
+    ContentModerationRepository,
 
     // Services
     ContentService,
+    ContentStatisticsService,
     ContentCategoryService,
     ContentTagService,
     ContentInteractionService,
     ContentSyncService,
     ContentSyncMetadataService,
+    ContentOrchestrationService,
+    ContentAdminStatisticsService,
+    ContentModerationService,
   ],
   exports: [
     ContentService,
@@ -85,6 +99,8 @@ import {
     ContentTagService,
     ContentInteractionService,
     ContentSyncService,
+    ContentOrchestrationService,
+    ContentAdminStatisticsService,
   ],
 })
 export class ContentModule {}

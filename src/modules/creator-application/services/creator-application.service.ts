@@ -10,9 +10,11 @@ import {
   CreatorApplicationReviewRepository,
 } from '../repositories/index.js';
 import { CreatorApplicationEntity } from '../entities/index.js';
+import { ApplicationStatus } from '../enums/index.js';
 import {
   ApplicationDetailDto,
   NormalizedApplicationDetailDto,
+  CreateApplicationDto,
 } from '../dto/index.js';
 import { CreatorApplicationException } from '../exceptions/index.js';
 
@@ -254,6 +256,115 @@ export class CreatorApplicationService {
   async hasActiveApplication(userId: string): Promise<boolean> {
     const count = await this.applicationRepo.countActiveApplications(userId);
     return count > 0;
+  }
+
+  // ==================== OrchestrationService 지원 메서드 ====================
+
+  async createApplication(
+    dto: CreateApplicationDto,
+    transactionManager?: EntityManager
+  ): Promise<string> {
+    try {
+      // 1. 활성 신청 중복 확인
+      const existingApplication = await this.findByUserId(dto.userId);
+      if (existingApplication && existingApplication.status === ApplicationStatus.PENDING) {
+        this.logger.warn('Active application already exists', {
+          userId: dto.userId,
+          existingApplicationId: existingApplication.id,
+        });
+        throw CreatorApplicationException.activeApplicationExists();
+      }
+
+      // 2. 신청 엔티티 생성
+      const application = new CreatorApplicationEntity();
+      Object.assign(application, {
+        userId: dto.userId,
+        status: ApplicationStatus.PENDING,
+        applicantMessage: dto.applicantMessage,
+        priority: dto.priority || 0,
+      });
+
+      // 3. 저장
+      const savedApplication = await this.applicationRepo.saveEntity(application, transactionManager);
+
+      this.logger.log('Creator application created successfully', {
+        applicationId: savedApplication.id,
+        userId: dto.userId,
+        platform: dto.channelInfo?.platform,
+        subscriberCount: dto.subscriberCount,
+        category: dto.contentCategory,
+      });
+
+      return savedApplication.id;
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Creator application creation failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId: dto.userId,
+        platform: dto.channelInfo?.platform,
+      });
+      throw CreatorApplicationException.applicationCreateError();
+    }
+  }
+
+  async updateApplicationStatus(
+    applicationId: string,
+    status: ApplicationStatus,
+    reviewerId: string,
+    transactionManager?: EntityManager
+  ): Promise<void> {
+    try {
+      const application = await this.findByIdOrFail(applicationId);
+
+      // 상태 검증
+      if (application.status !== ApplicationStatus.PENDING) {
+        this.logger.warn('Application already reviewed', {
+          applicationId,
+          currentStatus: application.status,
+          reviewerId,
+        });
+        throw CreatorApplicationException.applicationAlreadyReviewed();
+      }
+
+      // 자기 신청 검토 방지
+      if (application.userId === reviewerId) {
+        this.logger.warn('Reviewer cannot review own application', {
+          applicationId,
+          userId: application.userId,
+          reviewerId,
+        });
+        throw CreatorApplicationException.cannotReviewOwnApplication();
+      }
+
+      // 상태 업데이트
+      application.status = status;
+      application.reviewedAt = new Date();
+      application.reviewerId = reviewerId;
+
+      await this.applicationRepo.saveEntity(application, transactionManager);
+
+      this.logger.log('Application status updated successfully', {
+        applicationId,
+        userId: application.userId,
+        reviewerId,
+        status,
+      });
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Application status update failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        applicationId,
+        status,
+        reviewerId,
+      });
+      throw CreatorApplicationException.applicationUpdateError();
+    }
   }
 
   // ==================== PRIVATE HELPER METHODS ====================

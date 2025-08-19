@@ -1,19 +1,18 @@
 import { Injectable, Logger, Inject, HttpException } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 
-import { EntityManager, UpdateResult, In, DataSource } from 'typeorm';
+import { EntityManager, UpdateResult, In, DataSource, LessThan } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
 
 import { PlatformType } from '@common/enums/index.js';
 import { UserInteractionService } from '@modules/user-interaction/index.js';
 
 import { ContentRepository } from '../repositories/index.js';
-import { ContentEntity, ContentStatisticsEntity } from '../entities/index.js';
+import { ContentEntity } from '../entities/index.js';
 import {
   ContentDetailDto,
   CreateContentDto,
   UpdateContentDto,
-  UpdateContentStatisticsDto,
 } from '../dto/index.js';
 import { ContentException } from '../exceptions/index.js';
 
@@ -228,46 +227,6 @@ export class ContentService {
     }
   }
 
-  async updateContentStatistics(
-    contentId: string,
-    dto: UpdateContentStatisticsDto,
-  ): Promise<void> {
-    try {
-      // 1. 콘텐츠 존재 확인
-      await this.findByIdOrFail(contentId);
-
-      // 2. 통계 엔티티 조회 또는 생성
-      const statisticsRepo = this.dataSource.getRepository(ContentStatisticsEntity);
-      let statistics = await statisticsRepo.findOne({ where: { contentId } });
-
-      if (statistics) {
-        Object.assign(statistics, dto);
-      } else {
-        // 통계가 없는 경우 새로 생성
-        statistics = new ContentStatisticsEntity();
-        statistics.contentId = contentId;
-        Object.assign(statistics, dto);
-      }
-
-      // 3. 통계 저장
-      await statisticsRepo.save(statistics);
-
-      this.logger.log('Content statistics updated successfully', {
-        contentId,
-        updatedFields: Object.keys(dto),
-      });
-    } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      this.logger.error('Content statistics update failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        contentId,
-      });
-      throw ContentException.contentUpdateError();
-    }
-  }
 
   async deleteContent(contentId: string): Promise<UpdateResult> {
     try {
@@ -327,6 +286,194 @@ export class ContentService {
       }
 
       this.logger.error('Content details update failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        contentId,
+      });
+      throw ContentException.contentUpdateError();
+    }
+  }
+
+  // ==================== 검색 및 복합 조회 메서드 ====================
+
+  async searchContent(
+    options: Parameters<typeof this.contentRepo.searchContent>[0]
+  ): Promise<{ items: ContentEntity[]; pageInfo: unknown }> {
+    try {
+      const result = await this.contentRepo.searchContent(options);
+      return {
+        items: result.items as ContentEntity[],
+        pageInfo: result.pageInfo
+      };
+    } catch (error: unknown) {
+      this.logger.error('Content search failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        options,
+      });
+      throw ContentException.contentFetchError();
+    }
+  }
+
+  async getTrendingContent(hours: number, limit: number): Promise<ContentEntity[]> {
+    try {
+      return await this.contentRepo.getTrendingContent(hours, limit);
+    } catch (error: unknown) {
+      this.logger.error('Trending content fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        hours,
+        limit,
+      });
+      throw ContentException.contentFetchError();
+    }
+  }
+
+  async getRecentContentByCreatorIds(creatorIds: string[], limit: number): Promise<ContentEntity[]> {
+    try {
+      return await this.contentRepo.getRecentContent(creatorIds, limit);
+    } catch (error: unknown) {
+      this.logger.error('Recent content by creators fetch failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorIds: creatorIds.length,
+        limit,
+      });
+      throw ContentException.contentFetchError();
+    }
+  }
+
+  // ==================== 배치 작업 메서드 ====================
+
+  async batchUpdateContent(
+    contentIds: string[], 
+    updateData: Partial<ContentEntity>,
+    transactionManager?: EntityManager
+  ): Promise<void> {
+    try {
+      if (contentIds.length === 0) return;
+      
+      await this.contentRepo.batchUpdateContent(contentIds, updateData, transactionManager);
+      
+      this.logger.log('Batch content update completed', {
+        updatedCount: contentIds.length,
+        updateFields: Object.keys(updateData),
+      });
+    } catch (error: unknown) {
+      this.logger.error('Batch content update failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        contentIds: contentIds.length,
+        updateData: Object.keys(updateData),
+      });
+      throw ContentException.contentUpdateError();
+    }
+  }
+
+  async findOldContent(daysOld: number): Promise<ContentEntity[]> {
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+      
+      return await this.contentRepo.find({
+        where: {
+          createdAt: LessThan(cutoffDate)
+        },
+        select: ['id', 'title', 'platform', 'platformId', 'createdAt']
+      });
+    } catch (error: unknown) {
+      this.logger.error('Old content search failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        daysOld,
+      });
+      throw ContentException.contentFetchError();
+    }
+  }
+
+  async deleteContentsByIds(contentIds: string[]): Promise<{ deletedCount: number }> {
+    try {
+      if (contentIds.length === 0) {
+        return { deletedCount: 0 };
+      }
+
+      const deleteResult = await this.contentRepo.delete(contentIds);
+      const deletedCount = deleteResult.affected || 0;
+
+      this.logger.log('Content batch deletion completed', {
+        deletedCount,
+        requestedCount: contentIds.length,
+      });
+
+      return { deletedCount };
+    } catch (error: unknown) {
+      this.logger.error('Content batch deletion failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        contentIds: contentIds.length,
+      });
+      throw ContentException.contentDeleteError();
+    }
+  }
+
+  async deleteContentsByCreatorId(
+    creatorId: string,
+    transactionManager?: EntityManager
+  ): Promise<{ deletedCount: number }> {
+    try {
+      const deleteResult = transactionManager
+        ? await transactionManager.getRepository(ContentEntity).delete({ creatorId })
+        : await this.contentRepo.delete({ creatorId });
+      const deletedCount = deleteResult.affected || 0;
+
+      this.logger.log('Creator content deletion completed', {
+        creatorId,
+        deletedCount,
+      });
+
+      return { deletedCount };
+    } catch (error: unknown) {
+      this.logger.error('Creator content deletion failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      throw ContentException.contentDeleteError();
+    }
+  }
+
+  async deleteExpiredContent(cutoffDate: Date): Promise<{ deletedCount: number }> {
+    try {
+      const deleteResult = await this.contentRepo.delete({
+        createdAt: LessThan(cutoffDate)
+      });
+      const deletedCount = deleteResult.affected || 0;
+
+      this.logger.log('Expired content deletion completed', {
+        cutoffDate,
+        deletedCount,
+      });
+
+      return { deletedCount };
+    } catch (error: unknown) {
+      this.logger.error('Expired content deletion failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        cutoffDate,
+      });
+      throw ContentException.contentDeleteError();
+    }
+  }
+
+  async refreshContentMetadata(contentId: string): Promise<void> {
+    try {
+      await this.findByIdOrFail(contentId);
+      
+      await this.contentRepo.update(contentId, {
+        updatedAt: new Date()
+      });
+
+      this.logger.debug('Content metadata refreshed', {
+        contentId,
+        updatedAt: new Date()
+      });
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Content metadata refresh failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
         contentId,
       });

@@ -1,7 +1,9 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
-import { ContentService, ContentOrchestrationService, ContentSyncService } from '@modules/content/services/index.js';
+import { DataSource } from 'typeorm';
+
+import { ContentService, ContentStatisticsService, ContentOrchestrationService, ContentSyncService } from '@modules/content/services/index.js';
 import { CreateContentDto } from '@modules/content/dto/index.js';
 import { ContentType } from '@modules/content/enums/index.js';
 import { VideoSyncStatus, PlatformType, SyncStatus } from '@common/enums/index.js';
@@ -29,6 +31,7 @@ export class ExternalApiSchedulerService {
   private isTwitterSyncRunning = false;
 
   constructor(
+    private readonly dataSource: DataSource,
     private readonly youtubeApiService: YouTubeApiService,
     private readonly twitterApiService: TwitterApiService,
     private readonly creatorService: CreatorService,
@@ -38,6 +41,7 @@ export class ExternalApiSchedulerService {
     private readonly creatorSyncSchedulerService: CreatorSyncSchedulerService,
     private readonly creatorConsentService: CreatorConsentService,
     private readonly contentService: ContentService,
+    private readonly contentStatisticsService: ContentStatisticsService,
     private readonly contentOrchestrationService: ContentOrchestrationService,
     private readonly contentSyncService: ContentSyncService,
     private readonly quotaMonitorService: QuotaMonitorService
@@ -551,65 +555,123 @@ export class ExternalApiSchedulerService {
           nextPageToken
         );
 
+        // 각 비디오 처리
         for (const video of result.videos) {
           try {
             const existingContent = await this.contentService.findByPlatformId(video.id, 'youtube');
 
             if (!existingContent) {
-              const _creator = await this.creatorService.findById(platform.creatorId);
-              const hasConsent = await this.creatorConsentService.hasConsent(
-                platform.creatorId,
-                ConsentType.DATA_COLLECTION
-              );
+              // 트랜잭션으로 콘텐츠 생성 처리
+              const queryRunner = this.dataSource.createQueryRunner();
+              await queryRunner.connect();
+              await queryRunner.startTransaction();
 
-              const now = new Date();
-              const expiresAt = hasConsent
-                ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
-                : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+              try {
+                const transactionManager = queryRunner.manager;
 
-              const createDto: CreateContentDto = {
-                type: ContentType.YOUTUBE_VIDEO,
-                title: video.title,
-                description: video.description || '',
-                thumbnail:
-                  video.thumbnails.high ||
-                  video.thumbnails.medium ||
-                  video.thumbnails.default ||
-                  '',
-                url: video.url,
-                platform: 'youtube',
-                platformId: video.id,
-                duration: video.duration,
-                publishedAt: video.publishedAt.toISOString(),
-                creatorId: platform.creatorId,
-                // 메타데이터를 개별 필드로 분리
-                language: video.defaultLanguage || 'en',
-                isLive: video.liveBroadcastContent === 'live',
-                quality: 'hd' as const,
-                expiresAt: expiresAt.toISOString(),
-                lastSyncedAt: now.toISOString(),
-                isAuthorizedData: hasConsent,
-              };
+                const _creator = await this.creatorService.findById(platform.creatorId);
+                const hasConsent = await this.creatorConsentService.hasConsent(
+                  platform.creatorId,
+                  ConsentType.DATA_COLLECTION
+                );
 
-              // 조건부로 태그와 카테고리 추가
-              if (video.tags && video.tags.length > 0) {
-                createDto.tags = video.tags.map((tag) => ({ tag, source: 'platform' as const }));
+                const now = new Date();
+                const expiresAt = hasConsent
+                  ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
+                  : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+                const createDto: CreateContentDto = {
+                  type: ContentType.YOUTUBE_VIDEO,
+                  title: video.title,
+                  description: video.description || '',
+                  thumbnail:
+                    video.thumbnails.high ||
+                    video.thumbnails.medium ||
+                    video.thumbnails.default ||
+                    '',
+                  url: video.url,
+                  platform: 'youtube',
+                  platformId: video.id,
+                  duration: video.duration,
+                  publishedAt: video.publishedAt.toISOString(),
+                  creatorId: platform.creatorId,
+                  // 메타데이터를 개별 필드로 분리
+                  language: video.defaultLanguage || 'en',
+                  isLive: video.liveBroadcastContent === 'live',
+                  quality: 'hd' as const,
+                  expiresAt: expiresAt.toISOString(),
+                  lastSyncedAt: now.toISOString(),
+                  isAuthorizedData: hasConsent,
+                  initialViews: video.statistics.viewCount,
+                  initialLikes: video.statistics.likeCount,
+                  initialComments: video.statistics.commentCount,
+                  initialShares: 0, // YouTube API doesn't provide share count
+                };
+
+                // 조건부로 태그와 카테고리 추가
+                if (video.tags && video.tags.length > 0) {
+                  createDto.tags = video.tags.map((tag) => ({ tag, source: 'platform' as const }));
+                }
+                if (video.categoryId) {
+                  createDto.categories = [
+                    { category: video.categoryId, source: 'platform' as const, isPrimary: true },
+                  ];
+                }
+
+                // ContentOrchestrationService의 createContentComplete 사용 - 콘텐츠와 통계 함께 생성
+                await this.contentOrchestrationService.createContentComplete(createDto, transactionManager);
+                
+                await queryRunner.commitTransaction();
+                syncedCount++;
+
+                this.logger.debug('New video created successfully in transaction', {
+                  videoId: video.id,
+                  platformId: platform.id,
+                });
+              } catch (error: unknown) {
+                await queryRunner.rollbackTransaction();
+                this.logger.warn('Failed to create video - transaction rolled back', {
+                  error: error instanceof Error ? error.message : 'Unknown error',
+                  videoId: video.id,
+                  platformId: platform.id,
+                });
+              } finally {
+                await queryRunner.release();
               }
-              if (video.categoryId) {
-                createDto.categories = [
-                  { category: video.categoryId, source: 'platform' as const, isPrimary: true },
-                ];
-              }
-
-              await this.contentService.createContent(createDto);
-              syncedCount++;
             } else {
-              await this.contentService.updateContentStatistics(existingContent.id, {
-                views: video.statistics.viewCount,
-                likes: video.statistics.likeCount,
-                comments: video.statistics.commentCount,
-              });
-              await this.contentOrchestrationService.refreshContentMetadata(existingContent.id);
+              // 기존 콘텐츠 통계 업데이트 - 트랜잭션으로 처리
+              const queryRunner = this.dataSource.createQueryRunner();
+              await queryRunner.connect();
+              await queryRunner.startTransaction();
+
+              try {
+                const transactionManager = queryRunner.manager;
+
+                await this.contentStatisticsService.updateStatistics(existingContent.id, {
+                  views: video.statistics.viewCount,
+                  likes: video.statistics.likeCount,
+                  comments: video.statistics.commentCount,
+                }, transactionManager);
+                await this.contentOrchestrationService.refreshContentMetadata(existingContent.id);
+
+                await queryRunner.commitTransaction();
+
+                this.logger.debug('Existing video statistics updated successfully', {
+                  videoId: video.id,
+                  contentId: existingContent.id,
+                  platformId: platform.id,
+                });
+              } catch (error: unknown) {
+                await queryRunner.rollbackTransaction();
+                this.logger.warn('Failed to update video statistics - transaction rolled back', {
+                  error: error instanceof Error ? error.message : 'Unknown error',
+                  videoId: video.id,
+                  contentId: existingContent.id,
+                  platformId: platform.id,
+                });
+              } finally {
+                await queryRunner.release();
+              }
             }
 
             totalProcessed++;
@@ -646,7 +708,7 @@ export class ExternalApiSchedulerService {
         failedCount: 0,
       });
 
-      this.logger.debug('Full sync completed successfully', {
+      this.logger.log('Full sync completed successfully with transactions', {
         platformId: platform.id,
         channelId: platform.platformId,
         totalProcessed,
@@ -700,67 +762,119 @@ export class ExternalApiSchedulerService {
         });
       }
 
+      // 각 비디오 처리 
       for (const video of result.videos) {
         try {
           const existingContent = await this.contentService.findByPlatformId(video.id, 'youtube');
 
           if (!existingContent) {
-            const hasConsent = await this.creatorConsentService.hasConsent(
-              platform.creatorId,
-              ConsentType.DATA_COLLECTION
-            );
+            // 트랜잭션으로 콘텐츠 생성 처리
+            const queryRunner = this.dataSource.createQueryRunner();
+            await queryRunner.connect();
+            await queryRunner.startTransaction();
 
-            const now = new Date();
-            const expiresAt = hasConsent
-              ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
-              : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+            try {
+              const transactionManager = queryRunner.manager;
 
-            const createDto: CreateContentDto = {
-              type: ContentType.YOUTUBE_VIDEO,
-              title: video.title,
-              description: video.description,
-              thumbnail:
-                video.thumbnails.high || video.thumbnails.medium || video.thumbnails.default || '',
-              url: video.url,
-              platform: 'youtube',
-              platformId: video.id,
-              duration: video.duration,
-              publishedAt: video.publishedAt.toISOString(),
-              creatorId: platform.creatorId,
-              // 메타데이터를 개별 필드로 분리
-              language: video.defaultLanguage || 'en',
-              isLive: video.liveBroadcastContent === 'live',
-              quality: 'hd' as const,
-              // 태그와 카테고리는 별도 배열로 처리
-              tags: video.tags?.map((tag) => ({ tag, source: 'platform' as const })),
-              lastSyncedAt: now.toISOString(),
-              expiresAt: expiresAt.toISOString(),
-              isAuthorizedData: hasConsent,
-            };
+              const hasConsent = await this.creatorConsentService.hasConsent(
+                platform.creatorId,
+                ConsentType.DATA_COLLECTION
+              );
 
-            // 조건부로 카테고리 추가 (exactOptionalPropertyTypes 준수)
-            if (video.categoryId) {
-              createDto.categories = [
-                { category: video.categoryId, source: 'platform' as const, isPrimary: true },
-              ];
+              const now = new Date();
+              const expiresAt = hasConsent
+                ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
+                : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+              const createDto: CreateContentDto = {
+                type: ContentType.YOUTUBE_VIDEO,
+                title: video.title,
+                description: video.description,
+                thumbnail:
+                  video.thumbnails.high || video.thumbnails.medium || video.thumbnails.default || '',
+                url: video.url,
+                platform: 'youtube',
+                platformId: video.id,
+                duration: video.duration,
+                publishedAt: video.publishedAt.toISOString(),
+                creatorId: platform.creatorId,
+                // 메타데이터를 개별 필드로 분리
+                language: video.defaultLanguage || 'en',
+                isLive: video.liveBroadcastContent === 'live',
+                quality: 'hd' as const,
+                // 태그와 카테고리는 별도 배열로 처리
+                tags: video.tags?.map((tag) => ({ tag, source: 'platform' as const })),
+                lastSyncedAt: now.toISOString(),
+                expiresAt: expiresAt.toISOString(),
+                isAuthorizedData: hasConsent,
+                initialViews: video.statistics.viewCount,
+                initialLikes: video.statistics.likeCount,
+                initialComments: video.statistics.commentCount,
+                initialShares: 0, // YouTube API doesn't provide share count
+              };
+
+              // 조건부로 카테고리 추가 (exactOptionalPropertyTypes 준수)
+              if (video.categoryId) {
+                createDto.categories = [
+                  { category: video.categoryId, source: 'platform' as const, isPrimary: true },
+                ];
+              }
+
+              // ContentOrchestrationService의 createContentComplete 사용 - 콘텐츠와 통계 함께 생성
+              await this.contentOrchestrationService.createContentComplete(createDto, transactionManager);
+              
+              await queryRunner.commitTransaction();
+              syncedCount++;
+
+              this.logger.debug('New video found in incremental sync - created with transaction', {
+                videoId: video.id,
+                title: video.title,
+                platformId: platform.id,
+              });
+            } catch (error: unknown) {
+              await queryRunner.rollbackTransaction();
+              this.logger.warn('Failed to create video in incremental sync - transaction rolled back', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                videoId: video.id,
+                platformId: platform.id,
+              });
+            } finally {
+              await queryRunner.release();
             }
-
-            await this.contentService.createContent(createDto);
-            syncedCount++;
-
-            this.logger.debug('New video found in incremental sync', {
-              videoId: video.id,
-              title: video.title,
-              platformId: platform.id,
-            });
           } else {
-            // 기존 영상 통계 업데이트
-            await this.contentService.updateContentStatistics(existingContent.id, {
-              views: video.statistics.viewCount,
-              likes: video.statistics.likeCount,
-              comments: video.statistics.commentCount,
-            });
-            await this.contentOrchestrationService.refreshContentMetadata(existingContent.id);
+            // 기존 영상 통계 업데이트 - 트랜잭션으로 처리
+            const queryRunner = this.dataSource.createQueryRunner();
+            await queryRunner.connect();
+            await queryRunner.startTransaction();
+
+            try {
+              const transactionManager = queryRunner.manager;
+
+              await this.contentStatisticsService.updateStatistics(existingContent.id, {
+                views: video.statistics.viewCount,
+                likes: video.statistics.likeCount,
+                comments: video.statistics.commentCount,
+              }, transactionManager);
+              await this.contentOrchestrationService.refreshContentMetadata(existingContent.id);
+
+              await queryRunner.commitTransaction();
+
+              this.logger.debug('Existing video statistics updated in incremental sync', {
+                videoId: video.id,
+                contentId: existingContent.id,
+                platformId: platform.id,
+              });
+            } catch (error: unknown) {
+              await queryRunner.rollbackTransaction();
+              this.logger.warn('Failed to update video statistics in incremental sync - transaction rolled back', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                videoId: video.id,
+                contentId: existingContent.id,
+                platformId: platform.id,
+              });
+            } finally {
+              await queryRunner.release();
+            }
           }
         } catch (error: unknown) {
           this.logger.warn('Failed to process video in incremental sync', {
@@ -834,74 +948,126 @@ export class ExternalApiSchedulerService {
         nextToken
       );
 
+      // 각 트윗 처리
       for (const tweet of result.tweets) {
         try {
           // 이미 존재하는 콘텐츠인지 확인
           const existingContent = await this.contentService.findByPlatformId(tweet.id, 'twitter');
 
           if (!existingContent) {
-            // 크리에이터 동의 상태 확인
-            const hasConsent = await this.creatorConsentService.hasConsent(
-              platform.creatorId,
-              ConsentType.DATA_COLLECTION
-            );
+            // 트랜잭션으로 콘텐츠 생성 처리
+            const queryRunner = this.dataSource.createQueryRunner();
+            await queryRunner.connect();
+            await queryRunner.startTransaction();
 
-            // 새로운 콘텐츠 생성 (Twitter API 정책: 동의 여부에 따른 차별 처리)
-            const now = new Date();
-            const expiresAt = hasConsent
-              ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000) // 동의한 경우: 1년 (장기 보존)
-              : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 비동의: 30일 후
+            try {
+              const transactionManager = queryRunner.manager;
 
-            const createDto: CreateContentDto = {
-              type: ContentType.TWITTER_POST,
-              title: this.generateTweetTitle(tweet.text),
-              description: tweet.text,
-              thumbnail:
-                tweet.attachments.media[0]?.previewImageUrl ||
-                tweet.author?.profileImageUrl ||
-                'https://abs.twimg.com/icons/apple-touch-icon-192x192.png',
-              url: tweet.url,
-              platform: 'twitter',
-              platformId: tweet.id,
-              publishedAt: tweet.createdAt.toISOString(),
-              creatorId: platform.creatorId,
-              // 메타데이터를 개별 필드로 분리
-              language: tweet.lang || 'en',
-              isLive: false,
-              quality: 'hd' as const,
-              // 태그와 카테고리는 별도 배열로 처리
-              tags: tweet.entities.hashtags.map((hashtag) => ({
-                tag: hashtag.tag,
-                source: 'platform' as const,
-              })),
-              categories: [{ category: 'social', source: 'platform' as const, isPrimary: true }],
-              lastSyncedAt: now.toISOString(),
-              expiresAt: expiresAt.toISOString(),
-              isAuthorizedData: hasConsent, // 동의 여부에 따른 인증 데이터 플래그
-            };
+              // 크리에이터 동의 상태 확인
+              const hasConsent = await this.creatorConsentService.hasConsent(
+                platform.creatorId,
+                ConsentType.DATA_COLLECTION
+              );
 
-            await this.contentService.createContent(createDto);
-            syncedCount++;
+              // 새로운 콘텐츠 생성 (Twitter API 정책: 동의 여부에 따른 차별 처리)
+              const now = new Date();
+              const expiresAt = hasConsent
+                ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000) // 동의한 경우: 1년 (장기 보존)
+                : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 비동의: 30일 후
 
-            this.logger.debug('New tweet synced', {
-              tweetId: tweet.id,
-              text: tweet.text.substring(0, 50) + '...',
-              creatorId: platform.creatorId,
-              hasCreatorConsent: hasConsent,
-              isAuthorizedData: hasConsent,
-              expiresAt: expiresAt.toISOString(),
-            });
+              const createDto: CreateContentDto = {
+                type: ContentType.TWITTER_POST,
+                title: this.generateTweetTitle(tweet.text),
+                description: tweet.text,
+                thumbnail:
+                  tweet.attachments.media[0]?.previewImageUrl ||
+                  tweet.author?.profileImageUrl ||
+                  'https://abs.twimg.com/icons/apple-touch-icon-192x192.png',
+                url: tweet.url,
+                platform: 'twitter',
+                platformId: tweet.id,
+                publishedAt: tweet.createdAt.toISOString(),
+                creatorId: platform.creatorId,
+                // 메타데이터를 개별 필드로 분리
+                language: tweet.lang || 'en',
+                isLive: false,
+                quality: 'hd' as const,
+                // 태그와 카테고리는 별도 배열로 처리
+                tags: tweet.entities.hashtags.map((hashtag) => ({
+                  tag: hashtag.tag,
+                  source: 'platform' as const,
+                })),
+                categories: [{ category: 'social', source: 'platform' as const, isPrimary: true }],
+                lastSyncedAt: now.toISOString(),
+                expiresAt: expiresAt.toISOString(),
+                isAuthorizedData: hasConsent, // 동의 여부에 따른 인증 데이터 플래그
+                initialViews: 0, // Twitter는 조회수 제공하지 않음
+                initialLikes: tweet.publicMetrics.likeCount,
+                initialComments: tweet.publicMetrics.replyCount,
+                initialShares: tweet.publicMetrics.retweetCount,
+              };
+
+              // ContentOrchestrationService의 createContentComplete 사용 - 콘텐츠와 통계 함께 생성
+              await this.contentOrchestrationService.createContentComplete(createDto, transactionManager);
+
+              await queryRunner.commitTransaction();
+              syncedCount++;
+
+              this.logger.debug('New tweet synced with transaction', {
+                tweetId: tweet.id,
+                text: tweet.text.substring(0, 50) + '...',
+                creatorId: platform.creatorId,
+                hasCreatorConsent: hasConsent,
+                isAuthorizedData: hasConsent,
+                expiresAt: expiresAt.toISOString(),
+              });
+            } catch (error: unknown) {
+              await queryRunner.rollbackTransaction();
+              this.logger.warn('Failed to create tweet - transaction rolled back', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                tweetId: tweet.id,
+                creatorId: platform.creatorId,
+              });
+            } finally {
+              await queryRunner.release();
+            }
           } else {
-            // 기존 콘텐츠 통계 업데이트 및 동기화 시간 갱신
-            await this.contentService.updateContentStatistics(existingContent.id, {
-              views: 0, // Twitter는 조회수 제공하지 않음
-              likes: tweet.publicMetrics.likeCount,
-              comments: tweet.publicMetrics.replyCount,
-              shares: tweet.publicMetrics.retweetCount,
-            });
+            // 기존 콘텐츠 통계 업데이트 - 트랜잭션으로 처리
+            const queryRunner = this.dataSource.createQueryRunner();
+            await queryRunner.connect();
+            await queryRunner.startTransaction();
 
-            // 동기화 시간 갱신 (Twitter API 정책 준수)
-            await this.contentOrchestrationService.refreshContentMetadata(existingContent.id);
+            try {
+              const transactionManager = queryRunner.manager;
+
+              await this.contentStatisticsService.updateStatistics(existingContent.id, {
+                views: 0, // Twitter는 조회수 제공하지 않음
+                likes: tweet.publicMetrics.likeCount,
+                comments: tweet.publicMetrics.replyCount,
+                shares: tweet.publicMetrics.retweetCount,
+              }, transactionManager);
+
+              // 동기화 시간 갱신 (Twitter API 정책 준수)
+              await this.contentOrchestrationService.refreshContentMetadata(existingContent.id);
+
+              await queryRunner.commitTransaction();
+
+              this.logger.debug('Existing tweet statistics updated with transaction', {
+                tweetId: tweet.id,
+                contentId: existingContent.id,
+                creatorId: platform.creatorId,
+              });
+            } catch (error: unknown) {
+              await queryRunner.rollbackTransaction();
+              this.logger.warn('Failed to update tweet statistics - transaction rolled back', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                tweetId: tweet.id,
+                contentId: existingContent.id,
+                creatorId: platform.creatorId,
+              });
+            } finally {
+              await queryRunner.release();
+            }
           }
         } catch (error: unknown) {
           this.logger.warn('Failed to sync tweet', {

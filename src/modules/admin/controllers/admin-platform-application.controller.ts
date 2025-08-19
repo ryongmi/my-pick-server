@@ -6,8 +6,11 @@ import {
   Param,
   Query,
   UseGuards,
+  UseInterceptors,
   ParseUUIDPipe,
 } from '@nestjs/common';
+
+import { EntityManager } from 'typeorm';
 
 import {
   SwaggerApiTags,
@@ -19,16 +22,19 @@ import {
   SwaggerApiPaginatedResponse,
   SwaggerApiErrorResponse,
 } from '@krgeobuk/swagger/decorators';
-import { Serialize } from '@krgeobuk/core/decorators';
+import { Serialize, TransactionManager } from '@krgeobuk/core/decorators';
+import { TransactionInterceptor } from '@krgeobuk/core/interceptors';
 import type { PaginatedResult } from '@krgeobuk/core/interfaces';
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { RequireRole, RequirePermission } from '@krgeobuk/authorization/decorators';
+import { CurrentJwt } from '@krgeobuk/jwt/decorators';
+import type { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 
 import { 
   PlatformApplicationService,
   PlatformApplicationStatisticsService,
-  PlatformApplicationReviewService,
+  PlatformApplicationOrchestrationService,
 } from '../../platform-application/services/index.js';
 import {
   ApplicationDetailDto,
@@ -50,7 +56,7 @@ export class AdminPlatformApplicationController {
   constructor(
     private readonly platformApplicationService: PlatformApplicationService,
     private readonly statisticsService: PlatformApplicationStatisticsService,
-    private readonly reviewService: PlatformApplicationReviewService,
+    private readonly orchestrationService: PlatformApplicationOrchestrationService,
   ) {}
 
   @Get()
@@ -160,9 +166,10 @@ export class AdminPlatformApplicationController {
   }
 
   @Post(':id/approve')
+  @UseInterceptors(TransactionInterceptor)
   @SwaggerApiOperation({
     summary: '플랫폼 신청 승인 (관리자)',
-    description: '관리자가 플랫폼 신청을 승인합니다. 승인 시 크리에이터 플랫폼이 생성됩니다.',
+    description: '관리자가 플랫폼 신청을 승인합니다. 승인 시 크리에이터 플랫폼이 생성됩니다. 트랜잭션을 통해 데이터 일관성을 보장합니다.',
   })
   @SwaggerApiParam({ name: 'id', type: String, description: '플랫폼 신청 ID' })
   @SwaggerApiBody({ dto: ApproveApplicationDto })
@@ -173,16 +180,18 @@ export class AdminPlatformApplicationController {
   @RequirePermission('platform-application:approve')
   async approveApplication(
     @Param('id', ParseUUIDPipe) applicationId: string,
-    @Body() dto: ApproveApplicationDto
-    // @CurrentUser() admin: UserInfo
+    @Body() dto: ApproveApplicationDto,
+    @CurrentJwt() { userId: adminId }: AuthenticatedJwt,
+    @TransactionManager() transactionManager: EntityManager
   ): Promise<void> {
-    await this.reviewService.approveApplication(applicationId, dto, 'admin-user-id'); // TODO: CurrentUser 구현 후 실제 admin.id 사용
+    await this.orchestrationService.approveApplicationComplete(applicationId, dto, adminId, transactionManager);
   }
 
   @Post(':id/reject')
+  @UseInterceptors(TransactionInterceptor)
   @SwaggerApiOperation({
     summary: '플랫폼 신청 거부 (관리자)',
-    description: '관리자가 플랫폼 신청을 거부합니다. 거부 사유를 포함해야 합니다.',
+    description: '관리자가 플랫폼 신청을 거부합니다. 거부 사유를 포함해야 합니다. 트랜잭션을 통해 데이터 일관성을 보장합니다.',
   })
   @SwaggerApiParam({ name: 'id', type: String, description: '플랫폼 신청 ID' })
   @SwaggerApiBody({ dto: RejectApplicationDto })
@@ -193,10 +202,11 @@ export class AdminPlatformApplicationController {
   @RequirePermission('platform-application:reject')
   async rejectApplication(
     @Param('id', ParseUUIDPipe) applicationId: string,
-    @Body() dto: RejectApplicationDto
-    // @CurrentUser() admin: UserInfo
+    @Body() dto: RejectApplicationDto,
+    @CurrentJwt() { userId: adminId }: AuthenticatedJwt,
+    @TransactionManager() transactionManager: EntityManager
   ): Promise<void> {
-    await this.reviewService.rejectApplication(applicationId, dto, 'admin-user-id'); // TODO: CurrentUser 구현 후 실제 admin.id 사용
+    await this.orchestrationService.rejectApplicationComplete(applicationId, dto, adminId, transactionManager);
   }
 
   @Get('rejection-reasons')

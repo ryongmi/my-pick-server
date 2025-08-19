@@ -6,14 +6,17 @@ import {
   Param,
   Body,
   UseGuards,
+  UseInterceptors,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
 } from '@nestjs/common';
 
-import { plainToInstance } from 'class-transformer';
+import { EntityManager } from 'typeorm';
 
-import { Serialize } from '@krgeobuk/core/decorators';
+
+import { Serialize, TransactionManager } from '@krgeobuk/core/decorators';
+import { TransactionInterceptor } from '@krgeobuk/core/interceptors';
 import {
   SwaggerApiTags,
   SwaggerApiOperation,
@@ -28,10 +31,9 @@ import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 
-import { UserSubscriptionService } from '../services/index.js';
-import { CreatorService } from '../../creator/services/index.js';
-import { SubscribeCreatorDto } from '../dto/index.js';
+import { UserSubscriptionOrchestrationService } from '../services/index.js';
 import { CreatorSearchResultDto } from '../../creator/dto/index.js';
+import { SubscribeCreatorDto } from '../dto/index.js';
 
 @SwaggerApiTags({ tags: ['user-subscriptions'] })
 @SwaggerApiBearerAuth()
@@ -39,8 +41,7 @@ import { CreatorSearchResultDto } from '../../creator/dto/index.js';
 @Controller('me/subscriptions')
 export class UserSubscriptionController {
   constructor(
-    private readonly userSubscriptionService: UserSubscriptionService,
-    private readonly creatorService: CreatorService
+    private readonly orchestrationService: UserSubscriptionOrchestrationService
   ) {}
 
   @Get()
@@ -59,20 +60,7 @@ export class UserSubscriptionController {
   async getUserSubscriptions(
     @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<CreatorSearchResultDto[]> {
-    const subscriptions = await this.userSubscriptionService.getSubscriptionsByUserId(userId);
-    const creatorIds = subscriptions.map((sub) => sub.creatorId);
-
-    if (creatorIds.length === 0) {
-      return [];
-    }
-
-    const creators = await this.creatorService.findByIds(creatorIds);
-
-    return creators.map((creator) =>
-      plainToInstance(CreatorSearchResultDto, creator, {
-        excludeExtraneousValues: true,
-      })
-    );
+    return await this.orchestrationService.getSubscriptionsWithCreatorInfo(userId);
   }
 
   @Get(':creatorId/exists')
@@ -91,13 +79,16 @@ export class UserSubscriptionController {
     @CurrentJwt() { userId }: AuthenticatedJwt,
     @Param('creatorId', ParseUUIDPipe) creatorId: string
   ): Promise<{ exists: boolean }> {
-    const exists = await this.userSubscriptionService.exists(userId, creatorId);
-    return { exists };
+    return await this.orchestrationService.checkSubscriptionExists(userId, creatorId);
   }
 
   @Post(':creatorId')
   @HttpCode(HttpStatus.CREATED)
-  @SwaggerApiOperation({ summary: '크리에이터 구독하기' })
+  @UseInterceptors(TransactionInterceptor)
+  @SwaggerApiOperation({ 
+    summary: '크리에이터 구독하기',
+    description: '크리에이터를 구독하고 트랜잭션을 통해 데이터 일관성을 보장합니다.'
+  })
   @SwaggerApiParam({ name: 'creatorId', type: String, description: '크리에이터 ID' })
   @SwaggerApiBody({
     dto: SubscribeCreatorDto,
@@ -118,23 +109,25 @@ export class UserSubscriptionController {
   async createSubscription(
     @CurrentJwt() { userId }: AuthenticatedJwt,
     @Param('creatorId', ParseUUIDPipe) creatorId: string,
-    @Body() body: { notificationEnabled?: boolean } = {}
+    @Body() body: { notificationEnabled?: boolean } = {},
+    @TransactionManager() transactionManager: EntityManager
   ): Promise<void> {
-    // 크리에이터 존재 확인
-    await this.creatorService.findByIdOrFail(creatorId);
-
-    const dto: SubscribeCreatorDto = {
+    const dto = {
       userId,
       creatorId,
-      notificationEnabled: body.notificationEnabled,
+      notificationEnabled: body.notificationEnabled ?? false,
     };
 
-    await this.userSubscriptionService.subscribeToCreator(dto);
+    await this.orchestrationService.subscribeToCreatorComplete(dto, transactionManager);
   }
 
   @Delete(':creatorId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @SwaggerApiOperation({ summary: '크리에이터 구독 해제' })
+  @UseInterceptors(TransactionInterceptor)
+  @SwaggerApiOperation({ 
+    summary: '크리에이터 구독 해제',
+    description: '크리에이터 구독을 해제하고 트랜잭션을 통해 데이터 일관성을 보장합니다.'
+  })
   @SwaggerApiParam({ name: 'creatorId', type: String, description: '크리에이터 ID' })
   @SwaggerApiOkResponse({
     status: 204,
@@ -146,8 +139,9 @@ export class UserSubscriptionController {
   })
   async deleteSubscription(
     @CurrentJwt() { userId }: AuthenticatedJwt,
-    @Param('creatorId', ParseUUIDPipe) creatorId: string
+    @Param('creatorId', ParseUUIDPipe) creatorId: string,
+    @TransactionManager() transactionManager: EntityManager
   ): Promise<void> {
-    await this.userSubscriptionService.unsubscribeFromCreator(userId, creatorId);
+    await this.orchestrationService.unsubscribeFromCreator(userId, creatorId, transactionManager);
   }
 }

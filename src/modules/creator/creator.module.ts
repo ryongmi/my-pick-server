@@ -10,18 +10,12 @@ import {
   CreatorPlatformEntity,
   CreatorPlatformSyncEntity,
   CreatorConsentEntity,
-  CreatorStatisticsEntity,
-  CreatorPlatformStatisticsEntity,
-  CreatorCategoryStatisticsEntity,
 } from './entities/index.js';
 import {
   CreatorRepository,
   CreatorPlatformRepository,
   CreatorPlatformSyncRepository,
   CreatorConsentRepository,
-  CreatorStatisticsRepository,
-  CreatorPlatformStatisticsRepository,
-  CreatorCategoryStatisticsRepository,
 } from './repositories/index.js';
 import {
   CreatorService,
@@ -30,9 +24,6 @@ import {
   CreatorSyncProcessorService,
   CreatorSyncSchedulerService,
   CreatorConsentService,
-  CreatorStatisticsService,
-  CreatorPlatformStatisticsService,
-  CreatorCategoryStatisticsService,
   CreatorOrchestrationService,
   CreatorAggregateService,
 } from './services/index.js';
@@ -45,9 +36,6 @@ import { CreatorController } from './controllers/index.js';
       CreatorPlatformEntity,
       CreatorPlatformSyncEntity,
       CreatorConsentEntity,
-      CreatorStatisticsEntity,
-      CreatorPlatformStatisticsEntity,
-      CreatorCategoryStatisticsEntity,
     ]),
     RedisModule,
     UserSubscriptionModule,
@@ -59,9 +47,6 @@ import { CreatorController } from './controllers/index.js';
     CreatorPlatformRepository,
     CreatorPlatformSyncRepository,
     CreatorConsentRepository,
-    CreatorStatisticsRepository,
-    CreatorPlatformStatisticsRepository,
-    CreatorCategoryStatisticsRepository,
 
     // Services
     CreatorService,
@@ -70,9 +55,6 @@ import { CreatorController } from './controllers/index.js';
     CreatorSyncProcessorService,
     CreatorSyncSchedulerService,
     CreatorConsentService,
-    CreatorStatisticsService,
-    CreatorPlatformStatisticsService,
-    CreatorCategoryStatisticsService,
     CreatorOrchestrationService,
     CreatorAggregateService,
   ],
@@ -84,9 +66,6 @@ import { CreatorController } from './controllers/index.js';
     CreatorSyncProcessorService,
     CreatorSyncSchedulerService,
     CreatorConsentService,
-    CreatorStatisticsService,
-    CreatorPlatformStatisticsService,
-    CreatorCategoryStatisticsService,
     CreatorOrchestrationService,
     CreatorAggregateService,
   ],

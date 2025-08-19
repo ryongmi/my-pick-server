@@ -2,21 +2,7 @@ import { Entity, Column, Index } from 'typeorm';
 
 import { BaseEntityUUID } from '@krgeobuk/core/entities';
 
-export enum RequirementCategory {
-  CHANNEL_VERIFICATION = 'channel_verification',
-  CONTENT_QUALITY = 'content_quality',
-  LEGAL_COMPLIANCE = 'legal_compliance',
-  TECHNICAL_REQUIREMENT = 'technical_requirement',
-  DOCUMENTATION = 'documentation',
-  OTHER = 'other',
-}
-
-export enum RequirementStatus {
-  PENDING = 'pending',
-  IN_PROGRESS = 'in_progress',
-  COMPLETED = 'completed',
-  NOT_APPLICABLE = 'not_applicable',
-}
+import { RequirementCategory, RequirementStatus } from '../enums/index.js';
 
 @Entity('creator_application_requirements')
 @Index(['reviewId']) // 검토별 요구사항 조회 최적화
