@@ -7,10 +7,10 @@ import { PlatformType } from '@common/enums/index.js';
 import { ContentRepository } from '../repositories/index.js';
 import { ContentEntity } from '../entities/index.js';
 import { ContentException } from '../exceptions/index.js';
-
-import { ContentStatisticsService } from './content-statistics.service.js';
 import { ReportService } from '../../report/services/report.service.js';
 import { ReportTargetType } from '../../report/enums/index.js';
+
+import { ContentStatisticsService } from './content-statistics.service.js';
 
 @Injectable()
 export class ContentAdminStatisticsService {

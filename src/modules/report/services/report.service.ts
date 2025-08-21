@@ -284,7 +284,7 @@ export class ReportService {
     }
   }
 
-  async updateReportPriority(reportId: string, priority: number, transactionManager?: EntityManager): Promise<void> {
+  async updateReportPriority(reportId: string, priority: number, _transactionManager?: EntityManager): Promise<void> {
     try {
       this.logger.debug('Updating report priority', { reportId, priority });
 
