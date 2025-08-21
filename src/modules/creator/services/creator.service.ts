@@ -27,6 +27,15 @@ interface PlatformStats {
   platformCount: number;
 }
 
+interface CreatorStatistics {
+  followerCount: number;
+  contentCount: number;
+  totalViews: number;
+  avgEngagementRate: number;
+  platformCount: number;
+  lastSyncAt?: Date | undefined;
+}
+
 @Injectable()
 export class CreatorService {
   private readonly logger = new Logger(CreatorService.name);
@@ -167,6 +176,41 @@ export class CreatorService {
     }
   }
 
+  async updateCreatorStatus(
+    creatorId: string,
+    status: 'active' | 'inactive' | 'suspended' | 'banned',
+    reason?: string,
+    transactionManager?: EntityManager
+  ): Promise<void> {
+    try {
+      const creator = await this.findByIdOrFail(creatorId);
+
+      // 상태 변경
+      creator.status = status;
+
+      // 비활성/정지/밴 상태인 경우 마지막 활동 시간 업데이트
+      if (status !== 'active') {
+        creator.lastActivityAt = new Date();
+      }
+
+      await this.creatorRepo.updateEntity(creator, transactionManager);
+      await this.cacheService.invalidateCreatorRelatedCaches(creatorId);
+
+      this.logger.log('Creator status updated successfully', {
+        creatorId,
+        newStatus: status,
+        reason,
+      });
+    } catch (error: unknown) {
+      this.handleServiceError(
+        error,
+        'Creator status update',
+        { creatorId, status, reason },
+        CreatorException.creatorUpdateError
+      );
+    }
+  }
+
   // ==================== 동의 관리 메서드 (위임) ====================
 
   async hasValidConsents(creatorId: string): Promise<boolean> {
@@ -261,6 +305,211 @@ export class CreatorService {
     });
 
     return result;
+  }
+
+  // ==================== STATISTICS AND PERFORMANCE METHODS ====================
+
+  async getCreatorStatistics(creatorId: string): Promise<CreatorStatistics> {
+    try {
+      // 캐시 키 생성
+      const cacheKey = `creator:stats:${creatorId}`;
+      
+      // 캐시에서 먼저 조회 시도
+      const cachedStats = await this.cacheService.get<CreatorStatistics>(cacheKey);
+      if (cachedStats) {
+        this.logger.debug('Creator statistics fetched from cache', { creatorId });
+        return cachedStats;
+      }
+
+      // 크리에이터 존재 확인
+      await this.findByIdOrFail(creatorId);
+
+      // 플랫폼 통계를 병렬로 조회하여 성능 최적화
+      const [platforms, platformStats] = await Promise.all([
+        this.creatorPlatformService.findByCreatorId(creatorId),
+        this.calculatePlatformStats(creatorId),
+      ]);
+
+      const lastSyncAt = this.getLastSyncTime(platforms);
+      const statistics: CreatorStatistics = {
+        followerCount: platformStats.totalFollowers,
+        contentCount: platformStats.totalContent,
+        totalViews: platformStats.totalViews,
+        avgEngagementRate: await this.calculateEngagementRate(creatorId, platformStats),
+        platformCount: platforms.length,
+        ...(lastSyncAt && { lastSyncAt }),
+      };
+
+      // 통계를 캐시에 저장 (5분 TTL)
+      await this.cacheService.set(cacheKey, statistics, 300);
+
+      this.logger.log('Creator statistics calculated and cached', {
+        creatorId,
+        platformCount: statistics.platformCount,
+        contentCount: statistics.contentCount,
+      });
+
+      return statistics;
+    } catch (error: unknown) {
+      this.handleServiceError(
+        error,
+        'Creator statistics calculation',
+        { creatorId },
+        CreatorException.creatorFetchError
+      );
+    }
+  }
+
+  async getCreatorPlatforms(creatorId: string): Promise<Array<{
+    id: string;
+    type: string;
+    platformId: string;
+    url: string;
+    displayName?: string | undefined;
+    followerCount: number;
+    contentCount: number;
+    totalViews: number;
+    isActive: boolean;
+    lastSyncAt?: Date | undefined;
+    syncStatus: string;
+  }>> {
+    try {
+      // 크리에이터 존재 확인
+      await this.findByIdOrFail(creatorId);
+
+      // 플랫폼 정보 조회
+      const platforms = await this.creatorPlatformService.findByCreatorId(creatorId);
+
+      // 각 플랫폼의 상세 통계를 병렬로 조회
+      const platformDetails = await Promise.all(
+        platforms.map(async (platform) => {
+          const stats = await this.getPlatformStatistics(platform.id);
+          return {
+            id: platform.id,
+            type: platform.type,
+            platformId: platform.platformId,
+            url: platform.url || '',
+            displayName: platform.displayName || undefined,
+            followerCount: stats.followerCount || 0,
+            contentCount: stats.contentCount || 0,
+            totalViews: stats.totalViews || 0,
+            isActive: platform.isActive,
+            lastSyncAt: platform.lastSyncAt || undefined,
+            syncStatus: this.determineSyncStatus(platform.lastSyncAt || undefined, platform.isActive),
+          };
+        })
+      );
+
+      this.logger.debug('Creator platforms fetched successfully', {
+        creatorId,
+        platformCount: platformDetails.length,
+      });
+
+      return platformDetails;
+    } catch (error: unknown) {
+      this.handleServiceError(
+        error,
+        'Creator platforms fetch',
+        { creatorId },
+        CreatorException.creatorFetchError
+      );
+    }
+  }
+
+  // ==================== PRIVATE HELPER METHODS ====================
+
+  private async calculatePlatformStats(creatorId: string): Promise<PlatformStats> {
+    try {
+      const platforms = await this.creatorPlatformService.findByCreatorId(creatorId);
+      
+      const stats = await Promise.all(
+        platforms.map(async (platform) => {
+          const platformStats = await this.getPlatformStatistics(platform.id);
+          return {
+            followers: platformStats.followerCount || 0,
+            content: platformStats.contentCount || 0,
+            views: platformStats.totalViews || 0,
+          };
+        })
+      );
+
+      return {
+        totalFollowers: stats.reduce((sum, stat) => sum + stat.followers, 0),
+        totalContent: stats.reduce((sum, stat) => sum + stat.content, 0),
+        totalViews: stats.reduce((sum, stat) => sum + stat.views, 0),
+        platformCount: platforms.length,
+      };
+    } catch (error: unknown) {
+      this.logger.warn('Failed to calculate platform stats', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      return {
+        totalFollowers: 0,
+        totalContent: 0,
+        totalViews: 0,
+        platformCount: 0,
+      };
+    }
+  }
+
+  private async getPlatformStatistics(platformId: string): Promise<{
+    followerCount?: number;
+    contentCount?: number;
+    totalViews?: number;
+  }> {
+    try {
+      // 플랫폼별 통계는 향후 구현될 ExternalApiService나 별도 통계 서비스에서 조회
+      // 현재는 기본값 반환
+      return {
+        followerCount: 0,
+        contentCount: 0,
+        totalViews: 0,
+      };
+    } catch (error: unknown) {
+      this.logger.debug('Platform statistics not available', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        platformId,
+      });
+      return {};
+    }
+  }
+
+  private async calculateEngagementRate(creatorId: string, platformStats: PlatformStats): Promise<number> {
+    try {
+      if (platformStats.totalViews === 0) return 0;
+
+      // 참여율 계산은 향후 Content 도메인과 User-Interaction 도메인 연동으로 개선
+      // 현재는 기본 계산 로직 사용
+      const estimatedEngagements = Math.floor(platformStats.totalViews * 0.05); // 5% 추정
+      return Math.round((estimatedEngagements / platformStats.totalViews) * 10000) / 100; // 소수점 2자리
+    } catch (error: unknown) {
+      this.logger.debug('Engagement rate calculation failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        creatorId,
+      });
+      return 0;
+    }
+  }
+
+  private getLastSyncTime(platforms: Array<{ lastSyncAt?: Date | null }>): Date | undefined {
+    const syncTimes = platforms
+      .map(p => p.lastSyncAt)
+      .filter((time): time is Date => time !== undefined && time !== null)
+      .sort((a, b) => b.getTime() - a.getTime());
+
+    return syncTimes.length > 0 ? syncTimes[0] : undefined;
+  }
+
+  private determineSyncStatus(lastSyncAt?: Date, isActive?: boolean): string {
+    if (!isActive) return 'inactive';
+    if (!lastSyncAt) return 'never_synced';
+
+    const hoursSinceSync = (Date.now() - lastSyncAt.getTime()) / (1000 * 60 * 60);
+    
+    if (hoursSinceSync < 24) return 'up_to_date';
+    if (hoursSinceSync < 72) return 'slightly_outdated';
+    return 'outdated';
   }
 
   private buildCreatorSearchResults(creators: Partial<CreatorEntity>[]): CreatorSearchResultDto[] {

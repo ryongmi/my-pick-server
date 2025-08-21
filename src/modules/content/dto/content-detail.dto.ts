@@ -110,6 +110,9 @@ export class ContentDetailDto {
   @Expose()
   ageRestriction!: boolean;
 
+  @Expose()
+  status!: 'active' | 'inactive' | 'under_review' | 'flagged' | 'removed';
+
   // ==================== 분리된 엔티티 데이터 ====================
 
   @Expose()

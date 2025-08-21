@@ -13,6 +13,7 @@ import {
 
 import { CreatorService } from '../services/creator.service.js';
 import { CreatorPlatformService } from '../services/creator-platform.service.js';
+import { UserSubscriptionService } from '../../user-subscription/services/index.js';
 import {
   CreatorSearchQueryDto,
   CreatorSearchResultDto,
@@ -26,7 +27,8 @@ import { CreatorPlatformEntity } from '../entities/index.js';
 export class CreatorController {
   constructor(
     private readonly creatorService: CreatorService,
-    private readonly platformService: CreatorPlatformService
+    private readonly platformService: CreatorPlatformService,
+    private readonly userSubscriptionService: UserSubscriptionService
   ) {}
 
   // ==================== 크리에이터 기본 CRUD ====================
@@ -128,8 +130,11 @@ export class CreatorController {
     // 크리에이터 상세 정보 조회 (플랫폼 통계 포함)
     const creatorDetail = await this.creatorService.getCreatorById(creatorId);
 
+    // UserSubscriptionService를 통한 실제 구독자 수 조회
+    const subscriberCount = await this.userSubscriptionService.getSubscriberCount(creatorId);
+
     return {
-      subscriberCount: 0, // TODO: 구독자 수는 User-Subscription 도메인에서 별도 API로 제공
+      subscriberCount, // 실제 구독자 수 연동 완료
       followerCount: creatorDetail.platformStats.totalFollowers,
       contentCount: creatorDetail.platformStats.totalContent,
       totalViews: creatorDetail.platformStats.totalViews,

@@ -269,7 +269,48 @@ export class ReportService {
     }
   }
 
+  async getCountByTarget(targetType: ReportTargetType, targetId: string): Promise<number> {
+    try {
+      this.logger.debug('Getting report count by target', { targetType, targetId });
 
+      return await this.reportRepo.getCountByTarget(targetType, targetId);
+    } catch (error: unknown) {
+      this.logger.error('Failed to get report count by target', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        targetType,
+        targetId,
+      });
+      return 0;
+    }
+  }
+
+  async updateReportPriority(reportId: string, priority: number, transactionManager?: EntityManager): Promise<void> {
+    try {
+      this.logger.debug('Updating report priority', { reportId, priority });
+
+      const report = await this.findByIdOrFail(reportId);
+      
+      // Priority validation (1: High, 2: Normal, 3: Low)
+      if (priority < 1 || priority > 3) {
+        throw new Error('Priority must be between 1 and 3');
+      }
+
+      await this.reportRepo.update({ id: reportId }, { priority });
+
+      this.logger.log('Report priority updated successfully', {
+        reportId,
+        oldPriority: report.priority,
+        newPriority: priority,
+      });
+    } catch (error: unknown) {
+      this.logger.error('Failed to update report priority', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        reportId,
+        priority,
+      });
+      throw ReportException.reportUpdateError();
+    }
+  }
 
   // ==================== 에러 처리 헬퍼 메서드 ====================
 

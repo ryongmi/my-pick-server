@@ -68,4 +68,12 @@ export class ContentEntity extends BaseEntityUUID {
 
   @Column({ default: false, comment: '연령 제한 콘텐츠 여부' })
   ageRestriction!: boolean;
+
+  @Column({
+    type: 'enum',
+    enum: ['active', 'inactive', 'under_review', 'flagged', 'removed'],
+    default: 'active',
+    comment: '콘텐츠 상태',
+  })
+  status!: 'active' | 'inactive' | 'under_review' | 'flagged' | 'removed';
 }

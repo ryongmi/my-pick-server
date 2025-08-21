@@ -222,10 +222,10 @@ export class AdminReportController {
     @Body() body: UpdatePriorityDto,
     @TransactionManager() _transactionManager: EntityManager
   ): Promise<void> {
-    await this.reportService.findByIdOrFail(reportId); // 존재 확인
+    // ReportService를 통한 실제 우선순위 업데이트
+    await this.reportService.updateReportPriority(reportId, body.priority, _transactionManager);
 
-    // TODO: ReportService에 우선순위 업데이트 메서드 추가 필요
-    this.logger.log('Report priority update requested', {
+    this.logger.log('Report priority updated successfully', {
       reportId,
       newPriority: body.priority,
     });

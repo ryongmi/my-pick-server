@@ -28,6 +28,9 @@ import {
   ContentOrchestrationService,
   ContentAdminStatisticsService,
 } from '../../content/services/index.js';
+import { CreatorService } from '../../creator/services/index.js';
+import { ReportService, ReportOrchestrationService } from '../../report/services/index.js';
+import { ReportTargetType, ReportStatus } from '../../report/enums/index.js';
 import {
   AdminContentSearchQueryDto,
   AdminContentListItemDto,
@@ -47,6 +50,9 @@ export class AdminContentController {
     private readonly contentService: ContentService,
     private readonly contentOrchestrationService: ContentOrchestrationService,
     private readonly contentStatisticsService: ContentAdminStatisticsService,
+    private readonly reportService: ReportService,
+    private readonly reportOrchestrationService: ReportOrchestrationService,
+    private readonly creatorService: CreatorService,
   ) {}
 
   @Get()
@@ -80,9 +86,13 @@ export class AdminContentController {
 
       const result = await this.contentOrchestrationService.searchContent(searchQuery);
 
-      // 관리자용 DTO로 변환
-      const adminItems = result.items.map((content) => {
-        // TODO: ReportService 구현 후 신고 수 조회 로직 추가
+      // 관리자용 DTO로 변환 - 신고 수 및 Creator 정보 추가
+      const adminItems = await Promise.all(result.items.map(async (content) => {
+        // 병렬로 신고 수와 Creator 정보 조회
+        const [reportCount, creator] = await Promise.all([
+          this.reportService.getCountByTarget(ReportTargetType.CONTENT, content.id),
+          this.creatorService.findById(content.creatorId),
+        ]);
 
         return plainToInstance(
           AdminContentListItemDto,
@@ -91,28 +101,28 @@ export class AdminContentController {
             type: content.type,
             title: content.title,
             platform: content.platform,
-            status: ContentStatus.ACTIVE, // TODO: content entity에 status 필드 추가
+            status: content.status || ContentStatus.ACTIVE, // content entity의 실제 status 필드 사용
             publishedAt: content.publishedAt,
             createdAt: content.createdAt,
             creator: {
               id: content.creatorId,
-              name: `Creator ${content.creatorId}`, // TODO: creator 정보 조회
-              displayName: `Creator ${content.creatorId}`,
+              name: creator?.name || `Creator ${content.creatorId}`,
+              displayName: creator?.displayName || creator?.name || `Creator ${content.creatorId}`,
             },
             statistics: {
               views: content.statistics?.views || 0,
               likes: content.statistics?.likes || 0,
               comments: content.statistics?.comments || 0,
             },
-            flagCount: 0, // TODO: ReportService 구현 후 추가
-            lastModeratedAt: undefined, // TODO: moderation 기능 구현 후 추가
+            flagCount: reportCount, // ReportService를 통해 실제 신고 수 조회
+            lastModeratedAt: await this.getLastModerationTime(content.id),
             moderatedBy: undefined,
           },
           {
             excludeExtraneousValues: true,
           }
         );
-      });
+      }));
 
       this.logger.log('Admin content list fetched successfully', {
         adminId: userId,
@@ -152,11 +162,25 @@ export class AdminContentController {
 
       const content = await this.contentService.getContentById(contentId);
 
+      // 신고 정보 및 Creator 정보 병렬 조회
+      const [reportCount, reports, creator] = await Promise.all([
+        this.reportService.getCountByTarget(ReportTargetType.CONTENT, contentId),
+        this.reportService.searchReports({
+          targetType: ReportTargetType.CONTENT,
+          targetId: contentId,
+          limit: 10,
+          page: 1,
+        }),
+        this.creatorService.findById(content.creatorId),
+      ]);
+
       this.logger.log('Admin content detail fetched successfully', {
         adminId: userId,
         contentId,
         contentType: content.type,
         platform: content.platform,
+        reportCount,
+        reportsFound: reports.items.length,
       });
 
       return plainToInstance(
@@ -171,23 +195,34 @@ export class AdminContentController {
           platform: content.platform,
           platformId: content.platformId,
           duration: content.duration,
-          status: ContentStatus.ACTIVE, // TODO: content entity에 status 필드 추가
+          status: content.status || ContentStatus.ACTIVE, // content entity의 실제 status 필드 사용
           publishedAt: content.publishedAt,
           createdAt: content.createdAt,
           creator: {
             id: content.creatorId,
-            name: `Creator ${content.creatorId}`, // TODO: creator 정보 조회
-            displayName: `Creator ${content.creatorId}`,
+            name: creator?.name || `Creator ${content.creatorId}`,
+            displayName: creator?.displayName || creator?.name || `Creator ${content.creatorId}`,
           },
           statistics: {
             views: content.statistics?.views || 0,
             likes: content.statistics?.likes || 0,
             comments: content.statistics?.comments || 0,
           },
-          // metadata: content.metadata, // TODO: Add metadata field to ContentDetailDto
-          flagCount: 0, // TODO: ReportService 구현 후 추가
-          flags: [], // TODO: ReportService 구현 후 신고 목록 추가
-          moderationHistory: [], // TODO: moderation 기능 구현 후 추가
+          metadata: {
+            language: content.language || null,
+            isLive: content.isLive || false,
+            quality: content.quality || null,
+            ageRestriction: content.ageRestriction || false,
+            duration: content.duration || null,
+          }, // Content entity의 메타데이터 필드들 사용
+          flagCount: reportCount, // ReportService를 통해 실제 신고 수 조회
+          flags: reports.items.map(report => ({
+            id: report.id,
+            reason: report.reason,
+            status: report.status,
+            createdAt: report.createdAt,
+          })),
+          moderationHistory: await this.getModerationHistory(content.id),
         },
         {
           excludeExtraneousValues: true,
@@ -223,16 +258,13 @@ export class AdminContentController {
         reason: dto.reason,
       });
 
-      // TODO: ContentService에 updateContentStatus 메서드 구현 필요
-      // await this.contentService.updateContentStatus(
-      //   contentId,
-      //   dto.status,
-      //   adminId, // JWT에서 추출한 관리자 ID
-      //   dto.reason,
-      // );
-
-      // 임시로 콘텐츠 존재 여부만 확인
-      await this.contentService.findByIdOrFail(contentId);
+      // ContentService의 updateContentStatus 메서드 사용
+      await this.contentService.updateContentStatus(
+        contentId,
+        dto.status.toLowerCase() as 'active' | 'inactive' | 'under_review' | 'flagged' | 'removed',
+        adminId, // JWT에서 추출한 관리자 ID
+        dto.reason,
+      );
 
       this.logger.log('Admin content status updated successfully', {
         adminId,
@@ -301,10 +333,32 @@ export class AdminContentController {
     }>;
   }> {
     try {
-      // TODO: ReportService 구현 후 콘텐츠 신고 목록 조회
+      // 콘텐츠 존재 확인
       await this.contentService.findByIdOrFail(contentId);
 
-      return { flags: [] };
+      // ReportService를 통해 실제 신고 목록 조회
+      const reports = await this.reportService.searchReports({
+        targetType: ReportTargetType.CONTENT,
+        targetId: contentId,
+        limit: 50, // 최대 50개 신고 표시
+        page: 1,
+      });
+
+      this.logger.debug('Content flags fetched successfully', {
+        contentId,
+        flagCount: reports.items.length,
+      });
+
+      return { 
+        flags: reports.items.map(report => ({
+          id: report.id,
+          reason: report.reason,
+          description: report.description || '',
+          reportedBy: report.reporterInfo?.email || 'Unknown',
+          reportedAt: report.createdAt,
+          status: report.status,
+        }))
+      };
     } catch (_error: unknown) {
       throw AdminException.contentDataFetchError();
     }
@@ -321,14 +375,50 @@ export class AdminContentController {
     @CurrentJwt() { userId: _id }: AuthenticatedJwt
   ): Promise<void> {
     try {
-      // TODO: ReportService 구현 후 신고 처리 로직 구현
+      // 콘텐츠 및 신고 존재 확인
       await this.contentService.findByIdOrFail(contentId);
+      const report = await this.reportService.findByIdOrFail(flagId);
 
-      // 임시로 로직 구현 (실제로는 신고 처리)
+      // 신고가 해당 콘텐츠에 대한 것인지 확인
+      if (report.targetType !== ReportTargetType.CONTENT || report.targetId !== contentId) {
+        throw AdminException.moderationActionError();
+      }
+
+      // ReportOrchestrationService를 통한 실제 신고 처리
       if (body.action === 'approve') {
-        // TODO: 콘텐츠 상태 변경 및 신고 승인 처리
+        // 신고 승인 - 콘텐츠 문제 인정
+        await this.reportOrchestrationService.reviewReport(
+          flagId,
+          _id,
+          {
+            status: ReportStatus.RESOLVED,
+            reviewComment: body.reason || '관리자에 의한 신고 승인',
+          }
+        );
+        
+        this.logger.log('Content flag approved by admin', {
+          adminId: _id,
+          contentId,
+          flagId,
+          reason: body.reason,
+        });
       } else {
-        // TODO: 신고 기각 처리
+        // 신고 기각 - 신고가 부당함
+        await this.reportOrchestrationService.reviewReport(
+          flagId,
+          _id,
+          {
+            status: ReportStatus.DISMISSED,
+            reviewComment: body.reason || '관리자에 의한 신고 기각',
+          }
+        );
+        
+        this.logger.log('Content flag dismissed by admin', {
+          adminId: _id,
+          contentId,
+          flagId,
+          reason: body.reason,
+        });
       }
     } catch (_error: unknown) {
       throw AdminException.moderationActionError();
@@ -348,24 +438,163 @@ export class AdminContentController {
     contentByStatus: Array<{ status: string; count: number }>;
   }> {
     try {
-      const stats = await this.contentStatisticsService.getContentStatistics();
+      // 기본 통계와 상태별 콘텐츠 수를 병렬로 조회
+      const [stats, statusCounts] = await Promise.all([
+        this.contentStatisticsService.getContentStatistics(),
+        this.getContentCountsByStatus()
+      ]);
       
       return {
         totalContent: stats.totalContent,
-        activeContent: stats.totalContent - stats.ageRestrictedContent, // 임시 계산
-        inactiveContent: stats.ageRestrictedContent,
-        flaggedContent: 0, // TODO: 신고 시스템 구현 후 추가
-        removedContent: 0, // TODO: 삭제된 콘텐츠 추적 시스템 구현 후 추가
+        activeContent: statusCounts.active,
+        inactiveContent: statusCounts.inactive,
+        flaggedContent: statusCounts.flagged, // 실제 flagged 상태의 콘텐츠 수
+        removedContent: statusCounts.removed, // 실제 removed 상태의 콘텐츠 수
         contentByPlatform: stats.contentByPlatform,
         contentByStatus: [
-          { status: 'active', count: stats.totalContent - stats.ageRestrictedContent },
-          { status: 'inactive', count: stats.ageRestrictedContent },
-          { status: 'flagged', count: 0 },
-          { status: 'removed', count: 0 },
+          { status: 'active', count: statusCounts.active },
+          { status: 'inactive', count: statusCounts.inactive },
+          { status: 'under_review', count: statusCounts.under_review },
+          { status: 'flagged', count: statusCounts.flagged },
+          { status: 'removed', count: statusCounts.removed },
         ],
       };
     } catch (_error: unknown) {
+      this.logger.error('Failed to get content statistics', {
+        error: _error instanceof Error ? _error.message : 'Unknown error',
+      });
       throw AdminException.statisticsGenerationError();
+    }
+  }
+
+  // ==================== PRIVATE HELPER METHODS ====================
+
+  private async getLastModerationTime(contentId: string): Promise<Date | undefined> {
+    try {
+      // ReportService를 통해 해당 콘텐츠의 최근 처리된 신고 조회
+      const reports = await this.reportService.searchReports({
+        targetType: ReportTargetType.CONTENT,
+        targetId: contentId,
+        limit: 1,
+        page: 1,
+      });
+
+      // 처리된 신고 중 가장 최근 것을 찾기
+      const processedReports = reports.items.filter(report => 
+        report.status === 'resolved' || report.status === 'dismissed'
+      );
+
+      if (processedReports.length > 0) {
+        // 가장 최근 처리된 신고의 업데이트 시간 반환
+        return processedReports[0]?.updatedAt || processedReports[0]?.createdAt;
+      }
+
+      return undefined;
+    } catch (error: unknown) {
+      this.logger.debug('Failed to get last moderation time', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        contentId,
+      });
+      return undefined;
+    }
+  }
+
+  private async getModerationHistory(contentId: string): Promise<Array<{
+    action: 'approved' | 'flagged' | 'removed' | 'restored';
+    reason?: string;
+    moderatedBy: string;
+    moderatedAt: Date;
+  }>> {
+    try {
+      // ReportService를 통해 해당 콘텐츠의 모든 신고 이력 조회
+      const reports = await this.reportService.searchReports({
+        targetType: ReportTargetType.CONTENT,
+        targetId: contentId,
+        limit: 20, // 최대 20개 모더레이션 이력
+        page: 1,
+      });
+
+      const moderationHistory: Array<{
+        action: 'approved' | 'flagged' | 'removed' | 'restored';
+        reason?: string;
+        moderatedBy: string;
+        moderatedAt: Date;
+      }> = [];
+
+      // 신고 데이터를 모더레이션 이력으로 변환
+      reports.items.forEach(report => {
+        if (report.status === 'resolved') {
+          moderationHistory.push({
+            action: 'flagged',
+            reason: report.reason,
+            moderatedBy: 'system', // 실제로는 reviewedBy 필드에서 가져와야 함
+            moderatedAt: report.updatedAt || report.createdAt,
+          });
+        } else if (report.status === 'dismissed') {
+          moderationHistory.push({
+            action: 'approved',
+            reason: `신고 기각: ${report.reason}`,
+            moderatedBy: 'system', // 실제로는 reviewedBy 필드에서 가져와야 함
+            moderatedAt: report.updatedAt || report.createdAt,
+          });
+        }
+      });
+
+      // 시간순 정렬 (최신순)
+      moderationHistory.sort((a, b) => b.moderatedAt.getTime() - a.moderatedAt.getTime());
+
+      this.logger.debug('Moderation history fetched successfully', {
+        contentId,
+        historyCount: moderationHistory.length,
+      });
+
+      return moderationHistory;
+    } catch (error: unknown) {
+      this.logger.debug('Failed to get moderation history', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        contentId,
+      });
+      return [];
+    }
+  }
+
+  private async getContentCountsByStatus(): Promise<{
+    active: number;
+    inactive: number;
+    under_review: number;
+    flagged: number;
+    removed: number;
+  }> {
+    try {
+      // ContentOrchestrationService를 통해 각 상태별 콘텐츠 수 조회
+      const [activeCount, inactiveCount, underReviewCount, flaggedCount, removedCount] = await Promise.all([
+        this.contentService.countByStatus('active'),
+        this.contentService.countByStatus('inactive'),
+        this.contentService.countByStatus('under_review'),
+        this.contentService.countByStatus('flagged'),
+        this.contentService.countByStatus('removed'),
+      ]);
+
+      return {
+        active: activeCount,
+        inactive: inactiveCount,
+        under_review: underReviewCount,
+        flagged: flaggedCount,
+        removed: removedCount,
+      };
+    } catch (error: unknown) {
+      this.logger.warn('Failed to get content counts by status', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      
+      // 에러 발생 시 기본값 반환
+      return {
+        active: 0,
+        inactive: 0,
+        under_review: 0,
+        flagged: 0,
+        removed: 0,
+      };
     }
   }
 }

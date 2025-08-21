@@ -730,6 +730,7 @@ export class ContentOrchestrationService {
         isLive: content.isLive || false,
         quality: content.quality ?? null,
         ageRestriction: content.ageRestriction || false,
+        status: content.status || 'active',
         // 분리된 엔티티 데이터 포함
         categories: contentCategories[content.id!] || [],
         tags: contentTags[content.id!] || [],
@@ -770,6 +771,7 @@ export class ContentOrchestrationService {
       isLive: content.isLive || false,
       quality: content.quality ?? null,
       ageRestriction: content.ageRestriction || false,
+      status: content.status || 'active',
       // 분리된 엔티티 데이터 (폴백 시 빈 배열)
       categories: [],
       tags: [],

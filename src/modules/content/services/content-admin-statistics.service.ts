@@ -9,6 +9,8 @@ import { ContentEntity } from '../entities/index.js';
 import { ContentException } from '../exceptions/index.js';
 
 import { ContentStatisticsService } from './content-statistics.service.js';
+import { ReportService } from '../../report/services/report.service.js';
+import { ReportTargetType } from '../../report/enums/index.js';
 
 @Injectable()
 export class ContentAdminStatisticsService {
@@ -16,7 +18,8 @@ export class ContentAdminStatisticsService {
 
   constructor(
     private readonly contentRepo: ContentRepository,
-    private readonly contentStatisticsService: ContentStatisticsService
+    private readonly contentStatisticsService: ContentStatisticsService,
+    private readonly reportService: ReportService
   ) {}
 
   // ==================== PUBLIC METHODS ====================
@@ -468,9 +471,13 @@ export class ContentAdminStatisticsService {
         throw ContentException.contentNotFound();
       }
 
-      // TODO: ReportService 연동 후 실제 신고 수 반환
-      // 현재는 0 반환
-      return 0;
+      // ReportService를 통해 실제 신고 수 조회
+      const reportCount = await this.reportService.getCountByTarget(
+        ReportTargetType.CONTENT, 
+        contentId
+      );
+      
+      return reportCount;
     } catch (error: unknown) {
       this.logger.error('Failed to get content report count', {
         error: error instanceof Error ? error.message : 'Unknown error',

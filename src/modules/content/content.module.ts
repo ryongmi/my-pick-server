@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { RedisModule } from '@database/redis/index.js';
 
 import { UserInteractionModule } from '../user-interaction/user-interaction.module.js';
+import { ReportModule } from '../report/report.module.js';
 
 import {
   ContentEntity,
@@ -60,6 +61,7 @@ import {
     ]),
     RedisModule,
     UserInteractionModule,
+    ReportModule,
   ],
   controllers: [
     ContentController,

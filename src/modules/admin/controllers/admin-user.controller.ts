@@ -37,6 +37,7 @@ import { UserInteractionService } from '../../user-interaction/services/index.js
 import { CreatorService } from '../../creator/services/index.js';
 import { ReportService } from '../../report/services/index.js';
 import { ReportTargetType } from '../../report/enums/index.js';
+import { ContentService } from '../../content/services/index.js';
 import {
   AdminUserSearchQueryDto,
   AdminUserListItemDto,
@@ -58,6 +59,7 @@ export class AdminUserController {
     private readonly userInteractionService: UserInteractionService,
     private readonly creatorService: CreatorService,
     private readonly reportService: ReportService,
+    private readonly contentService: ContentService,
     @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy
   ) {}
 
@@ -203,8 +205,8 @@ export class AdminUserController {
           isCreator,
           subscriptions,
           recentInteractions,
-          reports: [], // TODO: 신고 목록 구현 필요
-          moderationHistory: [], // TODO: 모더레이션 이력 구현 필요
+          reports: await this.getUserReportsForDetail(userId),
+          moderationHistory: await this.getUserModerationHistory(userId),
         },
         {
           excludeExtraneousValues: true,
@@ -248,8 +250,18 @@ export class AdminUserController {
         suspensionDays: dto.suspensionDays,
       });
 
-      // TODO: 모더레이션 이력 저장
-      // TODO: 상태에 따른 추가 액션 (알림, 세션 무효화 등)
+      // 모더레이션 이력 저장 및 추가 액션 처리
+      await this.recordModerationAction(userId, dto.status, dto.reason, _adminId);
+      
+      // 상태에 따른 추가 액션
+      if (dto.status === 'banned' || dto.status === 'suspended') {
+        this.logger.log('User restricted - additional actions may be needed', {
+          userId,
+          newStatus: dto.status,
+          adminId: _adminId,
+          note: '알림 발송 및 세션 무효화 기능은 향후 구현 예정',
+        });
+      }
     } catch (_error: unknown) {
       throw AdminException.userStatusUpdateError();
     }
@@ -281,14 +293,33 @@ export class AdminUserController {
     }>;
   }> {
     try {
-      // TODO: 사용자 활동 이력 조회 구현
+      // 사용자 존재 확인
+      const userDetail = await this.authClient.send('user.findById', { userId }).toPromise();
+      if (!userDetail) {
+        throw AdminException.userNotFound();
+      }
+
+      // 병렬로 활동 이력 조회
+      const [contentInteractionHistory, subscriptionHistory, loginHistory] = await Promise.all([
+        this.getContentInteractionHistory(userId, _days),
+        this.getSubscriptionActivityHistory(userId, _days),
+        this.getUserLoginHistory(userId, _days)
+      ]);
 
       return {
-        loginHistory: [], // TODO: auth-service에서 로그인 이력 조회
-        contentInteractions: [], // TODO: 콘텐츠 상호작용 이력 조회
-        subscriptionActivity: [], // TODO: 구독 활동 이력 조회
+        loginHistory,
+        contentInteractions: contentInteractionHistory,
+        subscriptionActivity: subscriptionHistory,
       };
     } catch (_error: unknown) {
+      if (_error instanceof Error && _error.message.includes('not found')) {
+        throw _error;
+      }
+      this.logger.error('Failed to get user activity', {
+        error: _error instanceof Error ? _error.message : 'Unknown error',
+        userId,
+        days: _days,
+      });
       throw AdminException.userDataFetchError();
     }
   }
@@ -376,25 +407,59 @@ export class AdminUserController {
     newUsersThisMonth: number;
   }> {
     try {
-      // TODO: 사용자 통계 구현
+      // auth-service에서 사용자 통계 조회
+      const userStatistics = await this.authClient
+        .send('user.getStatistics', {})
+        .toPromise();
 
+      this.logger.debug('User statistics fetched from auth service', {
+        adminId: _adminId,
+        totalUsers: userStatistics?.totalUsers || 0,
+      });
+
+      // auth-service 응답이 없는 경우 기본값 반환
+      if (!userStatistics) {
+        this.logger.warn('No user statistics received from auth service');
+        return {
+          totalUsers: 0,
+          activeUsers: 0,
+          suspendedUsers: 0,
+          bannedUsers: 0,
+          usersByStatus: [],
+          newUsersToday: 0,
+          newUsersThisWeek: 0,
+          newUsersThisMonth: 0,
+        };
+      }
+
+      // auth-service에서 받은 실제 통계 데이터 사용
       return {
-        totalUsers: 10000,
-        activeUsers: 9500,
-        suspendedUsers: 400,
-        bannedUsers: 100,
-        usersByStatus: [
-          { status: 'active', count: 9500 },
-          { status: 'inactive', count: 0 },
-          { status: 'suspended', count: 400 },
-          { status: 'banned', count: 100 },
-        ],
-        newUsersToday: 25,
-        newUsersThisWeek: 180,
-        newUsersThisMonth: 750,
+        totalUsers: userStatistics.totalUsers || 0,
+        activeUsers: userStatistics.activeUsers || 0,
+        suspendedUsers: userStatistics.suspendedUsers || 0,
+        bannedUsers: userStatistics.bannedUsers || 0,
+        usersByStatus: userStatistics.usersByStatus || [],
+        newUsersToday: userStatistics.newUsersToday || 0,
+        newUsersThisWeek: userStatistics.newUsersThisWeek || 0,
+        newUsersThisMonth: userStatistics.newUsersThisMonth || 0,
       };
-    } catch (_error: unknown) {
-      throw AdminException.statisticsGenerationError();
+    } catch (error: unknown) {
+      this.logger.error('Failed to get user statistics', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        adminId: _adminId,
+      });
+
+      // 에러 발생 시에도 기본값 반환 (서비스 안정성)
+      return {
+        totalUsers: 0,
+        activeUsers: 0,
+        suspendedUsers: 0,
+        bannedUsers: 0,
+        usersByStatus: [],
+        newUsersToday: 0,
+        newUsersThisWeek: 0,
+        newUsersThisMonth: 0,
+      };
     }
   }
 
@@ -455,13 +520,25 @@ export class AdminUserController {
     try {
       const interactions = await this.userInteractionService.getInteractionsByUserId(userId);
 
-      // TODO: Content 정보와 조인하여 제목 가져오기
-      return interactions.slice(0, 10).map((interaction) => ({
-        contentId: interaction.contentId,
-        contentTitle: 'Content Title', // TODO: 실제 콘텐츠 제목
-        type: interaction.isLiked ? 'like' : interaction.isBookmarked ? 'bookmark' : 'view',
-        interactedAt: interaction.updatedAt,
-      }));
+      // Content 정보와 함께 상호작용 데이터 반환
+      const interactionDetails = await Promise.all(
+        interactions.slice(0, 10).map(async (interaction) => {
+          const content = await this.contentService.findById(interaction.contentId);
+          
+          const type: 'view' | 'like' | 'bookmark' | 'comment' = 
+            interaction.isLiked ? 'like' : 
+            interaction.isBookmarked ? 'bookmark' : 'view';
+          
+          return {
+            contentId: interaction.contentId,
+            contentTitle: content?.title || 'Unknown Content',
+            type,
+            interactedAt: interaction.updatedAt,
+          };
+        })
+      );
+
+      return interactionDetails;
     } catch (_error: unknown) {
       return [];
     }
@@ -484,6 +561,302 @@ export class AdminUserController {
         userId,
       });
       return 0;
+    }
+  }
+
+  private async getContentInteractionHistory(
+    userId: string,
+    days: number
+  ): Promise<Array<{
+    contentId: string;
+    contentTitle: string;
+    interactionType: string;
+    interactedAt: Date;
+  }>> {
+    try {
+      // UserInteractionService에서 최근 상호작용 이력 조회
+      const interactions = await this.userInteractionService.getInteractionsByUserId(userId);
+      
+      // 기간 필터링 (days일 내)
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      
+      const recentInteractions = interactions.filter(
+        interaction => interaction.updatedAt >= cutoffDate
+      );
+
+      // Content 정보와 함께 상호작용 이력 반환
+      const interactionHistory = await Promise.all(
+        recentInteractions.slice(0, 50).map(async (interaction) => { // 최대 50개 제한
+          const content = await this.contentService.findById(interaction.contentId);
+          
+          // 상호작용 타입 결정
+          let interactionType = 'view';
+          if (interaction.isLiked) interactionType = 'like';
+          else if (interaction.isBookmarked) interactionType = 'bookmark';
+          
+          return {
+            contentId: interaction.contentId,
+            contentTitle: content?.title || 'Unknown Content',
+            interactionType,
+            interactedAt: interaction.updatedAt,
+          };
+        })
+      );
+
+      return interactionHistory.sort((a, b) => 
+        new Date(b.interactedAt).getTime() - new Date(a.interactedAt).getTime()
+      );
+    } catch (error: unknown) {
+      this.logger.warn('Failed to get content interaction history', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+        days,
+      });
+      return [];
+    }
+  }
+
+  private async getSubscriptionActivityHistory(
+    userId: string,
+    days: number
+  ): Promise<Array<{
+    creatorId: string;
+    creatorName: string;
+    action: 'subscribe' | 'unsubscribe';
+    actionAt: Date;
+  }>> {
+    try {
+      // UserSubscriptionService에서 구독 정보 조회
+      const subscriptions = await this.userSubscriptionService.getSubscriptionsByUserId(userId);
+      
+      // 기간 필터링 (days일 내)
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      
+      const recentSubscriptions = subscriptions.filter(
+        subscription => subscription.subscribedAt >= cutoffDate
+      );
+
+      // Creator 정보와 함께 구독 활동 이력 반환
+      const creatorIds = recentSubscriptions.map(sub => sub.creatorId);
+      if (creatorIds.length === 0) return [];
+
+      const creators = await this.creatorService.findByIds(creatorIds);
+
+      const subscriptionHistory = recentSubscriptions.map((subscription) => {
+        const creator = creators.find(c => c.id === subscription.creatorId);
+        
+        return {
+          creatorId: subscription.creatorId,
+          creatorName: creator?.displayName || creator?.name || 'Unknown Creator',
+          action: 'subscribe' as const, // 현재는 구독만 추적, 구독 취소 이력은 별도 구현 필요
+          actionAt: subscription.subscribedAt,
+        };
+      });
+
+      return subscriptionHistory.sort((a, b) => 
+        new Date(b.actionAt).getTime() - new Date(a.actionAt).getTime()
+      );
+    } catch (error: unknown) {
+      this.logger.warn('Failed to get subscription activity history', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+        days,
+      });
+      return [];
+    }
+  }
+
+  private async getUserReportsForDetail(userId: string): Promise<Array<{
+    id: string;
+    type: 'reported_by_user' | 'reported_against_user';
+    targetType?: string;
+    targetId?: string;
+    reason: string;
+    status: string;
+    createdAt: Date;
+  }>> {
+    try {
+      // 사용자가 신고한 목록과 사용자에 대한 신고 목록을 병렬로 조회
+      const [reportsByUser, reportsAgainstUser] = await Promise.all([
+        this.reportService.searchReports({
+          reporterId: userId,
+          page: 1,
+          limit: 25,
+        }),
+        this.reportService.searchReports({
+          targetType: ReportTargetType.USER,
+          targetId: userId,
+          page: 1,
+          limit: 25,
+        }),
+      ]);
+
+      const reports: Array<{
+        id: string;
+        type: 'reported_by_user' | 'reported_against_user';
+        targetType?: string;
+        targetId?: string;
+        reason: string;
+        status: string;
+        createdAt: Date;
+      }> = [];
+
+      // 사용자가 신고한 목록 추가
+      reportsByUser.items.forEach(report => {
+        reports.push({
+          id: report.id,
+          type: 'reported_by_user',
+          targetType: report.targetType,
+          targetId: report.targetId,
+          reason: report.reason,
+          status: report.status,
+          createdAt: report.createdAt,
+        });
+      });
+
+      // 사용자에 대한 신고 목록 추가
+      reportsAgainstUser.items.forEach(report => {
+        reports.push({
+          id: report.id,
+          type: 'reported_against_user',
+          reason: report.reason,
+          status: report.status,
+          createdAt: report.createdAt,
+        });
+      });
+
+      // 시간순 정렬 (최신순)
+      return reports.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    } catch (error: unknown) {
+      this.logger.warn('Failed to get user reports', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+      });
+      return [];
+    }
+  }
+
+  private async getUserModerationHistory(userId: string): Promise<Array<{
+    action: 'warning' | 'suspension' | 'ban' | 'status_change';
+    reason?: string;
+    moderatedBy: string;
+    moderatedAt: Date;
+    details?: string;
+  }>> {
+    try {
+      // 사용자에 대한 신고 처리 이력을 모더레이션 이력으로 변환
+      const reports = await this.reportService.searchReports({
+        targetType: ReportTargetType.USER,
+        targetId: userId,
+        page: 1,
+        limit: 30,
+      });
+
+      const moderationHistory: Array<{
+        action: 'warning' | 'suspension' | 'ban' | 'status_change';
+        reason?: string;
+        moderatedBy: string;
+        moderatedAt: Date;
+        details?: string;
+      }> = [];
+
+      // 처리된 신고를 모더레이션 이력으로 변환
+      reports.items.forEach(report => {
+        if (report.status === 'resolved') {
+          moderationHistory.push({
+            action: 'warning',
+            reason: report.reason,
+            moderatedBy: 'system', // 실제로는 reviewedBy 필드가 있어야 함
+            moderatedAt: report.updatedAt || report.createdAt,
+            details: `신고 처리로 인한 경고: ${report.description || ''}`,
+          });
+        } else if (report.status === 'dismissed') {
+          moderationHistory.push({
+            action: 'status_change',
+            reason: '신고 기각',
+            moderatedBy: 'system',
+            moderatedAt: report.updatedAt || report.createdAt,
+            details: `신고가 부당하다고 판단되어 기각됨: ${report.reason}`,
+          });
+        }
+      });
+
+      // 시간순 정렬 (최신순)
+      return moderationHistory.sort((a, b) => b.moderatedAt.getTime() - a.moderatedAt.getTime());
+    } catch (error: unknown) {
+      this.logger.warn('Failed to get user moderation history', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+      });
+      return [];
+    }
+  }
+
+  private async recordModerationAction(
+    userId: string,
+    action: string,
+    reason?: string,
+    moderatedBy?: string
+  ): Promise<void> {
+    try {
+      // 모더레이션 액션을 로그로 기록
+      this.logger.log('Moderation action recorded', {
+        userId,
+        action,
+        reason,
+        moderatedBy,
+        timestamp: new Date().toISOString(),
+        type: 'user_moderation',
+      });
+
+      // 향후 별도의 ModerationHistoryService나 데이터베이스 테이블에 저장할 수 있음
+      // 현재는 로깅으로만 처리
+    } catch (error: unknown) {
+      this.logger.warn('Failed to record moderation action', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+        action,
+      });
+    }
+  }
+
+  private async getUserLoginHistory(userId: string, days: number): Promise<Array<{
+    loginAt: Date;
+    ipAddress: string;
+    userAgent: string;
+  }>> {
+    try {
+      // auth-service에서 로그인 이력 조회 시도
+      const loginHistoryResponse = await this.authClient
+        .send('user.getLoginHistory', { userId, days })
+        .toPromise();
+
+      if (loginHistoryResponse && Array.isArray(loginHistoryResponse)) {
+        return loginHistoryResponse.map((login: unknown) => ({
+          loginAt: new Date((login as { loginAt: string }).loginAt),
+          ipAddress: (login as { ipAddress: string }).ipAddress || 'Unknown',
+          userAgent: (login as { userAgent: string }).userAgent || 'Unknown',
+        }));
+      }
+
+      // auth-service에 해당 API가 없는 경우 빈 배열 반환
+      this.logger.debug('Login history API not available in auth-service', {
+        userId,
+        days,
+        note: 'auth-service에 user.getLoginHistory API 구현 필요',
+      });
+
+      return [];
+    } catch (error: unknown) {
+      this.logger.debug('Failed to get login history from auth-service', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId,
+        days,
+        note: 'auth-service에서 로그인 이력 조회 실패 - API 미구현 가능성',
+      });
+      return [];
     }
   }
 }

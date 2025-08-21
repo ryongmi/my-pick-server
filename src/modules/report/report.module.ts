@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { RedisModule } from '@database/redis/index.js';
+import { SharedClientsModule } from '@common/clients/shared-clients.module.js';
+
 import {
   ReportEntity,
   ReportEvidenceEntity,
@@ -31,6 +34,8 @@ import { ReportController } from './controllers/index.js';
       ReportReviewEntity,
       ReportActionEntity,
     ]),
+    RedisModule,
+    SharedClientsModule,
   ],
   controllers: [ReportController],
   providers: [

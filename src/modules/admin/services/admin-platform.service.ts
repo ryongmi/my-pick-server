@@ -7,6 +7,7 @@ import { CreatorPlatformEntity } from '../../creator/entities/index.js';
 import { CreatePlatformDto, UpdatePlatformDto } from '../../creator/dto/index.js';
 import { CreatorException } from '../../creator/exceptions/index.js';
 import { CreatorService } from '../../creator/services/creator.service.js';
+import { YouTubeApiService } from '../../external-api/services/youtube-api.service.js';
 
 @Injectable()
 export class AdminPlatformService {
@@ -14,7 +15,8 @@ export class AdminPlatformService {
 
   constructor(
     private readonly creatorPlatformRepo: CreatorPlatformRepository,
-    private readonly creatorService: CreatorService
+    private readonly creatorService: CreatorService,
+    private readonly youtubeApiService: YouTubeApiService
   ) {}
 
   // ==================== ADMIN PLATFORM 관리 메서드 ====================
@@ -265,36 +267,48 @@ export class AdminPlatformService {
     isActive?: boolean;
   }> {
     try {
-      // TODO: ExternalApiService 또는 YouTubeApiService 연동
-      // 현재는 mock 데이터로 시뮬레이션
+      // YouTubeApiService를 통한 실제 API 호출
+      const channelData = await this.youtubeApiService.getChannelInfo(platform.platformId);
 
-      // 예시: YouTube Data API v3 호출 로직
-      // const channelData = await this.youtubeApiService.getChannelInfo(platform.platformId);
+      if (!channelData) {
+        this.logger.warn('YouTube channel data not found', {
+          platformId: platform.id,
+          channelId: platform.platformId,
+        });
+        
+        // 데이터를 찾을 수 없는 경우 비활성화 상태로 설정
+        return {
+          followerCount: platform.followerCount || 0,
+          contentCount: platform.contentCount || 0,
+          totalViews: platform.totalViews || 0,
+          isActive: false,
+        };
+      }
 
-      // Mock 동기화 로직 (실제 구현 시 제거)
-      const mockChannelData = {
-        subscriberCount: Math.floor(Math.random() * 100000) + 1000, // 1K~100K 랜덤
-        videoCount: Math.floor(Math.random() * 500) + 10, // 10~500 랜덤
-        totalViews: Math.floor(Math.random() * 10000000) + 100000, // 100K~10M 랜덤
-        isActive: Math.random() > 0.1, // 90% 확률로 활성
+      // 실제 YouTube API 데이터를 사용
+      const syncedData = {
+        subscriberCount: channelData.statistics.subscriberCount || 0,
+        videoCount: channelData.statistics.videoCount || 0,
+        totalViews: channelData.statistics.viewCount || 0,
+        isActive: true, // API에서 데이터를 성공적으로 가져온 경우 활성화
       };
 
       this.logger.debug('YouTube platform data fetched via admin', {
         platformId: platform.id,
         channelId: platform.platformId,
         oldFollowerCount: platform.followerCount,
-        newFollowerCount: mockChannelData.subscriberCount,
+        newFollowerCount: syncedData.subscriberCount,
         oldContentCount: platform.contentCount,
-        newContentCount: mockChannelData.videoCount,
+        newContentCount: syncedData.videoCount,
         oldTotalViews: platform.totalViews,
-        newTotalViews: mockChannelData.totalViews,
+        newTotalViews: syncedData.totalViews,
       });
 
       return {
-        followerCount: mockChannelData.subscriberCount,
-        contentCount: mockChannelData.videoCount,
-        totalViews: mockChannelData.totalViews,
-        isActive: mockChannelData.isActive,
+        followerCount: syncedData.subscriberCount,
+        contentCount: syncedData.videoCount,
+        totalViews: syncedData.totalViews,
+        isActive: syncedData.isActive,
       };
     } catch (error: unknown) {
       this.logger.warn('YouTube API sync failed via admin', {
@@ -303,8 +317,13 @@ export class AdminPlatformService {
         error: error instanceof Error ? error.message : 'Unknown YouTube API error',
       });
 
-      // YouTube API 실패 시 재시도하거나 에러 상태로 마킹
-      throw error;
+      // YouTube API 실패 시 기존 데이터 유지하되 비활성화 상태로 설정
+      return {
+        followerCount: platform.followerCount || 0,
+        contentCount: platform.contentCount || 0,
+        totalViews: platform.totalViews || 0,
+        isActive: false,
+      };
     }
   }
 }

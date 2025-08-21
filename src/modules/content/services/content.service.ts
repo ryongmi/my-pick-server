@@ -227,6 +227,42 @@ export class ContentService {
     }
   }
 
+  async updateContentStatus(
+    contentId: string,
+    status: 'active' | 'inactive' | 'under_review' | 'flagged' | 'removed',
+    moderatedBy: string,
+    reason?: string,
+    transactionManager?: EntityManager,
+  ): Promise<void> {
+    try {
+      const content = await this.findByIdOrFail(contentId);
+
+      // 상태 변경
+      content.status = status;
+
+      // BaseRepository 패턴 사용
+      await this.contentRepo.updateEntity(content, transactionManager);
+
+      this.logger.log('Content status updated successfully', {
+        contentId,
+        newStatus: status,
+        moderatedBy,
+        reason,
+      });
+    } catch (error: unknown) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error('Content status update failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        contentId,
+        status,
+      });
+      throw ContentException.contentUpdateError();
+    }
+  }
+
 
   async deleteContent(contentId: string): Promise<UpdateResult> {
     try {
@@ -255,6 +291,12 @@ export class ContentService {
   async countByCreatorId(creatorId: string): Promise<number> {
     return this.contentRepo.count({
       where: { creatorId },
+    });
+  }
+
+  async countByStatus(status: 'active' | 'inactive' | 'under_review' | 'flagged' | 'removed'): Promise<number> {
+    return this.contentRepo.count({
+      where: { status },
     });
   }
 
