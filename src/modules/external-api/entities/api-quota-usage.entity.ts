@@ -21,7 +21,7 @@ export class ApiQuotaUsageEntity extends BaseEntityUUID {
   @Column({ type: 'text', nullable: true })
   requestDetails?: string | null; // 요청 세부사항 (JSON)
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   responseStatus?: string | null; // 응답 상태
 
   @Column({ type: 'text', nullable: true })

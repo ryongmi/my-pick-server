@@ -83,7 +83,7 @@ export class YouTubeApiService {
     private readonly configService: ConfigService,
     private readonly quotaMonitor: QuotaMonitorService
   ) {
-    this.apiKey = this.configService.get<string>('youtubeApiKey')!;
+    this.apiKey = this.configService.get<string>('youtube.youtubeApiKey')!;
 
     if (!this.apiKey) {
       this.logger.error('YouTube API key not configured');

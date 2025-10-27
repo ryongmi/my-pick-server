@@ -9,7 +9,7 @@ import { createTypeOrmConfig } from '@krgeobuk/database-config'; // 공통 패�
 // ESM에서 __filename, __dirname 대체
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const entitiesPath = join(__dirname, '/../**/*.entity{.ts,.js}');
+const entitiesPath = join(__dirname, '/../modules/**/*.entity{.ts,.js}');
 
 @Module({
   imports: [TypeOrmModule.forRootAsync(createTypeOrmConfig([entitiesPath]))],

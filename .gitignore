@@ -1,3 +1,9 @@
+# JWT 키값
+keys
+
+# Docker volumes
+data
+
 # Logs
 logs
 *.log

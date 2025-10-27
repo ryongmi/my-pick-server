@@ -35,7 +35,8 @@
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "src/modules_backup"
   ],
   // docker에서 nestjs 파일 수정사항 반영을 위한 구문, 핫리로드
   "watchOptions": {

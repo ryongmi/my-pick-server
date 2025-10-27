@@ -92,6 +92,46 @@ export class YouTubeSyncScheduler {
   }
 
   /**
+   * 수동 동기화 트리거 (Admin API용)
+   */
+  async syncSinglePlatform(
+    platformId: string
+  ): Promise<{ success: boolean; message: string; syncedCount?: number }> {
+    try {
+      const platform = await this.creatorPlatformService.findById(platformId);
+
+      if (!platform) {
+        return { success: false, message: '플랫폼을 찾을 수 없습니다.' };
+      }
+
+      if (!platform.isActive) {
+        return { success: false, message: '비활성화된 플랫폼입니다.' };
+      }
+
+      await this.syncPlatform(platform);
+
+      const syncProgress = platform.syncProgress;
+      const syncedCount = syncProgress?.syncedVideoCount || 0;
+
+      return {
+        success: true,
+        message: '동기화가 완료되었습니다.',
+        syncedCount,
+      };
+    } catch (error: unknown) {
+      this.logger.error('Manual sync failed', {
+        platformId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : '동기화 실패',
+      };
+    }
+  }
+
+  /**
    * 플랫폼별 동기화
    */
   private async syncPlatform(platform: CreatorPlatformEntity): Promise<void> {

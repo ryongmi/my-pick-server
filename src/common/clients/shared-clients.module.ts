@@ -46,4 +46,3 @@ import { ClientConfig } from '@common/interfaces/config.interfaces.js';
   exports: [ClientsModule],
 })
 export class SharedClientsModule {}
-
