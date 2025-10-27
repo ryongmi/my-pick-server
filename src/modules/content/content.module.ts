@@ -1,108 +1,36 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { RedisModule } from '@database/redis/index.js';
+import { CreatorModule } from '@modules/creator/creator.module.js';
 
-import { UserInteractionModule } from '../user-interaction/user-interaction.module.js';
-import { ReportModule } from '../report/report.module.js';
-
-import {
-  ContentEntity,
-  ContentStatisticsEntity,
-  ContentCategoryEntity,
-  ContentTagEntity,
-  ContentInteractionEntity,
-  ContentSyncEntity,
-  ContentSyncMetadataEntity,
-  ContentModerationEntity,
-} from './entities/index.js';
-import {
-  ContentRepository,
-  ContentStatisticsRepository,
-  ContentCategoryRepository,
-  ContentTagRepository,
-  ContentInteractionRepository,
-  ContentSyncRepository,
-  ContentSyncMetadataRepository,
-  ContentModerationRepository,
-} from './repositories/index.js';
-import {
-  ContentService,
-  ContentStatisticsService,
-  ContentCategoryService,
-  ContentTagService,
-  ContentInteractionService,
-  ContentSyncService,
-  ContentSyncMetadataService,
-  ContentOrchestrationService,
-  ContentAdminStatisticsService,
-  ContentModerationService,
-} from './services/index.js';
-import {
-  ContentController,
-  ContentBookmarkController,
-  UserContentInteractionController,
-  ContentCategoryController,
-  ContentTagController,
-  ContentAnalyticsController,
-} from './controllers/index.js';
+import { ContentEntity } from './entities/content.entity.js';
+import { ContentCategoryEntity } from './entities/content-category.entity.js';
+import { ContentTagEntity } from './entities/content-tag.entity.js';
+import { ContentModerationEntity } from './entities/content-moderation.entity.js';
+import { ContentRepository } from './repositories/content.repository.js';
+import { ContentCategoryRepository } from './repositories/content-category.repository.js';
+import { ContentTagRepository } from './repositories/content-tag.repository.js';
+import { ContentService } from './services/content.service.js';
+import { ContentCategoryService } from './services/content-category.service.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       ContentEntity,
-      ContentStatisticsEntity,
       ContentCategoryEntity,
       ContentTagEntity,
-      ContentInteractionEntity,
-      ContentSyncEntity,
-      ContentSyncMetadataEntity,
       ContentModerationEntity,
     ]),
-    RedisModule,
-    UserInteractionModule,
-    ReportModule,
-  ],
-  controllers: [
-    ContentController,
-    ContentBookmarkController,
-    UserContentInteractionController,
-    ContentCategoryController,
-    ContentTagController,
-    ContentAnalyticsController,
+    // 순환 참조 방지를 위해 forwardRef 사용
+    forwardRef(() => CreatorModule),
   ],
   providers: [
-    // Repositories
     ContentRepository,
-    ContentStatisticsRepository,
     ContentCategoryRepository,
     ContentTagRepository,
-    ContentInteractionRepository,
-    ContentSyncRepository,
-    ContentSyncMetadataRepository,
-    ContentModerationRepository,
-
-    // Services
     ContentService,
-    ContentStatisticsService,
     ContentCategoryService,
-    ContentTagService,
-    ContentInteractionService,
-    ContentSyncService,
-    ContentSyncMetadataService,
-    ContentOrchestrationService,
-    ContentAdminStatisticsService,
-    ContentModerationService,
   ],
-  exports: [
-    ContentService,
-    ContentRepository,
-    ContentCategoryService,
-    ContentTagService,
-    ContentInteractionService,
-    ContentSyncService,
-    ContentOrchestrationService,
-    ContentAdminStatisticsService,
-  ],
+  exports: [ContentService, ContentCategoryService],
 })
 export class ContentModule {}

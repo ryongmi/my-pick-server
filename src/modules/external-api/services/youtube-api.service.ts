@@ -1,4 +1,4 @@
-import { Injectable, Logger, HttpException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 
@@ -6,23 +6,13 @@ import { lastValueFrom, map } from 'rxjs';
 
 import { transformAndValidate } from '@krgeobuk/core/utils';
 
-import { YouTubeConfig } from '@common/interfaces/config.interfaces.js';
-
 import { ExternalApiException } from '../exceptions/index.js';
 import { ApiProvider, ApiOperation } from '../enums/index.js';
-import {
-  YouTubeChannelDto,
-  YouTubeVideoDto,
-  YouTubeSearchResultDto,
-  YouTubeChannelsApiResponseDto,
-  YouTubeChannelContentApiResponseDto,
-  YouTubeChannelFullApiResponseDto,
-  YouTubeSearchApiResponseDto,
-} from '../dto/index.js';
+import { YouTubeChannelDto, YouTubeVideoDto } from '../dto/index.js';
 
 import { QuotaMonitorService } from './quota-monitor.service.js';
 
-// YouTube API 응답 타입 정의
+// YouTube API 응답 타입 정의 (inline)
 interface YouTubeVideoApiData {
   id: string;
   snippet: {
@@ -53,6 +43,35 @@ interface YouTubeVideoApiData {
   };
 }
 
+interface YouTubeChannelApiData {
+  id: string;
+  snippet: {
+    title: string;
+    description: string;
+    customUrl?: string;
+    publishedAt: string;
+    thumbnails: {
+      default?: { url: string };
+      medium?: { url: string };
+      high?: { url: string };
+    };
+  };
+  statistics: {
+    viewCount: string;
+    subscriberCount: string;
+    videoCount: string;
+  };
+  brandingSettings?: {
+    image?: {
+      bannerExternalUrl?: string;
+    };
+    channel?: {
+      keywords?: string;
+      country?: string;
+    };
+  };
+}
+
 @Injectable()
 export class YouTubeApiService {
   private readonly logger = new Logger(YouTubeApiService.name);
@@ -62,9 +81,9 @@ export class YouTubeApiService {
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
-    private readonly quotaMonitorService: QuotaMonitorService
+    private readonly quotaMonitor: QuotaMonitorService
   ) {
-    this.apiKey = this.configService.get<YouTubeConfig['youtubeApiKey']>('youtubeApiKey')!;
+    this.apiKey = this.configService.get<string>('youtubeApiKey')!;
 
     if (!this.apiKey) {
       this.logger.error('YouTube API key not configured');
@@ -74,23 +93,22 @@ export class YouTubeApiService {
 
   // ==================== PUBLIC METHODS ====================
 
+  /**
+   * 채널 정보 조회
+   */
   async getChannelInfo(channelId: string): Promise<YouTubeChannelDto | null> {
     try {
-      this.logger.debug('Fetching YouTube channel info', { channelId });
+      this.logger.debug(`Fetching YouTube channel info: ${channelId}`);
 
-      // 쿼터 사용 가능 여부 체크
-      const quotaCheck = await this.quotaMonitorService.canUseQuota(ApiProvider.YOUTUBE, 1);
+      // 할당량 체크
+      const quotaCheck = await this.quotaMonitor.canUseQuota(ApiProvider.YOUTUBE, 1);
       if (!quotaCheck.canUse) {
         this.logger.warn('YouTube API quota limit reached', {
           currentUsage: quotaCheck.currentUsage,
           remainingQuota: quotaCheck.remainingQuota,
-          usagePercentage: quotaCheck.usagePercentage.toFixed(1) + '%',
         });
         throw ExternalApiException.quotaExceeded();
       }
-
-      const requestDetails = { channelId, operation: 'channels' };
-      const startTime = Date.now();
 
       const response = await lastValueFrom(
         this.httpService
@@ -101,223 +119,112 @@ export class YouTubeApiService {
               part: 'snippet,statistics,brandingSettings',
             },
           })
-          .pipe(
-            map((httpResponse) => ({
-              data: httpResponse.data,
-              status: httpResponse.status,
-            }))
-          )
+          .pipe(map((res) => res.data))
       );
 
-      const responseTime = Date.now() - startTime;
-
-      // 쿼터 사용량 기록
-      await this.quotaMonitorService.recordQuotaUsage(
+      // 할당량 기록
+      await this.quotaMonitor.recordQuotaUsage(
         ApiProvider.YOUTUBE,
         ApiOperation.CHANNEL_INFO,
         1,
-        { ...requestDetails, responseTime },
-        response.status.toString()
+        { channelId },
+        '200'
       );
 
-      this.logger.debug('YouTube channel info API 호출 성공', { channelId });
-
-      // YouTube API 응답값 검증 및 변환
-      const validatedResponse = await transformAndValidate<YouTubeChannelFullApiResponseDto>({
-        cls: YouTubeChannelFullApiResponseDto,
-        plain: response.data,
-      });
-
-      this.logger.debug('YouTube channel info API 응답 검증 성공', { channelId });
-
-      if (!validatedResponse.items || validatedResponse.items.length === 0) {
-        this.logger.warn('YouTube channel not found', { channelId });
+      if (!response.items || response.items.length === 0) {
+        this.logger.warn(`YouTube channel not found: ${channelId}`);
         return null;
       }
 
-      const channel = validatedResponse.items[0]!;
+      const channel: YouTubeChannelApiData = response.items[0];
 
-      // 검증된 데이터로 안전하게 DTO 생성
-      const channelDto: YouTubeChannelDto = {
-        id: channel.id,
-        title: channel.snippet.title,
-        description: channel.snippet.description,
-        customUrl: channel.snippet.customUrl || undefined,
-        publishedAt: new Date(channel.snippet.publishedAt),
-        thumbnails: {
-          default: channel.snippet.thumbnails.default?.url || null,
-          medium: channel.snippet.thumbnails.medium?.url || null,
-          high: channel.snippet.thumbnails.high?.url || null,
+      // DTO 변환 및 검증 (1회만)
+      const channelDto = await transformAndValidate<YouTubeChannelDto>({
+        cls: YouTubeChannelDto,
+        plain: {
+          id: channel.id,
+          title: channel.snippet.title,
+          description: channel.snippet.description,
+          customUrl: channel.snippet.customUrl,
+          publishedAt: new Date(channel.snippet.publishedAt),
+          thumbnails: {
+            default: channel.snippet.thumbnails.default?.url || null,
+            medium: channel.snippet.thumbnails.medium?.url || null,
+            high: channel.snippet.thumbnails.high?.url || null,
+          },
+          statistics: {
+            viewCount: parseInt(channel.statistics.viewCount || '0'),
+            subscriberCount: parseInt(channel.statistics.subscriberCount || '0'),
+            videoCount: parseInt(channel.statistics.videoCount || '0'),
+          },
+          brandingSettings: {
+            bannerImageUrl: channel.brandingSettings?.image?.bannerExternalUrl,
+            keywords: channel.brandingSettings?.channel?.keywords,
+            country: channel.brandingSettings?.channel?.country,
+          },
         },
-        statistics: {
-          viewCount: parseInt(channel.statistics.viewCount || '0'),
-          subscriberCount: parseInt(channel.statistics.subscriberCount || '0'),
-          videoCount: parseInt(channel.statistics.videoCount || '0'),
-        },
-        brandingSettings: {
-          bannerImageUrl: channel.brandingSettings?.image?.bannerExternalUrl,
-          keywords: channel.brandingSettings?.channel?.keywords,
-          country: channel.brandingSettings?.channel?.country,
-        },
-      };
-
-      this.logger.debug('YouTube channel info fetched successfully', {
-        channelId,
-        title: channelDto.title,
-        subscriberCount: channelDto.statistics.subscriberCount,
       });
+
+      this.logger.debug(`YouTube channel info fetched: ${channelId}`);
 
       return channelDto;
     } catch (error: unknown) {
-      // 에러 발생 시 쿼터 사용량 기록 (에러 포함)
-      await this.quotaMonitorService
+      // 에러 발생 시 할당량 기록
+      await this.quotaMonitor
         .recordQuotaUsage(
           ApiProvider.YOUTUBE,
           ApiOperation.CHANNEL_INFO,
           1,
-          { channelId, operation: 'channels' },
+          { channelId },
           undefined,
           error instanceof Error ? error.message : 'Unknown error'
         )
-        .catch(() => {}); // 쿼터 기록 실패는 무시
+        .catch(() => {});
 
-      if (error instanceof HttpException) {
+      if (error instanceof Error && error.message.includes('quota')) {
         throw error;
       }
 
-      // 유효성 검증 실패 시 상세 로그
-      if (error instanceof Error && error.message.includes('validation')) {
-        this.logger.error('YouTube channel data validation failed', {
-          error: error.message,
-          channelId,
-          validationError: true,
-        });
-        throw ExternalApiException.youtubeApiValidationError();
-      }
-
-      this.logger.error('YouTube channel info fetch failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        channelId,
-      });
+      this.logger.error(`Failed to fetch channel info: ${channelId}`, error);
       throw ExternalApiException.youtubeApiError();
     }
   }
 
-  async getChannelByUsername(username: string): Promise<YouTubeChannelDto | null> {
-    try {
-      this.logger.debug('Fetching YouTube channel by username', { username });
-
-      const response = await lastValueFrom(
-        this.httpService
-          .get(`${this.baseUrl}/channels`, {
-            params: {
-              key: this.apiKey,
-              forUsername: username,
-              part: 'snippet,statistics,brandingSettings',
-            },
-          })
-          .pipe(map((response) => response.data))
-      );
-
-      this.logger.debug('YouTube channel by username API 호출 성공', { username });
-
-      // 응답값 검증 및 변환
-      const channelsResponse = await transformAndValidate<YouTubeChannelsApiResponseDto>({
-        cls: YouTubeChannelsApiResponseDto,
-        plain: response,
-      });
-
-      this.logger.debug('YouTube channel by username API 응답 검증 성공', { username });
-
-      if (!channelsResponse.items || channelsResponse.items.length === 0) {
-        this.logger.warn('YouTube channel not found by username', { username });
-        return null;
-      }
-
-      const channel = channelsResponse.items[0]!;
-      return this.getChannelInfo(channel.id);
-    } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      // 유효성 검증 실패 시 상세 로그
-      if (error instanceof Error && error.message.includes('validation')) {
-        this.logger.error('YouTube channel by username validation failed', {
-          error: error.message,
-          username,
-          validationError: true,
-        });
-        throw ExternalApiException.youtubeApiValidationError();
-      }
-
-      this.logger.error('YouTube channel fetch by username failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        username,
-      });
-      throw ExternalApiException.youtubeApiError();
-    }
-  }
-
+  /**
+   * 채널 영상 목록 조회 (증분 동기화 지원)
+   */
   async getChannelVideos(
     channelId: string,
-    maxResults = 50,
-    pageToken?: string,
-    publishedAfter?: Date
+    options: {
+      maxResults: number;
+      pageToken?: string;
+      publishedAfter?: Date;
+    }
   ): Promise<{
     videos: YouTubeVideoDto[];
     nextPageToken?: string;
     totalResults: number;
   }> {
-    try {
-      this.logger.debug('Fetching YouTube channel videos', {
-        channelId,
-        maxResults,
-        hasPageToken: !!pageToken,
-        hasPublishedAfter: !!publishedAfter,
-      });
+    const { maxResults, pageToken, publishedAfter } = options || {};
 
-      // 쿼터 사용량 계산 (playlistItems 1 + videos 1 = 총 2 유닛)
-      const totalQuotaUnits = 2;
-      const quotaCheck = await this.quotaMonitorService.canUseQuota(
-        ApiProvider.YOUTUBE,
-        totalQuotaUnits
-      );
+    try {
+      this.logger.debug(`Fetching YouTube channel videos: ${channelId}`);
+
+      // 할당량 체크 (playlistItems 1 + videos 1 = 2)
+      const quotaCheck = await this.quotaMonitor.canUseQuota(ApiProvider.YOUTUBE, 2);
       if (!quotaCheck.canUse) {
-        this.logger.warn('YouTube API quota limit reached for channel videos', {
-          channelId,
-          requiredUnits: totalQuotaUnits,
-          currentUsage: quotaCheck.currentUsage,
-          remainingQuota: quotaCheck.remainingQuota,
-        });
+        this.logger.warn('YouTube API quota limit reached for channel videos');
         throw ExternalApiException.quotaExceeded();
       }
 
-      const requestDetails = {
-        channelId,
-        maxResults,
-        hasPageToken: !!pageToken,
-        hasPublishedAfter: !!publishedAfter,
-        operation: 'channelVideos',
-      };
-      const startTime = Date.now();
-
-      // 1. 채널의 업로드 플레이리스트 ID 가져오기
+      // 1. 업로드 플레이리스트 ID
       const uploadsPlaylistId = await this.getUploadsPlaylistId(channelId);
       if (!uploadsPlaylistId) {
         return { videos: [], totalResults: 0 };
       }
 
-      // 2. 플레이리스트에서 비디오 목록 가져오기 (증분 동기화 지원)
-      const params: {
-        key: string;
-        playlistId: string;
-        part: string;
-        maxResults: number;
-        pageToken?: string;
-        order: string;
-        publishedAfter?: string;
-      } = {
+      // 2. 플레이리스트 아이템 조회
+      const params: Record<string, string | number> = {
         key: this.apiKey,
         playlistId: uploadsPlaylistId,
         part: 'snippet',
@@ -328,35 +235,26 @@ export class YouTubeApiService {
       if (pageToken) {
         params.pageToken = pageToken;
       }
-
-      // 증분 동기화를 위한 publishedAfter 필터 추가
       if (publishedAfter) {
         params.publishedAfter = publishedAfter.toISOString();
       }
 
       const playlistResponse = await lastValueFrom(
-        this.httpService
-          .get(`${this.baseUrl}/playlistItems`, { params })
-          .pipe(map((response) => response.data))
+        this.httpService.get(`${this.baseUrl}/playlistItems`, { params }).pipe(map((r) => r.data))
       );
 
-      interface PlaylistItem {
-        snippet: {
-          resourceId: {
-            videoId: string;
-          };
-        };
-      }
-
-      const videoIds = (playlistResponse.items as PlaylistItem[])
-        .map((item) => item.snippet.resourceId.videoId)
+      const videoIds = playlistResponse.items
+        .map(
+          (item: { snippet: { resourceId: { videoId: string } } }) =>
+            item.snippet.resourceId.videoId
+        )
         .filter(Boolean);
 
       if (videoIds.length === 0) {
         return { videos: [], totalResults: 0 };
       }
 
-      // 3. 비디오 상세 정보 가져오기
+      // 3. 비디오 상세 정보
       const videosResponse = await lastValueFrom(
         this.httpService
           .get(`${this.baseUrl}/videos`, {
@@ -366,31 +264,23 @@ export class YouTubeApiService {
               part: 'snippet,statistics,contentDetails',
             },
           })
-          .pipe(map((response) => response.data))
+          .pipe(map((r) => r.data))
       );
 
       const videos = await Promise.all(
         videosResponse.items.map((video: YouTubeVideoApiData) => this.transformVideoData(video))
       );
 
-      const responseTime = Date.now() - startTime;
-
-      // 쿼터 사용량 기록 (성공)
-      await this.quotaMonitorService.recordQuotaUsage(
+      // 할당량 기록
+      await this.quotaMonitor.recordQuotaUsage(
         ApiProvider.YOUTUBE,
         ApiOperation.CHANNEL_VIDEOS,
-        totalQuotaUnits,
-        { ...requestDetails, responseTime, videoCount: videos.length },
+        2,
+        { channelId, maxResults, videoCount: videos.length },
         '200'
       );
 
-      this.logger.debug('YouTube channel videos fetched successfully', {
-        channelId,
-        videoCount: videos.length,
-        totalResults: playlistResponse.pageInfo.totalResults,
-        quotaUnits: totalQuotaUnits,
-        responseTime,
-      });
+      this.logger.debug(`YouTube channel videos fetched: ${channelId} (${videos.length} videos)`);
 
       return {
         videos,
@@ -398,45 +288,38 @@ export class YouTubeApiService {
         totalResults: playlistResponse.pageInfo.totalResults,
       };
     } catch (error: unknown) {
-      // 에러 발생 시 쿼터 사용량 기록 (에러 포함)
-      await this.quotaMonitorService
+      // 에러 발생 시 할당량 기록
+      await this.quotaMonitor
         .recordQuotaUsage(
           ApiProvider.YOUTUBE,
           ApiOperation.CHANNEL_VIDEOS,
-          2, // 실패했어도 쿼터는 소모됨
-          { channelId, maxResults, operation: 'channelVideos' },
+          2,
+          { channelId, maxResults },
           undefined,
           error instanceof Error ? error.message : 'Unknown error'
         )
-        .catch(() => {}); // 쿼터 기록 실패는 무시
+        .catch(() => {});
 
-      if (error instanceof HttpException) {
+      if (error instanceof Error && error.message.includes('quota')) {
         throw error;
       }
 
-      // 유효성 검증 실패 시 상세 로그
-      if (error instanceof Error && error.message.includes('validation')) {
-        this.logger.error('YouTube channel videos validation failed', {
-          error: error.message,
-          channelId,
-          maxResults,
-          validationError: true,
-        });
-        throw ExternalApiException.youtubeApiValidationError();
-      }
-
-      this.logger.error('YouTube channel videos fetch failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        channelId,
-        maxResults,
-      });
+      this.logger.error(`Failed to fetch channel videos: ${channelId}`, error);
       throw ExternalApiException.youtubeApiError();
     }
   }
 
+  /**
+   * 비디오 상세 조회
+   */
   async getVideoById(videoId: string): Promise<YouTubeVideoDto | null> {
     try {
-      this.logger.debug('Fetching YouTube video by ID', { videoId });
+      this.logger.debug(`Fetching YouTube video: ${videoId}`);
+
+      const quotaCheck = await this.quotaMonitor.canUseQuota(ApiProvider.YOUTUBE, 1);
+      if (!quotaCheck.canUse) {
+        throw ExternalApiException.quotaExceeded();
+      }
 
       const response = await lastValueFrom(
         this.httpService
@@ -447,205 +330,45 @@ export class YouTubeApiService {
               part: 'snippet,statistics,contentDetails',
             },
           })
-          .pipe(map((response) => response.data))
+          .pipe(map((r) => r.data))
+      );
+
+      await this.quotaMonitor.recordQuotaUsage(
+        ApiProvider.YOUTUBE,
+        ApiOperation.VIDEO_DETAILS,
+        1,
+        { videoId },
+        '200'
       );
 
       if (!response.items || response.items.length === 0) {
-        this.logger.warn('YouTube video not found', { videoId });
+        this.logger.warn(`YouTube video not found: ${videoId}`);
         return null;
       }
 
-      const video = await this.transformVideoData(response.items[0]);
-
-      this.logger.debug('YouTube video fetched successfully', {
-        videoId,
-        title: video.title,
-        views: video.statistics.viewCount,
-      });
-
-      return video;
+      return this.transformVideoData(response.items[0]);
     } catch (error: unknown) {
-      if (error instanceof HttpException) {
+      await this.quotaMonitor
+        .recordQuotaUsage(
+          ApiProvider.YOUTUBE,
+          ApiOperation.VIDEO_DETAILS,
+          1,
+          { videoId },
+          undefined,
+          error instanceof Error ? error.message : 'Unknown error'
+        )
+        .catch(() => {});
+
+      if (error instanceof Error && error.message.includes('quota')) {
         throw error;
       }
 
-      // 유효성 검증 실패 시 상세 로그
-      if (error instanceof Error && error.message.includes('validation')) {
-        this.logger.error('YouTube video data validation failed', {
-          error: error.message,
-          videoId,
-          validationError: true,
-        });
-        throw ExternalApiException.youtubeApiValidationError();
-      }
-
-      this.logger.error('YouTube video fetch failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        videoId,
-      });
+      this.logger.error(`Failed to fetch video: ${videoId}`, error);
       throw ExternalApiException.youtubeApiError();
     }
   }
 
-  async searchVideos(
-    query: string,
-    maxResults = 25,
-    pageToken?: string
-  ): Promise<YouTubeSearchResultDto> {
-    try {
-      this.logger.debug('Searching YouTube videos', {
-        query,
-        maxResults,
-        hasPageToken: !!pageToken,
-      });
-
-      const response = await lastValueFrom(
-        this.httpService.get(`${this.baseUrl}/search`, {
-          params: {
-            key: this.apiKey,
-            q: query,
-            part: 'snippet',
-            type: 'video',
-            maxResults,
-            pageToken,
-            order: 'relevance',
-          },
-        })
-      );
-
-      this.logger.debug('YouTube search API 호출 성공', { query, maxResults });
-
-      // 응답값 검증 및 변환
-      const searchResponse = await transformAndValidate<YouTubeSearchApiResponseDto>({
-        cls: YouTubeSearchApiResponseDto,
-        plain: response.data,
-      });
-
-      this.logger.debug('YouTube search API 응답 검증 성공', { query, maxResults });
-
-      const videoIds = searchResponse.items.map((item) => item.id.videoId).filter(Boolean);
-
-      if (videoIds.length === 0) {
-        return {
-          videos: [],
-          nextPageToken: searchResponse.nextPageToken || undefined,
-          totalResults: 0,
-        };
-      }
-
-      // 비디오 상세 정보 가져오기
-      const videosResponse = await lastValueFrom(
-        this.httpService
-          .get(`${this.baseUrl}/videos`, {
-            params: {
-              key: this.apiKey,
-              id: videoIds.join(','),
-              part: 'snippet,statistics,contentDetails',
-            },
-          })
-          .pipe(map((response) => response.data))
-      );
-
-      const videos = await Promise.all(
-        videosResponse.items.map((video: YouTubeVideoApiData) => this.transformVideoData(video))
-      );
-
-      this.logger.debug('YouTube video search completed', {
-        query,
-        videoCount: videos.length,
-        totalResults: searchResponse.pageInfo.totalResults,
-      });
-
-      return {
-        videos,
-        nextPageToken: searchResponse.nextPageToken,
-        totalResults: searchResponse.pageInfo.totalResults,
-      };
-    } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      // 유효성 검증 실패 시 상세 로그
-      if (error instanceof Error && error.message.includes('validation')) {
-        this.logger.error('YouTube video search validation failed', {
-          error: error.message,
-          query,
-          maxResults,
-          validationError: true,
-        });
-        throw ExternalApiException.youtubeApiValidationError();
-      }
-
-      this.logger.error('YouTube video search failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        query,
-        maxResults,
-      });
-      throw ExternalApiException.youtubeApiError();
-    }
-  }
-
-  // ==================== BATCH SIZE OPTIMIZATION ====================
-
-  /**
-   * 동기화 상태에 따른 최적 배치 크기 결정
-   */
-  getOptimalBatchSize(syncStatus: 'initial' | 'incremental'): number {
-    switch (syncStatus) {
-      case 'initial':
-        return 50; // 초기 동기화 시 최대 효율
-      case 'incremental':
-        return 10; // 증분 동기화 시 쿼터 절약
-      default:
-        return 25; // 기본값
-    }
-  }
-
-  /**
-   * 증분 동기화용 채널 영상 조회 (publishedAfter 필터 적용)
-   */
-  async getChannelVideosIncremental(
-    channelId: string,
-    publishedAfter: Date,
-    maxResults = 10
-  ): Promise<{
-    videos: YouTubeVideoDto[];
-    nextPageToken?: string;
-    totalResults: number;
-  }> {
-    this.logger.debug('Performing incremental video sync', {
-      channelId,
-      publishedAfter: publishedAfter.toISOString(),
-      maxResults,
-    });
-
-    return this.getChannelVideos(channelId, maxResults, undefined, publishedAfter);
-  }
-
-  /**
-   * 전체 동기화용 채널 영상 조회 (큰 배치 크기)
-   */
-  async getChannelVideosInitial(
-    channelId: string,
-    pageToken?: string
-  ): Promise<{
-    videos: YouTubeVideoDto[];
-    nextPageToken?: string;
-    totalResults: number;
-  }> {
-    const maxResults = this.getOptimalBatchSize('initial');
-
-    this.logger.debug('Performing initial video sync', {
-      channelId,
-      maxResults,
-      hasPageToken: !!pageToken,
-    });
-
-    return this.getChannelVideos(channelId, maxResults, pageToken);
-  }
-
-  // ==================== PRIVATE HELPER METHODS ====================
+  // ==================== PRIVATE METHODS ====================
 
   private async getUploadsPlaylistId(channelId: string): Promise<string | null> {
     try {
@@ -658,87 +381,58 @@ export class YouTubeApiService {
               part: 'contentDetails',
             },
           })
-          .pipe(map((response) => response.data))
+          .pipe(map((r) => r.data))
       );
 
-      this.logger.debug('YouTube channel content API 호출 성공', { channelId });
-
-      // 응답값 검증 및 변환
-      const channelContentResponse =
-        await transformAndValidate<YouTubeChannelContentApiResponseDto>({
-          cls: YouTubeChannelContentApiResponseDto,
-          plain: response,
-        });
-
-      this.logger.debug('YouTube channel content API 응답 검증 성공', { channelId });
-
-      if (!channelContentResponse.items || channelContentResponse.items.length === 0) {
-        this.logger.warn('YouTube channel content not found', { channelId });
+      if (!response.items || response.items.length === 0) {
+        this.logger.warn(`YouTube channel content not found: ${channelId}`);
         return null;
       }
 
-      return channelContentResponse.items[0]!.contentDetails.relatedPlaylists.uploads;
+      return response.items[0].contentDetails.relatedPlaylists.uploads || null;
     } catch (error: unknown) {
-      // 유효성 검증 실패 시 상세 로그
-      if (error instanceof Error && error.message.includes('validation')) {
-        this.logger.error('YouTube channel content validation failed', {
-          error: error.message,
-          channelId,
-          validationError: true,
-        });
-        return null; // 이 메서드는 private이므로 null 반환
-      }
-
-      this.logger.warn('Failed to get uploads playlist ID', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        channelId,
-      });
+      this.logger.warn(`Failed to get uploads playlist: ${channelId}`);
       return null;
     }
   }
 
   private async transformVideoData(video: YouTubeVideoApiData): Promise<YouTubeVideoDto> {
     try {
-      // ISO 8601 duration을 초로 변환
       const duration = this.parseDuration(video.contentDetails.duration);
 
-      const videoRawData = {
-        id: video.id,
-        title: video.snippet.title,
-        description: video.snippet.description,
-        publishedAt: new Date(video.snippet.publishedAt),
-        channelId: video.snippet.channelId,
-        channelTitle: video.snippet.channelTitle,
-        thumbnails: {
-          default: video.snippet.thumbnails.default?.url,
-          medium: video.snippet.thumbnails.medium?.url,
-          high: video.snippet.thumbnails.high?.url,
-          standard: video.snippet.thumbnails.standard?.url,
-          maxres: video.snippet.thumbnails.maxres?.url,
-        },
-        statistics: {
-          viewCount: parseInt(video.statistics.viewCount || '0'),
-          likeCount: parseInt(video.statistics.likeCount || '0'),
-          commentCount: parseInt(video.statistics.commentCount || '0'),
-        },
-        duration,
-        tags: video.snippet.tags || [],
-        categoryId: video.snippet.categoryId,
-        liveBroadcastContent: video.snippet.liveBroadcastContent,
-        defaultLanguage: video.snippet.defaultLanguage,
-        url: `https://www.youtube.com/watch?v=${video.id}`,
-      };
-
-      // 응답값 검증 및 변환
       return await transformAndValidate<YouTubeVideoDto>({
         cls: YouTubeVideoDto,
-        plain: videoRawData,
+        plain: {
+          id: video.id,
+          title: video.snippet.title,
+          description: video.snippet.description,
+          publishedAt: new Date(video.snippet.publishedAt),
+          channelId: video.snippet.channelId,
+          channelTitle: video.snippet.channelTitle,
+          thumbnails: {
+            default: video.snippet.thumbnails.default?.url,
+            medium: video.snippet.thumbnails.medium?.url,
+            high: video.snippet.thumbnails.high?.url,
+            standard: video.snippet.thumbnails.standard?.url,
+            maxres: video.snippet.thumbnails.maxres?.url,
+          },
+          statistics: {
+            viewCount: parseInt(video.statistics.viewCount || '0'),
+            likeCount: parseInt(video.statistics.likeCount || '0'),
+            commentCount: parseInt(video.statistics.commentCount || '0'),
+          },
+          duration,
+          tags: video.snippet.tags || [],
+          categoryId: video.snippet.categoryId,
+          liveBroadcastContent: video.snippet.liveBroadcastContent,
+          defaultLanguage: video.snippet.defaultLanguage,
+          url: `https://www.youtube.com/watch?v=${video.id}`,
+        },
       });
     } catch (error: unknown) {
       this.logger.error('YouTube video data validation failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
         videoId: video.id,
-        validationError: true,
       });
       throw ExternalApiException.youtubeApiValidationError();
     }

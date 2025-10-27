@@ -1,13 +1,10 @@
-import { IsString, IsOptional, IsBoolean } from 'class-validator';
+import { IsUUID, IsOptional, IsBoolean } from 'class-validator';
 
 export class SubscribeCreatorDto {
-  @IsString()
-  userId!: string;
-
-  @IsString()
+  @IsUUID()
   creatorId!: string;
 
   @IsOptional()
   @IsBoolean()
-  notificationEnabled?: boolean | undefined = true;
+  notificationEnabled?: boolean;
 }

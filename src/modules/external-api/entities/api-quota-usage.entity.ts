@@ -26,8 +26,4 @@ export class ApiQuotaUsageEntity extends BaseEntityUUID {
 
   @Column({ type: 'text', nullable: true })
   errorMessage?: string | null; // 에러 메시지
-
-  // usedAt, date 필드 제거 - BaseEntityUUID의 createdAt 사용
-  // usedAt → createdAt 대체
-  // date → createdAt에서 날짜 부분 추출하여 집계에 사용
 }

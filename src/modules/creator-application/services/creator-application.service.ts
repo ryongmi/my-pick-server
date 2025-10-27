@@ -1,21 +1,19 @@
-import { Injectable, Logger, HttpException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
-import { EntityManager } from 'typeorm';
-import { plainToInstance } from 'class-transformer';
+import { DataSource } from 'typeorm';
 
+import { PlatformType as CommonPlatformType } from '@common/enums/index.js';
+
+import { CreatorService } from '../../creator/services/creator.service.js';
+import { CreatorPlatformService } from '../../creator/services/creator-platform.service.js';
+import { YouTubeApiService } from '../../external-api/services/youtube-api.service.js';
+import { CreatorApplicationRepository } from '../repositories/creator-application.repository.js';
 import {
-  CreatorApplicationRepository,
-  CreatorApplicationChannelInfoRepository,
-  CreatorApplicationSampleVideoRepository,
-  CreatorApplicationReviewRepository,
-} from '../repositories/index.js';
-import { CreatorApplicationEntity } from '../entities/index.js';
-import { ApplicationStatus } from '../enums/index.js';
-import {
-  ApplicationDetailDto,
-  NormalizedApplicationDetailDto,
-  CreateApplicationDto,
-} from '../dto/index.js';
+  CreatorApplicationEntity,
+  PlatformType,
+  ApplicationStatus,
+} from '../entities/creator-application.entity.js';
+import { CreateApplicationDto, ApplicationDetailDto } from '../dto/index.js';
 import { CreatorApplicationException } from '../exceptions/index.js';
 
 @Injectable()
@@ -24,366 +22,275 @@ export class CreatorApplicationService {
 
   constructor(
     private readonly applicationRepo: CreatorApplicationRepository,
-    private readonly channelInfoRepo: CreatorApplicationChannelInfoRepository,
-    private readonly sampleVideoRepo: CreatorApplicationSampleVideoRepository,
-    private readonly reviewRepo: CreatorApplicationReviewRepository
+    private readonly youtubeApi: YouTubeApiService,
+    private readonly creatorService: CreatorService,
+    private readonly creatorPlatformService: CreatorPlatformService,
+    private readonly dataSource: DataSource
   ) {}
 
-  // ==================== PUBLIC METHODS ====================
+  // ==================== PUBLIC METHODS (사용자) ====================
 
-  // 기본 조회 메서드들
-  async findById(applicationId: string): Promise<CreatorApplicationEntity | null> {
-    return this.applicationRepo.findOneById(applicationId);
-  }
-
-  async findByIdOrFail(applicationId: string): Promise<CreatorApplicationEntity> {
-    const application = await this.findById(applicationId);
-    if (!application) {
-      this.logger.warn('Application not found', { applicationId });
-      throw CreatorApplicationException.applicationNotFound();
+  /**
+   * 크리에이터 신청 제출
+   */
+  async submitApplication(userId: string, dto: CreateApplicationDto): Promise<string> {
+    // 1. 중복 신청 체크 (PENDING 상태만)
+    const hasActive = await this.applicationRepo.hasActiveApplication(userId);
+    if (hasActive) {
+      throw CreatorApplicationException.activeApplicationExists();
     }
-    return application;
-  }
 
-  async findByIds(applicationIds: string[]): Promise<CreatorApplicationEntity[]> {
-    if (applicationIds.length === 0) {
-      return [];
+    // 2. YouTube API로 채널 정보 검증 (실제 존재하는 채널인지)
+    if (dto.platform === PlatformType.YOUTUBE) {
+      const channelInfo = await this.youtubeApi.getChannelInfo(dto.channelId);
+      if (!channelInfo) {
+        throw CreatorApplicationException.channelNotFound();
+      }
+
+      // 3. 이미 등록된 채널인지 확인
+      const existingPlatform = await this.creatorPlatformService.findByPlatformTypeAndId(
+        CommonPlatformType.YOUTUBE as any,
+        dto.channelId
+      );
+      if (existingPlatform) {
+        throw CreatorApplicationException.channelAlreadyRegistered();
+      }
+
+      // 4. 신청 엔티티 생성 (YouTube 데이터 포함)
+      const channelData: any = {
+        platform: dto.platform,
+        channelId: dto.channelId,
+        channelUrl: dto.channelUrl,
+        channelName: channelInfo.title,
+        subscriberCount: channelInfo.statistics.subscriberCount,
+        videoCount: channelInfo.statistics.videoCount,
+        description: channelInfo.description,
+      };
+
+      if (channelInfo.thumbnails.high || channelInfo.thumbnails.medium) {
+        channelData.thumbnailUrl = channelInfo.thumbnails.high || channelInfo.thumbnails.medium;
+      }
+      if (channelInfo.customUrl) {
+        channelData.customUrl = channelInfo.customUrl;
+      }
+      if (channelInfo.brandingSettings.country) {
+        channelData.country = channelInfo.brandingSettings.country;
+      }
+      channelData.publishedAt = channelInfo.publishedAt.toISOString();
+
+      const applicationData: any = {
+        userId,
+        channelInfo: channelData,
+        status: ApplicationStatus.PENDING,
+        appliedAt: new Date(),
+      };
+
+      if (dto.applicantMessage) {
+        applicationData.applicantMessage = dto.applicantMessage;
+      }
+
+      const application = this.applicationRepo.create(applicationData);
+      const saved = await this.applicationRepo.save(application);
+      const savedEntity = (Array.isArray(saved) ? saved[0] : saved) as CreatorApplicationEntity;
+
+      this.logger.log('Creator application submitted', {
+        applicationId: savedEntity.id,
+        userId,
+        channelId: dto.channelId,
+        channelName: channelInfo.title,
+      });
+
+      return savedEntity.id;
     }
-    return this.applicationRepo.findApplicationsByIds(applicationIds);
+
+    throw CreatorApplicationException.platformNotSupported();
   }
 
-  async findByUserId(userId: string): Promise<CreatorApplicationEntity | null> {
+  /**
+   * 사용자의 활성 신청 조회 (PENDING만)
+   */
+  async findActiveApplication(userId: string): Promise<CreatorApplicationEntity | null> {
     return this.applicationRepo.findOne({
-      where: { userId },
-      order: { appliedAt: 'DESC' },
+      where: { userId, status: ApplicationStatus.PENDING },
     });
   }
 
-  async findByUserIds(userIds: string[]): Promise<CreatorApplicationEntity[]> {
-    if (userIds.length === 0) {
-      return [];
-    }
-    return this.applicationRepo.findByUserIds(userIds);
+  /**
+   * 신청 상태 조회 (사용자)
+   */
+  async getMyApplicationStatus(userId: string): Promise<ApplicationDetailDto | null> {
+    const application = await this.applicationRepo.findLatestByUserId(userId);
+
+    return application;
   }
 
-  // 복합 조회 메서드들
+  /**
+   * 신청 상세 조회 (권한 체크 포함)
+   */
   async getApplicationById(
     applicationId: string,
-    requestUserId?: string
+    requestUserId: string
   ): Promise<ApplicationDetailDto> {
-    try {
-      const application = await this.findByIdOrFail(applicationId);
+    const application = await this.findByIdOrFail(applicationId);
 
-      // 권한 확인 (신청자 본인만 조회 가능, 관리자는 별도 API)
-      if (requestUserId && application.userId !== requestUserId) {
-        this.logger.warn('Unauthorized application access attempt', {
-          applicationId,
-          requestUserId,
-          applicationUserId: application.userId,
-        });
-        throw CreatorApplicationException.notApplicationOwner();
-      }
-
-      const detailDto = plainToInstance(ApplicationDetailDto, application, {
-        excludeExtraneousValues: true,
-      });
-
-      this.logger.debug('Application detail fetched', {
-        applicationId,
-        requestUserId,
-        status: application.status,
-      });
-
-      return detailDto;
-    } catch (error: unknown) {
-      this.handleServiceError(
-        error,
-        'Application detail fetch',
-        { applicationId, requestUserId },
-        CreatorApplicationException.applicationFetchError
-      );
+    // 본인 신청만 조회 가능
+    if (application.userId !== requestUserId) {
+      throw CreatorApplicationException.notApplicationOwner();
     }
+
+    return application;
   }
 
-  async getApplicationStatus(userId: string): Promise<ApplicationDetailDto | null> {
-    try {
-      const application = await this.findByUserId(userId);
+  // ==================== PUBLIC METHODS (관리자) ====================
+
+  /**
+   * 신청 승인 (트랜잭션)
+   */
+  async approveApplication(
+    applicationId: string,
+    reviewerId: string,
+    comment?: string
+  ): Promise<string> {
+    return this.dataSource.transaction(async (manager) => {
+      const application = await manager.findOne(CreatorApplicationEntity, {
+        where: { id: applicationId },
+      });
 
       if (!application) {
-        return null;
+        throw CreatorApplicationException.applicationNotFound();
       }
 
-      const detailDto = plainToInstance(ApplicationDetailDto, application, {
-        excludeExtraneousValues: true,
-      });
-
-      this.logger.debug('Application status fetched', {
-        userId,
-        status: application.status,
-        applicationId: application.id,
-      });
-
-      return detailDto;
-    } catch (error: unknown) {
-      this.handleServiceError(
-        error,
-        'Application status fetch',
-        { userId },
-        CreatorApplicationException.applicationFetchError
-      );
-    }
-  }
-
-  // 정규화된 데이터 조회 메서드
-  async getNormalizedApplicationById(
-    applicationId: string,
-    requestUserId?: string
-  ): Promise<NormalizedApplicationDetailDto> {
-    try {
-      const application = await this.findByIdOrFail(applicationId);
-
-      // 권한 확인 (신청자 본인만 조회 가능, 관리자는 별도 API)
-      if (requestUserId && application.userId !== requestUserId) {
-        this.logger.warn('Unauthorized application access attempt', {
-          applicationId,
-          requestUserId,
-          applicationUserId: application.userId,
-        });
-        throw CreatorApplicationException.notApplicationOwner();
-      }
-
-      // 정규화된 데이터 조회
-      const [channelInfo, sampleVideos, review] = await Promise.all([
-        this.channelInfoRepo.findByApplicationId(applicationId),
-        this.sampleVideoRepo.findByApplicationId(applicationId),
-        this.reviewRepo.findByApplicationId(applicationId),
-      ]);
-
-      const detailDto = plainToInstance(
-        NormalizedApplicationDetailDto,
-        {
-          ...application,
-          channelInfo,
-          sampleVideos,
-          review,
-        },
-        {
-          excludeExtraneousValues: true,
-        }
-      );
-
-      this.logger.debug('Normalized application detail fetched', {
-        applicationId,
-        requestUserId,
-        status: application.status,
-        hasChannelInfo: !!channelInfo,
-        sampleVideoCount: sampleVideos?.length || 0,
-        hasReview: !!review,
-      });
-
-      return detailDto;
-    } catch (error: unknown) {
-      this.handleServiceError(
-        error,
-        'Normalized application detail fetch',
-        { applicationId, requestUserId },
-        CreatorApplicationException.applicationFetchError
-      );
-    }
-  }
-
-  // ==================== 변경 메서드 ====================
-
-  async updateApplication(
-    applicationId: string,
-    updates: Partial<CreatorApplicationEntity>,
-    transactionManager?: EntityManager
-  ): Promise<void> {
-    try {
-      const application = await this.findByIdOrFail(applicationId);
-      
-      Object.assign(application, updates);
-      await this.applicationRepo.updateEntity(application, transactionManager);
-
-      this.logger.log('Application updated successfully', {
-        applicationId,
-        updatedFields: Object.keys(updates),
-      });
-    } catch (error: unknown) {
-      this.handleServiceError(
-        error,
-        'Application update',
-        { applicationId, updates },
-        CreatorApplicationException.applicationUpdateError
-      );
-    }
-  }
-
-  async deleteApplication(applicationId: string): Promise<void> {
-    try {
-      const application = await this.findByIdOrFail(applicationId);
-      
-      // 정규화된 데이터 먼저 삭제
-      await Promise.all([
-        this.channelInfoRepo.deleteByApplicationId(applicationId),
-        this.sampleVideoRepo.deleteByApplicationId(applicationId),
-        this.reviewRepo.deleteByApplicationId(applicationId),
-      ]);
-
-      // 메인 신청서 삭제
-      await this.applicationRepo.remove(application);
-
-      this.logger.log('Application deleted successfully', {
-        applicationId,
-        userId: application.userId,
-      });
-    } catch (error: unknown) {
-      this.handleServiceError(
-        error,
-        'Application deletion',
-        { applicationId },
-        CreatorApplicationException.applicationDeleteError
-      );
-    }
-  }
-
-  // ==================== 집계 메서드 ====================
-
-  async countByUserId(userId: string): Promise<number> {
-    return this.applicationRepo.count({ where: { userId } });
-  }
-
-  async hasActiveApplication(userId: string): Promise<boolean> {
-    const count = await this.applicationRepo.countActiveApplications(userId);
-    return count > 0;
-  }
-
-  // ==================== OrchestrationService 지원 메서드 ====================
-
-  async createApplication(
-    dto: CreateApplicationDto,
-    transactionManager?: EntityManager
-  ): Promise<string> {
-    try {
-      // 1. 활성 신청 중복 확인
-      const existingApplication = await this.findByUserId(dto.userId);
-      if (existingApplication && existingApplication.status === ApplicationStatus.PENDING) {
-        this.logger.warn('Active application already exists', {
-          userId: dto.userId,
-          existingApplicationId: existingApplication.id,
-        });
-        throw CreatorApplicationException.activeApplicationExists();
-      }
-
-      // 2. 신청 엔티티 생성
-      const application = new CreatorApplicationEntity();
-      Object.assign(application, {
-        userId: dto.userId,
-        status: ApplicationStatus.PENDING,
-        applicantMessage: dto.applicantMessage,
-        priority: dto.priority || 0,
-      });
-
-      // 3. 저장
-      const savedApplication = await this.applicationRepo.saveEntity(application, transactionManager);
-
-      this.logger.log('Creator application created successfully', {
-        applicationId: savedApplication.id,
-        userId: dto.userId,
-        platform: dto.channelInfo?.platform,
-        subscriberCount: dto.subscriberCount,
-        category: dto.contentCategory,
-      });
-
-      return savedApplication.id;
-    } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      this.logger.error('Creator application creation failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        userId: dto.userId,
-        platform: dto.channelInfo?.platform,
-      });
-      throw CreatorApplicationException.applicationCreateError();
-    }
-  }
-
-  async updateApplicationStatus(
-    applicationId: string,
-    status: ApplicationStatus,
-    reviewerId: string,
-    transactionManager?: EntityManager
-  ): Promise<void> {
-    try {
-      const application = await this.findByIdOrFail(applicationId);
-
-      // 상태 검증
       if (application.status !== ApplicationStatus.PENDING) {
-        this.logger.warn('Application already reviewed', {
-          applicationId,
-          currentStatus: application.status,
-          reviewerId,
-        });
         throw CreatorApplicationException.applicationAlreadyReviewed();
       }
 
-      // 자기 신청 검토 방지
-      if (application.userId === reviewerId) {
-        this.logger.warn('Reviewer cannot review own application', {
-          applicationId,
-          userId: application.userId,
-          reviewerId,
-        });
-        throw CreatorApplicationException.cannotReviewOwnApplication();
+      const channelInfo = application.channelInfo;
+
+      // 1. Creator 생성 (CreatorService의 createFromApplication 사용)
+      const creator = await this.creatorService.createFromApplication(
+        application.userId,
+        applicationId,
+        channelInfo
+      );
+
+      // 2. CreatorPlatform 생성
+      const platformData: any = {
+        creatorId: creator.id,
+        platformType: CommonPlatformType.YOUTUBE,
+        platformId: channelInfo.channelId,
+        isActive: true,
+      };
+
+      if (channelInfo.customUrl !== undefined) {
+        platformData.platformUsername = channelInfo.customUrl;
+      }
+      if (channelInfo.channelUrl !== undefined) {
+        platformData.platformUrl = channelInfo.channelUrl;
       }
 
-      // 상태 업데이트
-      application.status = status;
-      application.reviewedAt = new Date();
-      application.reviewerId = reviewerId;
+      await this.creatorPlatformService.createPlatform(platformData);
 
-      await this.applicationRepo.saveEntity(application, transactionManager);
+      // 3. 신청 상태 업데이트
+      application.status = ApplicationStatus.APPROVED;
 
-      this.logger.log('Application status updated successfully', {
-        applicationId,
-        userId: application.userId,
+      const reviewInfoData: any = {
         reviewerId,
-        status,
-      });
-    } catch (error: unknown) {
-      if (error instanceof HttpException) {
-        throw error;
+        reviewedAt: new Date().toISOString(),
+      };
+      if (comment) {
+        reviewInfoData.comment = comment;
       }
+      application.reviewInfo = reviewInfoData;
 
-      this.logger.error('Application status update failed', {
-        error: error instanceof Error ? error.message : 'Unknown error',
+      await manager.save(application);
+
+      this.logger.log('Creator application approved', {
         applicationId,
-        status,
+        creatorId: creator.id,
         reviewerId,
       });
-      throw CreatorApplicationException.applicationUpdateError();
+
+      return creator.id;
+    });
+  }
+
+  /**
+   * 신청 거부
+   */
+  async rejectApplication(
+    applicationId: string,
+    reviewerId: string,
+    reason: string,
+    comment?: string
+  ): Promise<void> {
+    const application = await this.findByIdOrFail(applicationId);
+
+    if (application.status !== ApplicationStatus.PENDING) {
+      throw CreatorApplicationException.applicationAlreadyReviewed();
     }
+
+    application.status = ApplicationStatus.REJECTED;
+
+    const reviewInfoData: any = {
+      reviewerId,
+      reviewedAt: new Date().toISOString(),
+      reason,
+    };
+    if (comment) {
+      reviewInfoData.comment = comment;
+    }
+    application.reviewInfo = reviewInfoData;
+
+    await this.applicationRepo.save(application);
+
+    this.logger.log('Creator application rejected', {
+      applicationId,
+      reviewerId,
+      reason,
+    });
+  }
+
+  /**
+   * 신청 목록 조회 (관리자, 페이지네이션)
+   */
+  async searchApplications(options: {
+    status?: ApplicationStatus;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ applications: CreatorApplicationEntity[]; total: number }> {
+    const [applications, total] = await this.applicationRepo.searchApplications(options);
+
+    return { applications, total };
+  }
+
+  /**
+   * 신청 통계 조회 (관리자)
+   */
+  async getApplicationStats(): Promise<{
+    pending: number;
+    approved: number;
+    rejected: number;
+    total: number;
+  }> {
+    const pending = await this.applicationRepo.countByStatus(ApplicationStatus.PENDING);
+    const approved = await this.applicationRepo.countByStatus(ApplicationStatus.APPROVED);
+    const rejected = await this.applicationRepo.countByStatus(ApplicationStatus.REJECTED);
+
+    return {
+      pending,
+      approved,
+      rejected,
+      total: pending + approved + rejected,
+    };
   }
 
   // ==================== PRIVATE HELPER METHODS ====================
 
-  private handleServiceError(
-    error: unknown,
-    operation: string,
-    context: Record<string, unknown>,
-    fallbackException: () => HttpException
-  ): never {
-    if (error instanceof HttpException) {
-      throw error;
+  async findByIdOrFail(id: string): Promise<CreatorApplicationEntity> {
+    const application = await this.applicationRepo.findOne({ where: { id } });
+    if (!application) {
+      throw CreatorApplicationException.applicationNotFound();
     }
-
-    this.logger.error(`${operation} failed`, {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      ...context,
-    });
-
-    throw fallbackException();
+    return application;
   }
 }

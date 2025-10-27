@@ -1,18 +1,20 @@
-import { Entity, PrimaryColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, Index } from 'typeorm';
 
 @Entity('user_subscriptions')
+@Index(['userId'])
+@Index(['creatorId'])
+@Index(['userId', 'creatorId'], { unique: true })
+@Index(['notificationEnabled'])
 export class UserSubscriptionEntity {
   @PrimaryColumn({ type: 'uuid' })
-  userId!: string;
+  userId!: string; // 외래키 (auth-server User.id)
 
   @PrimaryColumn({ type: 'uuid' })
-  creatorId!: string;
+  creatorId!: string; // 외래키 (CreatorEntity.id)
 
   @Column({ default: true })
   notificationEnabled!: boolean;
 
   @CreateDateColumn()
   subscribedAt!: Date;
-
-  // FK 없이 creatorId 저장해서 직접 조회
 }

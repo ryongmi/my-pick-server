@@ -6,7 +6,7 @@ import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn, Inde
 @Index(['moderatedAt']) // 모더레이션 일시 조회 최적화
 @Index(['moderationStatus', 'moderatedAt']) // 상태별 최신순 조회 최적화
 export class ContentModerationEntity {
-  @PrimaryColumn({ comment: '외래키(content.id)이자 기본키 - 1:1 관계 최적화' })
+  @PrimaryColumn({ type: 'uuid', comment: '외래키(content.id)이자 기본키 - 1:1 관계 최적화' })
   contentId!: string;
 
   @Column({
@@ -22,19 +22,19 @@ export class ContentModerationEntity {
     nullable: true,
     comment: '상태 변경 사유',
   })
-  reason?: string | null;
+  reason?: string;
 
   @Column({
     nullable: true,
     comment: '모더레이션 처리자 ID',
   })
-  moderatorId?: string | null;
+  moderatorId?: string;
 
   @Column({
     nullable: true,
     comment: '모더레이션 처리 시간',
   })
-  moderatedAt?: Date | null;
+  moderatedAt?: Date;
 
   @CreateDateColumn()
   createdAt!: Date;

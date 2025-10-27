@@ -51,7 +51,7 @@ export class ApiQuotaUsageRepository extends BaseRepository<ApiQuotaUsageEntity>
     };
   }
 
-  async getTotalRecordCount(): Promise<number> {
-    return this.count();
-  }
+  // async getTotalRecordCount(): Promise<number> {
+  //   return this.count();
+  // }
 }

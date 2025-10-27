@@ -1,18 +1,10 @@
 import { Injectable } from '@nestjs/common';
 
-import { DataSource, In } from 'typeorm';
+import { DataSource } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
 
-
-import { CreatorPlatformEntity } from '../entities/index.js';
-
-export interface PlatformStats {
-  totalFollowers: number;
-  totalContent: number;
-  totalViews: number;
-  platformCount: number;
-}
+import { CreatorPlatformEntity } from '../entities/creator-platform.entity.js';
 
 @Injectable()
 export class CreatorPlatformRepository extends BaseRepository<CreatorPlatformEntity> {
@@ -20,140 +12,61 @@ export class CreatorPlatformRepository extends BaseRepository<CreatorPlatformEnt
     super(CreatorPlatformEntity, dataSource);
   }
 
-  // ==================== 배치 처리 조회 메서드 ====================
+  // async findByCreatorId(creatorId: string): Promise<CreatorPlatformEntity[]> {
+  //   return this.find({
+  //     where: { creatorId, isActive: true },
+  //   });
+  // }
 
-  /**
-   * 여러 크리에이터의 플랫폼 목록 조회 (배치 처리)
-   */
-  async findByCreatorIds(creatorIds: string[]): Promise<Record<string, CreatorPlatformEntity[]>> {
-    if (creatorIds.length === 0) return {};
+  // async findByPlatformTypeAndId(
+  //   platformType: PlatformType,
+  //   platformId: string
+  // ): Promise<CreatorPlatformEntity | null> {
+  //   return this.findOne({
+  //     where: { platformType, platformId },
+  //   });
+  // }
 
-    const platforms = await this.find({
-      where: { creatorId: In(creatorIds) },
-      order: { createdAt: 'DESC' },
-    });
-
-    const platformMap: Record<string, CreatorPlatformEntity[]> = {};
-
-    creatorIds.forEach((creatorId) => {
-      platformMap[creatorId] = [];
-    });
-
-    platforms.forEach((platform) => {
-      const creatorId = platform.creatorId;
-
-      if (!platformMap[creatorId]) {
-        platformMap[creatorId] = [];
-      }
-      platformMap[creatorId].push(platform);
-    });
-
-    return platformMap;
-  }
-
-  /**
-   * 여러 크리에이터의 활성 플랫폼 조회 (배치 처리)
-   */
-  async findActiveByCreatorIds(
-    creatorIds: string[]
-  ): Promise<Record<string, CreatorPlatformEntity[]>> {
-    if (creatorIds.length === 0) return {};
-
-    const platforms = await this.find({
-      where: { creatorId: In(creatorIds), isActive: true },
-      order: { createdAt: 'DESC' },
-    });
-
-    const platformMap: Record<string, CreatorPlatformEntity[]> = {};
-
-    creatorIds.forEach((creatorId) => {
-      platformMap[creatorId] = [];
-    });
-
-    platforms.forEach((platform) => {
-      const creatorId = platform.creatorId;
-
-      if (!platformMap[creatorId]) {
-        platformMap[creatorId] = [];
-      }
-      platformMap[creatorId].push(platform);
-    });
-
-    return platformMap;
-  }
-
-  // ==================== 통계 집계 메서드 ====================
-
-  /**
-   * 크리에이터별 플랫폼 통계 집계
-   */
-  async getStatsByCreatorId(creatorId: string): Promise<PlatformStats> {
+  async findWithCreator(platformId: string): Promise<{
+    platform: CreatorPlatformEntity;
+    creator: { id: string; name: string; profileImageUrl?: string };
+  } | null> {
     const result = await this.createQueryBuilder('platform')
       .select([
-        'SUM(platform.followerCount) as totalFollowers',
-        'SUM(platform.contentCount) as totalContent',
-        'SUM(platform.totalViews) as totalViews',
-        'COUNT(platform.id) as platformCount',
+        'platform.id',
+        'platform.creatorId',
+        'platform.platformType',
+        'platform.platformId',
+        'platform.platformUsername',
+        'platform.platformUrl',
+        'platform.syncProgress',
+        'platform.isActive',
+        'creator.id',
+        'creator.name',
+        'creator.profileImageUrl',
       ])
-      .where('platform.creatorId = :creatorId', { creatorId })
-      .andWhere('platform.isActive = :isActive', { isActive: true })
+      .innerJoin('creators', 'creator', 'creator.id = platform.creatorId')
+      .where('platform.id = :platformId', { platformId })
       .getRawOne();
 
+    if (!result) return null;
+
     return {
-      totalFollowers: parseInt(result.totalFollowers) || 0,
-      totalContent: parseInt(result.totalContent) || 0,
-      totalViews: parseInt(result.totalViews) || 0,
-      platformCount: parseInt(result.platformCount) || 0,
+      platform: {
+        id: result.platform_id,
+        creatorId: result.platform_creatorId,
+        platformType: result.platform_platformType,
+        platformId: result.platform_platformId,
+        platformUsername: result.platform_platformUsername,
+        platformUrl: result.platform_platformUrl,
+        syncProgress: result.platform_syncProgress,
+        isActive: result.platform_isActive,
+      } as CreatorPlatformEntity,
+      creator: {
+        id: result.creator_id,
+        name: result.creator_name,
+        profileImageUrl: result.creator_profileImageUrl,
+      },
     };
-  }
-
-  /**
-   * 여러 크리에이터의 플랫폼 통계 집계 (배치 처리)
-   */
-  async getStatsByCreatorIds(creatorIds: string[]): Promise<Record<string, PlatformStats>> {
-    if (creatorIds.length === 0) return {};
-
-    const results: Array<{
-      creatorId: string;
-      totalFollowers: string;
-      totalContent: string;
-      totalViews: string;
-      platformCount: string;
-    }> = await this.createQueryBuilder('platform')
-      .select([
-        'platform.creatorId as creatorId',
-        'SUM(platform.followerCount) as totalFollowers',
-        'SUM(platform.contentCount) as totalContent',
-        'SUM(platform.totalViews) as totalViews',
-        'COUNT(platform.id) as platformCount',
-      ])
-      .where('platform.creatorId IN (:...creatorIds)', { creatorIds })
-      .andWhere('platform.isActive = :isActive', { isActive: true })
-      .groupBy('platform.creatorId')
-      .getRawMany();
-
-    const statsMap: Record<string, PlatformStats> = {};
-
-    // 모든 크리에이터에 대해 기본값 설정
-    creatorIds.forEach((creatorId) => {
-      statsMap[creatorId] = {
-        totalFollowers: 0,
-        totalContent: 0,
-        totalViews: 0,
-        platformCount: 0,
-      };
-    });
-
-    // 실제 데이터로 업데이트
-    results.forEach((result) => {
-      statsMap[result.creatorId] = {
-        totalFollowers: parseInt(result.totalFollowers) || 0,
-        totalContent: parseInt(result.totalContent) || 0,
-        totalViews: parseInt(result.totalViews) || 0,
-        platformCount: parseInt(result.platformCount) || 0,
-      };
-    });
-
-    return statsMap;
   }
 }

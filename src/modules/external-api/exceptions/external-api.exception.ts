@@ -4,7 +4,6 @@ import {
   InternalServerErrorException,
   BadRequestException,
   ServiceUnavailableException,
-  // TooManyRequestsException, // NestJS에서 제공하지 않음
 } from '@nestjs/common';
 
 export class ExternalApiException {

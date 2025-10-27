@@ -1,226 +1,181 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 
-import { ContentCategoryRepository, type CategoryStats } from '../repositories/index.js';
-import { ContentCategoryEntity } from '../entities/index.js';
-import { ContentException } from '../exceptions/index.js';
+import { ContentCategoryRepository } from '../repositories/content-category.repository.js';
+import { ContentCategoryEntity } from '../entities/content-category.entity.js';
+
+import { ContentService } from './content.service.js';
+
+export interface AddCategoryDto {
+  contentId: string;
+  category: string;
+  isPrimary?: boolean;
+  subcategory?: string;
+  confidence?: number;
+  source?: 'manual' | 'ai' | 'platform';
+  classifiedBy?: string;
+}
 
 @Injectable()
 export class ContentCategoryService {
   private readonly logger = new Logger(ContentCategoryService.name);
 
-  constructor(private readonly categoryRepo: ContentCategoryRepository) {}
+  constructor(
+    private readonly contentCategoryRepository: ContentCategoryRepository,
+    // 순환 참조 방지를 위해 Inject + forwardRef 사용
+    @Inject(forwardRef(() => ContentService))
+    private readonly contentService: ContentService
+  ) {}
 
   // ==================== PUBLIC METHODS ====================
 
+  /**
+   * 콘텐츠의 모든 카테고리 조회
+   */
   async findByContentId(contentId: string): Promise<ContentCategoryEntity[]> {
-    return await this.categoryRepo.findByContentId(contentId);
+    return this.contentCategoryRepository.findByContentId(contentId);
   }
 
-  async findByCategory(category: string): Promise<ContentCategoryEntity[]> {
-    return await this.categoryRepo.findByCategory(category);
+  /**
+   * 콘텐츠의 주 카테고리 조회
+   */
+  async findPrimaryByContentId(contentId: string): Promise<ContentCategoryEntity | null> {
+    return this.contentCategoryRepository.findPrimaryByContentId(contentId);
   }
 
-  async getPrimaryCategory(contentId: string): Promise<ContentCategoryEntity | null> {
-    return await this.categoryRepo.getPrimaryCategory(contentId);
+  /**
+   * 특정 카테고리의 콘텐츠 ID 목록 조회
+   */
+  async findContentIdsByCategory(category: string): Promise<string[]> {
+    return this.contentCategoryRepository.findContentIdsByCategory(category);
   }
 
-  async getCategoryStats(category?: string): Promise<CategoryStats[]> {
-    try {
-      return await this.categoryRepo.getCategoryStats(category);
-    } catch (error: unknown) {
-      this.logger.error('Failed to get category stats', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        category,
+  /**
+   * 카테고리 추가
+   */
+  async addCategory(dto: AddCategoryDto): Promise<ContentCategoryEntity> {
+    // 외래키 검증: Content가 존재하는지 확인
+    await this.contentService.findByIdOrFail(dto.contentId);
+
+    // 중복 체크
+    const existing = await this.contentCategoryRepository.findOne({
+      where: {
+        contentId: dto.contentId,
+        category: dto.category,
+      },
+    });
+
+    if (existing) {
+      this.logger.warn('Category already exists', {
+        contentId: dto.contentId,
+        category: dto.category,
       });
-      throw ContentException.contentStatisticsFetchError();
+      return existing;
     }
-  }
 
-  async getTopCategories(limit = 10): Promise<Array<{ category: string; contentCount: number }>> {
-    try {
-      return await this.categoryRepo.getTopCategories(limit);
-    } catch (error: unknown) {
-      this.logger.error('Failed to get top categories', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        limit,
-      });
-      throw ContentException.contentStatisticsFetchError();
+    // 주 카테고리 설정 시 기존 주 카테고리 해제
+    if (dto.isPrimary) {
+      const currentPrimary = await this.findPrimaryByContentId(dto.contentId);
+      if (currentPrimary) {
+        await this.contentCategoryRepository.update(
+          {
+            contentId: dto.contentId,
+            category: currentPrimary.category,
+          },
+          { isPrimary: false }
+        );
+      }
     }
-  }
 
-  // ==================== 변경 메서드 ====================
-
-  async assignCategoriesToContent(
-    contentId: string,
-    categories: Array<{
+    const categoryData: {
+      contentId: string;
       category: string;
-      isPrimary?: boolean;
+      isPrimary: boolean;
+      confidence: number;
+      source: 'manual' | 'ai' | 'platform';
       subcategory?: string;
-      confidence?: number;
-      source?: 'manual' | 'ai' | 'platform';
       classifiedBy?: string;
-    }>
-  ): Promise<void> {
-    if (categories.length === 0) return;
-
-    try {
-      // 기존 카테고리 제거
-      await this.categoryRepo.removeContentCategories(contentId);
-
-      // 새 카테고리 배치 생성
-      const categoryEntities = categories.map((cat) => {
-        const entity: {
-          contentId: string;
-          category: string;
-          isPrimary: boolean;
-          confidence: number;
-          source: 'manual' | 'ai' | 'platform';
-          subcategory?: string;
-          classifiedBy?: string;
-        } = {
-          contentId,
-          category: cat.category,
-          isPrimary: cat.isPrimary || false,
-          confidence: cat.confidence || 1.0,
-          source: cat.source || ('platform' as const),
-        };
-
-        if (cat.subcategory) {
-          entity.subcategory = cat.subcategory;
-        }
-
-        if (cat.classifiedBy) {
-          entity.classifiedBy = cat.classifiedBy;
-        }
-
-        return entity;
-      });
-
-      await this.categoryRepo.batchCreateCategories(categoryEntities);
-
-      this.logger.log('Categories assigned to content', {
-        contentId,
-        categoryCount: categories.length,
-        primaryCount: categories.filter((c) => c.isPrimary).length,
-      });
-    } catch (error: unknown) {
-      this.logger.error('Failed to assign categories to content', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        contentId,
-        categoryCount: categories.length,
-      });
-      throw ContentException.contentCategoryUpdateError();
+    } = {
+      contentId: dto.contentId,
+      category: dto.category,
+      isPrimary: dto.isPrimary ?? false,
+      confidence: dto.confidence ?? 1.0,
+      source: dto.source ?? 'platform',
+    };
+    if (dto.subcategory !== undefined) {
+      categoryData.subcategory = dto.subcategory;
     }
+    if (dto.classifiedBy !== undefined) {
+      categoryData.classifiedBy = dto.classifiedBy;
+    }
+
+    const category = this.contentCategoryRepository.create(categoryData);
+
+    const saved = await this.contentCategoryRepository.save(category);
+
+    this.logger.debug('Category added to content', {
+      contentId: dto.contentId,
+      category: dto.category,
+      isPrimary: dto.isPrimary,
+    });
+
+    return saved;
   }
 
-  async updateCategoryConfidence(
-    contentId: string,
-    category: string,
-    confidence: number
-  ): Promise<void> {
-    if (confidence < 0 || confidence > 1) {
-      throw ContentException.invalidContentData();
-    }
+  /**
+   * 카테고리 배치 추가 (YouTube 동기화용)
+   */
+  async addBatch(dtos: AddCategoryDto[]): Promise<ContentCategoryEntity[]> {
+    const categories = dtos.map((dto) => {
+      const categoryData: {
+        contentId: string;
+        category: string;
+        isPrimary: boolean;
+        confidence: number;
+        source: 'manual' | 'ai' | 'platform';
+        subcategory?: string;
+        classifiedBy?: string;
+      } = {
+        contentId: dto.contentId,
+        category: dto.category,
+        isPrimary: dto.isPrimary ?? false,
+        confidence: dto.confidence ?? 1.0,
+        source: dto.source ?? 'platform',
+      };
+      if (dto.subcategory !== undefined) {
+        categoryData.subcategory = dto.subcategory;
+      }
+      if (dto.classifiedBy !== undefined) {
+        categoryData.classifiedBy = dto.classifiedBy;
+      }
 
-    try {
-      await this.categoryRepo.updateCategoryConfidence(contentId, category, confidence);
+      return this.contentCategoryRepository.create(categoryData);
+    });
 
-      this.logger.log('Category confidence updated', {
-        contentId,
-        category,
-        confidence,
-      });
-    } catch (error: unknown) {
-      this.logger.error('Failed to update category confidence', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        contentId,
-        category,
-        confidence,
-      });
-      throw ContentException.contentCategoryUpdateError();
-    }
+    const saved = await this.contentCategoryRepository.saveBatch(categories);
+
+    this.logger.debug('Categories batch added', { count: saved.length });
+
+    return saved;
   }
 
-  async removeContentCategories(contentId: string): Promise<void> {
-    try {
-      await this.categoryRepo.removeContentCategories(contentId);
+  /**
+   * 카테고리 삭제
+   */
+  async removeCategory(contentId: string, category: string): Promise<void> {
+    await this.contentCategoryRepository.delete({
+      contentId,
+      category,
+    });
 
-      this.logger.log('Content categories removed', {
-        contentId,
-      });
-    } catch (error: unknown) {
-      this.logger.error('Failed to remove content categories', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        contentId,
-      });
-      throw ContentException.contentCategoryDeleteError();
-    }
+    this.logger.debug('Category removed from content', { contentId, category });
   }
 
-  // ==================== AI 분류 관련 메서드 ====================
+  /**
+   * 콘텐츠의 모든 카테고리 삭제
+   */
+  async removeAllByContentId(contentId: string): Promise<void> {
+    await this.contentCategoryRepository.deleteByContentId(contentId);
 
-  async getAIClassifiedCategories(minConfidence = 0.8): Promise<ContentCategoryEntity[]> {
-    try {
-      return await this.categoryRepo.getAIClassifiedCategories(minConfidence);
-    } catch (error: unknown) {
-      this.logger.error('Failed to get AI classified categories', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        minConfidence,
-      });
-      throw ContentException.contentStatisticsFetchError();
-    }
+    this.logger.debug('All categories removed from content', { contentId });
   }
-
-  async batchUpdateConfidenceScores(
-    updates: Array<{ contentId: string; category: string; confidence: number }>
-  ): Promise<void> {
-    if (updates.length === 0) return;
-
-    try {
-      await this.categoryRepo.updateBatchConfidenceScores(updates);
-
-      this.logger.log('Batch confidence scores updated', {
-        updateCount: updates.length,
-      });
-    } catch (error: unknown) {
-      this.logger.error('Failed to batch update confidence scores', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        updateCount: updates.length,
-      });
-      throw ContentException.contentCategoryUpdateError();
-    }
-  }
-
-  // ==================== 통계 및 분석 메서드 ====================
-
-  async getCategoryDistribution(): Promise<
-    Array<{ category: string; count: number; percentage: number }>
-  > {
-    try {
-      return await this.categoryRepo.getCategoryDistribution();
-    } catch (error: unknown) {
-      this.logger.error('Failed to get category distribution', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      throw ContentException.contentStatisticsFetchError();
-    }
-  }
-
-  async getContentsByCategory(category: string, limit = 50): Promise<string[]> {
-    try {
-      const categories = await this.categoryRepo.findByCategory(category);
-      return categories.slice(0, limit).map((c) => c.contentId);
-    } catch (error: unknown) {
-      this.logger.error('Failed to get contents by category', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        category,
-        limit,
-      });
-      throw ContentException.contentStatisticsFetchError();
-    }
-  }
-
-  // ==================== PRIVATE HELPER METHODS ====================
-
-  // 향후 AI 기반 카테고리 분류 로직을 위한 메서드 예약
 }

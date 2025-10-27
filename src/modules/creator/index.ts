@@ -1,13 +1,5 @@
-export { CreatorModule } from './creator.module.js';
-
-// Entities
+export * from './creator.module.js';
 export * from './entities/index.js';
-
-// Services
+export * from './repositories/index.js';
 export * from './services/index.js';
-
-// DTOs
 export * from './dto/index.js';
-
-// Exceptions
-export * from './exceptions/index.js';

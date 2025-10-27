@@ -6,8 +6,8 @@ import { Entity, PrimaryColumn, Column, CreateDateColumn, Index } from 'typeorm'
 @Index(['contentId', 'tag'], { unique: true })
 @Index(['tag', 'source'])
 export class ContentTagEntity {
-  @PrimaryColumn()
-  contentId!: string;
+  @PrimaryColumn({ type: 'uuid' })
+  contentId!: string; // 외래키 (ContentEntity.id)
 
   @PrimaryColumn()
   tag!: string;
@@ -19,7 +19,7 @@ export class ContentTagEntity {
   relevanceScore!: number; // 관련성 점수 (0.0-1.0)
 
   @Column({ nullable: true })
-  addedBy?: string | null; // 태그 추가자 ID
+  addedBy?: string; // 태그 추가자 ID
 
   @Column({ default: 0 })
   usageCount!: number; // 이 태그가 사용된 횟수 (전체 콘텐츠 기준)

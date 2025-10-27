@@ -424,7 +424,7 @@ export class QuotaMonitorService {
       const [youtubeUsage, twitterUsage, totalRecords] = await Promise.all([
         this.getDailyQuotaUsage(ApiProvider.YOUTUBE, today).catch(() => null),
         this.getDailyQuotaUsage(ApiProvider.TWITTER, today).catch(() => null),
-        this.quotaUsageRepo.getTotalRecordCount(),
+        this.quotaUsageRepo.count(),
       ]);
 
       return {

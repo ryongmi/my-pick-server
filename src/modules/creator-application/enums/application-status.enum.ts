@@ -1,5 +1,5 @@
 export enum ApplicationStatus {
-  PENDING = 'pending',
-  APPROVED = 'approved',
-  REJECTED = 'rejected',
+  PENDING = 'pending', // 검토 대기
+  APPROVED = 'approved', // 승인됨
+  REJECTED = 'rejected', // 거부됨
 }

@@ -1,2 +1,2 @@
-export * from './youtube.dto.js';
-export * from './twitter.dto.js';
+export * from './youtube-channel.dto.js';
+export * from './youtube-video.dto.js';

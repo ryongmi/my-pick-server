@@ -2,44 +2,59 @@ import { Entity, Column, Index } from 'typeorm';
 
 import { BaseEntityUUID } from '@krgeobuk/core/entities';
 
-import { PlatformType, SyncStatus } from '@common/enums/index.js';
+export enum PlatformType {
+  YOUTUBE = 'youtube',
+  TWITTER = 'twitter',
+}
+
+export enum VideoSyncStatus {
+  NOT_SYNCED = 'not_synced',
+  IN_PROGRESS = 'in_progress',
+  SYNCED = 'synced',
+  FAILED = 'failed',
+}
+
+// JSON 필드 타입 정의
+export interface SyncProgress {
+  videoSyncStatus: VideoSyncStatus;
+  lastVideoSyncAt?: string; // ISO 8601 string
+  syncStartedAt?: string;
+  syncCompletedAt?: string;
+  totalVideoCount?: number;
+  syncedVideoCount?: number;
+  failedVideoCount?: number;
+  failedSyncCount?: number; // 동기화 실패 횟수
+  lastSyncError?: string;
+  syncMetadata?: Record<string, unknown>;
+
+  // Phase 1 & 2: 페이지네이션 지원
+  initialSyncCompleted?: boolean; // 최초 동기화 완료 여부
+  nextPageToken?: string; // YouTube API 페이지네이션 토큰
+}
 
 @Entity('creator_platforms')
-@Index(['creatorId']) // 크리에이터별 플랫폼 조회 최적화
-@Index(['creatorId', 'type']) // 크리에이터별 특정 플랫폼 조회 최적화
-@Index(['creatorId', 'isActive']) // 활성 플랫폼만 조회 최적화
-@Index(['type', 'isActive']) // 플랫폼별 활성 계정 조회 최적화
+@Index(['platformType', 'platformId'], { unique: true })
+@Index(['creatorId'])
+@Index(['platformType', 'isActive'])
 export class CreatorPlatformEntity extends BaseEntityUUID {
   @Column({ type: 'uuid' })
-  creatorId!: string; // FK 없이 creatorId 저장해서 직접 조회
+  creatorId!: string;
 
   @Column({ type: 'enum', enum: PlatformType })
-  type!: PlatformType;
+  platformType!: PlatformType;
 
   @Column()
-  platformId!: string; // 채널 ID, 사용자명 등
-
-  @Column()
-  url!: string;
+  platformId!: string;
 
   @Column({ nullable: true })
-  displayName?: string | null;
+  platformUsername?: string;
 
-  @Column({ default: 0 })
-  followerCount!: number;
+  @Column({ nullable: true })
+  platformUrl?: string;
 
-  @Column({ default: 0 })
-  contentCount!: number;
-
-  @Column({ type: 'bigint', default: 0 })
-  totalViews!: number;
+  @Column({ type: 'json', nullable: true })
+  syncProgress?: SyncProgress;
 
   @Column({ default: true })
   isActive!: boolean;
-
-  @Column({ nullable: true })
-  lastSyncAt?: Date | null;
-
-  @Column({ type: 'enum', enum: SyncStatus, default: SyncStatus.ACTIVE })
-  syncStatus!: SyncStatus;
 }

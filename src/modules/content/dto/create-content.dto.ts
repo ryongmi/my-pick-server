@@ -1,53 +1,9 @@
-import {
-  IsString,
-  IsOptional,
-  IsEnum,
-  IsNumber,
-  IsDateString,
-  ValidateNested,
-  Min,
-  IsBoolean,
-  IsArray,
-} from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsUrl, IsUUID, IsDate, IsNumber, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
+import { PlatformType } from '@common/enums/index.js';
+
 import { ContentType } from '../enums/index.js';
-
-class CreateContentCategoryDto {
-  @IsString()
-  category!: string;
-
-  @IsOptional()
-  @IsBoolean()
-  isPrimary?: boolean;
-
-  @IsOptional()
-  @IsString()
-  subcategory?: string;
-
-  @IsOptional()
-  @IsEnum(['manual', 'ai', 'platform'])
-  source?: 'manual' | 'ai' | 'platform';
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  confidence?: number;
-}
-
-class CreateContentTagDto {
-  @IsString()
-  tag!: string;
-
-  @IsOptional()
-  @IsEnum(['manual', 'ai', 'platform'])
-  source?: 'manual' | 'ai' | 'platform';
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  relevanceScore?: number;
-}
 
 export class CreateContentDto {
   @IsEnum(ContentType)
@@ -60,30 +16,28 @@ export class CreateContentDto {
   @IsString()
   description?: string;
 
-  @IsString()
+  @IsUrl()
   thumbnail!: string;
 
-  @IsString()
+  @IsUrl()
   url!: string;
 
-  @IsString()
-  platform!: string;
+  @IsEnum(PlatformType)
+  platform!: PlatformType;
 
   @IsString()
   platformId!: string;
 
   @IsOptional()
   @IsNumber()
-  @Min(0)
   duration?: number;
 
-  @IsDateString()
-  publishedAt!: string;
+  @IsDate()
+  @Type(() => Date)
+  publishedAt!: Date;
 
-  @IsString()
+  @IsUUID()
   creatorId!: string;
-
-  // ==================== 메타데이터 필드 (JSON에서 개별 필드로 분리) ====================
 
   @IsOptional()
   @IsString()
@@ -100,51 +54,4 @@ export class CreateContentDto {
   @IsOptional()
   @IsBoolean()
   ageRestriction?: boolean;
-
-  // ==================== 분리된 엔티티 데이터 ====================
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateContentCategoryDto)
-  categories?: CreateContentCategoryDto[];
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateContentTagDto)
-  tags?: CreateContentTagDto[];
-
-  // 초기 통계 정보 (외부 API에서 가져온 경우)
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  initialViews?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  initialLikes?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  initialComments?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  initialShares?: number;
-
-  // 데이터 만료 및 동기화 관련 (external-api에서 사용)
-  @IsOptional()
-  @IsDateString()
-  expiresAt?: string;
-
-  @IsOptional()
-  @IsDateString()
-  lastSyncedAt?: string;
-
-  @IsOptional()
-  isAuthorizedData?: boolean;
 }

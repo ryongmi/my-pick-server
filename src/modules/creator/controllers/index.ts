@@ -1,1 +1,0 @@
-export { CreatorController } from './creator.controller.js';

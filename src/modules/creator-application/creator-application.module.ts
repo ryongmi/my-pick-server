@@ -1,78 +1,25 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { CreatorModule } from '../creator/index.js';
+import { CreatorModule } from '../creator/creator.module.js';
+import { ExternalApiModule } from '../external-api/external-api.module.js';
 
+import { CreatorApplicationEntity } from './entities/creator-application.entity.js';
+import { CreatorApplicationRepository } from './repositories/creator-application.repository.js';
+import { CreatorApplicationService } from './services/creator-application.service.js';
 import {
-  CreatorApplicationEntity,
-  CreatorApplicationChannelInfoEntity,
-  CreatorApplicationSampleVideoEntity,
-  CreatorApplicationReviewEntity,
-  CreatorApplicationRequirementEntity,
-} from './entities/index.js';
-import {
-  CreatorApplicationRepository,
-  CreatorApplicationChannelInfoRepository,
-  CreatorApplicationSampleVideoRepository,
-  CreatorApplicationReviewRepository,
-  CreatorApplicationRequirementRepository,
-} from './repositories/index.js';
-import { 
-  CreatorApplicationService,
-  CreatorApplicationOrchestrationService,
-  CreatorApplicationStatisticsService,
-  CreatorApplicationRequirementService,
-  CreatorApplicationReviewService,
-  CreatorApplicationChannelInfoService,
-  CreatorApplicationSampleVideoService,
-} from './services/index.js';
-import { CreatorApplicationController } from './controllers/index.js';
+  CreatorApplicationController,
+  CreatorApplicationAdminController,
+} from './controllers/index.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      CreatorApplicationEntity,
-      CreatorApplicationChannelInfoEntity,
-      CreatorApplicationSampleVideoEntity,
-      CreatorApplicationReviewEntity,
-      CreatorApplicationRequirementEntity,
-    ]),
-    CreatorModule, // CreatorService 사용을 위해 필요
+    TypeOrmModule.forFeature([CreatorApplicationEntity]),
+    CreatorModule, // Creator, CreatorPlatform 서비스 사용
+    ExternalApiModule, // YouTube API 사용
   ],
-  controllers: [CreatorApplicationController],
-  providers: [
-    // Repositories
-    CreatorApplicationRepository,
-    CreatorApplicationChannelInfoRepository,
-    CreatorApplicationSampleVideoRepository,
-    CreatorApplicationReviewRepository,
-    CreatorApplicationRequirementRepository,
-    
-    // Services
-    CreatorApplicationService,
-    CreatorApplicationOrchestrationService,
-    CreatorApplicationStatisticsService,
-    CreatorApplicationRequirementService,
-    CreatorApplicationReviewService,
-    CreatorApplicationChannelInfoService,
-    CreatorApplicationSampleVideoService,
-  ],
-  exports: [
-    // Services
-    CreatorApplicationService,
-    CreatorApplicationOrchestrationService,
-    CreatorApplicationStatisticsService,
-    CreatorApplicationRequirementService,
-    CreatorApplicationReviewService,
-    CreatorApplicationChannelInfoService,
-    CreatorApplicationSampleVideoService,
-    
-    // Repositories  
-    CreatorApplicationRepository,
-    CreatorApplicationChannelInfoRepository,
-    CreatorApplicationSampleVideoRepository,
-    CreatorApplicationReviewRepository,
-    CreatorApplicationRequirementRepository,
-  ],
+  controllers: [CreatorApplicationController, CreatorApplicationAdminController],
+  providers: [CreatorApplicationRepository, CreatorApplicationService],
+  exports: [CreatorApplicationService],
 })
 export class CreatorApplicationModule {}

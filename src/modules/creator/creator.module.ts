@@ -1,73 +1,21 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { RedisModule } from '@database/redis/index.js';
-
-import { UserSubscriptionModule } from '../user-subscription/user-subscription.module.js';
-
-import {
-  CreatorEntity,
-  CreatorPlatformEntity,
-  CreatorPlatformSyncEntity,
-  CreatorConsentEntity,
-} from './entities/index.js';
-import {
-  CreatorRepository,
-  CreatorPlatformRepository,
-  CreatorPlatformSyncRepository,
-  CreatorConsentRepository,
-} from './repositories/index.js';
-import {
-  CreatorService,
-  CreatorPlatformService,
-  CreatorPlatformSyncService,
-  CreatorSyncProcessorService,
-  CreatorSyncSchedulerService,
-  CreatorConsentService,
-  CreatorOrchestrationService,
-  CreatorAggregateService,
-} from './services/index.js';
-import { CreatorController } from './controllers/index.js';
+import { CreatorEntity } from './entities/creator.entity.js';
+import { CreatorPlatformEntity } from './entities/creator-platform.entity.js';
+import { CreatorRepository } from './repositories/creator.repository.js';
+import { CreatorPlatformRepository } from './repositories/creator-platform.repository.js';
+import { CreatorService } from './services/creator.service.js';
+import { CreatorPlatformService } from './services/creator-platform.service.js';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([
-      CreatorEntity,
-      CreatorPlatformEntity,
-      CreatorPlatformSyncEntity,
-      CreatorConsentEntity,
-    ]),
-    RedisModule,
-    UserSubscriptionModule,
-  ],
-  controllers: [CreatorController],
+  imports: [TypeOrmModule.forFeature([CreatorEntity, CreatorPlatformEntity])],
   providers: [
-    // Repositories
     CreatorRepository,
     CreatorPlatformRepository,
-    CreatorPlatformSyncRepository,
-    CreatorConsentRepository,
-
-    // Services
     CreatorService,
     CreatorPlatformService,
-    CreatorPlatformSyncService,
-    CreatorSyncProcessorService,
-    CreatorSyncSchedulerService,
-    CreatorConsentService,
-    CreatorOrchestrationService,
-    CreatorAggregateService,
   ],
-  exports: [
-    // 다른 모듈에서 사용할 수 있도록 서비스 export
-    CreatorService,
-    CreatorPlatformService,
-    CreatorPlatformSyncService,
-    CreatorSyncProcessorService,
-    CreatorSyncSchedulerService,
-    CreatorConsentService,
-    CreatorOrchestrationService,
-    CreatorAggregateService,
-  ],
+  exports: [CreatorService, CreatorPlatformService],
 })
 export class CreatorModule {}

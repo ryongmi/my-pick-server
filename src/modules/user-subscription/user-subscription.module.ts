@@ -1,28 +1,24 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { CreatorModule } from '@modules/creator/index.js';
+import { CreatorModule } from '../creator/creator.module.js';
 
-import { UserSubscriptionEntity } from './entities/index.js';
-import { UserSubscriptionRepository } from './repositories/index.js';
-import { UserSubscriptionService, UserSubscriptionOrchestrationService } from './services/index.js';
-import { UserSubscriptionController, CreatorSubscriptionController } from './controllers/index.js';
+import { UserSubscriptionEntity } from './entities/user-subscription.entity.js';
+import { UserSubscriptionRepository } from './repositories/user-subscription.repository.js';
+import { UserSubscriptionService } from './services/user-subscription.service.js';
+import {
+  UserSubscriptionController,
+  CreatorSubscriptionController,
+} from './controllers/index.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([UserSubscriptionEntity]),
-    CreatorModule, // CreatorService 의존성
+    // Creator 모듈 import (외래키 검증용)
+    forwardRef(() => CreatorModule),
   ],
+  providers: [UserSubscriptionRepository, UserSubscriptionService],
   controllers: [UserSubscriptionController, CreatorSubscriptionController],
-  providers: [
-    UserSubscriptionRepository, 
-    UserSubscriptionService, 
-    UserSubscriptionOrchestrationService
-  ],
-  exports: [
-    UserSubscriptionService, 
-    UserSubscriptionOrchestrationService, 
-    UserSubscriptionRepository
-  ],
+  exports: [UserSubscriptionService],
 })
 export class UserSubscriptionModule {}
