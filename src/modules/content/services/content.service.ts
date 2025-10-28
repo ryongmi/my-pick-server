@@ -7,6 +7,7 @@ import { LimitType } from '@krgeobuk/core/enum';
 // import { UserTcpPatterns } from '@krgeobuk/user/tcp';
 
 import { PlatformType } from '@common/enums/index.js';
+import { convertToProxyUrl } from '@utils/imageUrlUtils.js';
 
 import { ContentException } from '../exceptions/index.js';
 import { CreatorService } from '../../creator/services/creator.service.js';
@@ -121,7 +122,10 @@ export class ContentService {
       creatorInfo.displayName = creator.profile.displayName;
     }
     if (creator?.profileImageUrl) {
-      creatorInfo.profileImageUrl = creator.profileImageUrl;
+      const proxyUrl = convertToProxyUrl(creator.profileImageUrl);
+      if (proxyUrl) {
+        creatorInfo.profileImageUrl = proxyUrl;
+      }
     }
     if (user) {
       creatorInfo.user = {
@@ -139,7 +143,7 @@ export class ContentService {
       type: content.type,
       title: content.title,
       description: content.description ?? '',
-      thumbnail: content.thumbnail,
+      thumbnail: convertToProxyUrl(content.thumbnail) ?? '',
       url: content.url,
       platform: content.platform,
       platformId: content.platformId,
@@ -416,7 +420,10 @@ export class ContentService {
         creatorInfo.displayName = creator.profile.displayName;
       }
       if (creator?.profileImageUrl) {
-        creatorInfo.profileImageUrl = creator.profileImageUrl;
+        const proxyUrl = convertToProxyUrl(creator.profileImageUrl);
+        if (proxyUrl) {
+          creatorInfo.profileImageUrl = proxyUrl;
+        }
       }
       if (user) {
         creatorInfo.user = {
@@ -434,7 +441,7 @@ export class ContentService {
         type: content.type,
         title: content.title,
         description: content.description ?? '',
-        thumbnail: content.thumbnail ?? '',
+        thumbnail: convertToProxyUrl(content.thumbnail) ?? '',
         url: content.url,
         platform: content.platform,
         platformId: content.platformId,

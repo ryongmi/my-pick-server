@@ -17,6 +17,7 @@ import {
   ContentModule,
   CreatorApplicationModule,
 } from '@modules/index.js';
+import { ImageModule } from '@modules/image/image.module.js';
 
 @Module({
   imports: [
@@ -36,6 +37,8 @@ import {
     ContentModule,
     // Phase 6: External API Integration
     ExternalApiModule,
+    // Image Proxy Module
+    ImageModule,
   ],
   providers: [
     {
