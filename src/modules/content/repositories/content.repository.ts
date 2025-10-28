@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
+import { LimitType, SortOrderType } from '@krgeobuk/core/enum';
 
 import { PlatformType } from '@common/enums/index.js';
 
@@ -17,7 +18,10 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
   /**
    * 플랫폼 타입과 플랫폼 ID로 콘텐츠 조회
    */
-  async findByPlatformAndId(platform: PlatformType, platformId: string): Promise<ContentEntity | null> {
+  async findByPlatformAndId(
+    platform: PlatformType,
+    platformId: string
+  ): Promise<ContentEntity | null> {
     return this.findOne({
       where: { platform, platformId },
     });
@@ -172,4 +176,86 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
       },
     });
   }
+
+  /**
+   * 콘텐츠 검색 (페이지네이션, 필터링, 정렬)
+   */
+  async searchContents(options: {
+    page?: number;
+    limit?: LimitType;
+    creatorId?: string;
+    platform?: string;
+    type?: string;
+    sortBy?: string;
+    sortOrder?: SortOrderType;
+  }): Promise<{
+    items: ContentEntity[];
+    pageInfo: {
+      totalItems: number;
+      page: number;
+      limit: LimitType;
+      totalPages: number;
+      hasPreviousPage: boolean;
+      hasNextPage: boolean;
+    };
+  }> {
+    const {
+      page = 1,
+      limit = LimitType.THIRTY,
+      creatorId,
+      platform,
+      type,
+      sortBy = 'publishedAt',
+      sortOrder = SortOrderType.DESC,
+    } = options;
+
+    const queryBuilder = this.createQueryBuilder('content').where('content.status = :status', {
+      status: 'active',
+    });
+
+    // 필터링
+    if (creatorId) {
+      queryBuilder.andWhere('content.creatorId = :creatorId', { creatorId });
+    }
+    if (platform) {
+      queryBuilder.andWhere('content.platform = :platform', { platform });
+    }
+    if (type) {
+      queryBuilder.andWhere('content.type = :type', { type });
+    }
+
+    // 정렬 (JSON 필드 접근 처리)
+    if (sortBy === 'views' || sortBy === 'likes') {
+      queryBuilder.orderBy(`JSON_EXTRACT(content.statistics, '$.${sortBy}')`, sortOrder);
+    } else {
+      queryBuilder.orderBy(`content.${sortBy}`, sortOrder);
+    }
+
+    // 전체 개수 조회
+    const total = await queryBuilder.getCount();
+
+    // 페이지네이션
+    const items = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    // 페이지네이션 메타 정보 계산
+    const totalPages = Math.ceil(total / limit);
+    const hasPreviousPage = page > 1;
+    const hasNextPage = page < totalPages;
+
+    return {
+      items,
+      pageInfo: {
+        totalItems: total,
+        page,
+        limit,
+        totalPages,
+        hasPreviousPage,
+        hasNextPage,
+      },
+    };
+  }
 }
+

@@ -12,6 +12,7 @@ import { ContentCategoryRepository } from './repositories/content-category.repos
 import { ContentTagRepository } from './repositories/content-tag.repository.js';
 import { ContentService } from './services/content.service.js';
 import { ContentCategoryService } from './services/content-category.service.js';
+import { ContentController } from './controllers/content.controller.js';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ContentCategoryService } from './services/content-category.service.js';
     // 순환 참조 방지를 위해 forwardRef 사용
     forwardRef(() => CreatorModule),
   ],
+  controllers: [ContentController],
   providers: [
     ContentRepository,
     ContentCategoryRepository,
