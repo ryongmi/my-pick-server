@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { LimitType } from '@krgeobuk/core/enum';
+import { PaginatedResult } from '@krgeobuk/core/interfaces';
+
 import { CreatorException } from '../exceptions/index.js';
 import { CreatorRepository } from '../repositories/creator.repository.js';
 import {
@@ -8,7 +11,7 @@ import {
   CreatorStatistics,
   CreatorMetadata,
 } from '../entities/creator.entity.js';
-import { CreateCreatorDto } from '../dto/create-creator.dto.js';
+import { CreateCreatorDto, CreatorSearchQueryDto, CreatorSearchResultDto } from '../dto/index.js';
 import type { ChannelInfo } from '../../creator-application/entities/creator-application.entity.js';
 
 @Injectable()
@@ -51,6 +54,40 @@ export class CreatorService {
    */
   async findActive(): Promise<CreatorEntity[]> {
     return this.creatorRepository.findActive();
+  }
+
+  /**
+   * 크리에이터 검색 (페이지네이션)
+   */
+  async searchCreators(query: CreatorSearchQueryDto): Promise<{
+    items: CreatorSearchResultDto[];
+    pageInfo: {
+      totalItems: number;
+      page: number;
+      limit: LimitType;
+      totalPages: number;
+      hasPreviousPage: boolean;
+      hasNextPage: boolean;
+    };
+  }> {
+    const [creators, total] = await this.creatorRepository.searchCreators(query);
+
+    const items = creators.map((creator) => this.toSearchResultDto(creator));
+
+    const page = query.page || 1;
+    const limit = query.limit || LimitType.THIRTY;
+
+    return {
+      items,
+      pageInfo: {
+        totalItems: total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasPreviousPage: page > 1,
+        hasNextPage: page < Math.ceil(total / limit),
+      },
+    };
   }
 
   /**
@@ -248,10 +285,7 @@ export class CreatorService {
   /**
    * 프로필 정보 업데이트
    */
-  async updateProfile(
-    creatorId: string,
-    profileUpdate: Partial<CreatorProfile>
-  ): Promise<void> {
+  async updateProfile(creatorId: string, profileUpdate: Partial<CreatorProfile>): Promise<void> {
     const creator = await this.findByIdOrFail(creatorId);
 
     const currentProfile = creator.profile || {};
@@ -271,10 +305,7 @@ export class CreatorService {
   /**
    * 메타데이터 업데이트
    */
-  async updateMetadata(
-    creatorId: string,
-    metadataUpdate: Partial<CreatorMetadata>
-  ): Promise<void> {
+  async updateMetadata(creatorId: string, metadataUpdate: Partial<CreatorMetadata>): Promise<void> {
     const creator = await this.findByIdOrFail(creatorId);
 
     const currentMetadata = creator.metadata || {};
@@ -320,5 +351,38 @@ export class CreatorService {
       where: { userId },
       order: { createdAt: 'DESC' },
     });
+  }
+
+  // ==================== PRIVATE HELPER METHODS ====================
+
+  /**
+   * CreatorEntity를 CreatorSearchResultDto로 변환
+   */
+  private toSearchResultDto(creator: CreatorEntity): CreatorSearchResultDto {
+    const result: CreatorSearchResultDto = {
+      id: creator.id,
+      name: creator.name,
+      isActive: creator.isActive,
+      platformCount: 0, // TODO: CreatorPlatformService와 연동 필요
+      createdAt: creator.createdAt,
+    };
+
+    if (creator.description) {
+      result.description = creator.description;
+    }
+    if (creator.profileImageUrl) {
+      result.profileImageUrl = creator.profileImageUrl;
+    }
+    if (creator.statistics?.totalSubscribers !== undefined) {
+      result.subscriberCount = creator.statistics.totalSubscribers;
+    }
+    if (creator.statistics?.totalVideos !== undefined) {
+      result.videoCount = creator.statistics.totalVideos;
+    }
+    if (creator.statistics?.totalViews !== undefined) {
+      result.totalViews = creator.statistics.totalViews;
+    }
+
+    return result;
   }
 }

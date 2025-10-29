@@ -7,9 +7,11 @@ import { CreatorRepository } from './repositories/creator.repository.js';
 import { CreatorPlatformRepository } from './repositories/creator-platform.repository.js';
 import { CreatorService } from './services/creator.service.js';
 import { CreatorPlatformService } from './services/creator-platform.service.js';
+import { CreatorController } from './controllers/creator.controller.js';
 
 @Module({
   imports: [TypeOrmModule.forFeature([CreatorEntity, CreatorPlatformEntity])],
+  controllers: [CreatorController],
   providers: [
     CreatorRepository,
     CreatorPlatformRepository,
