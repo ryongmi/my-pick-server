@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
+import { LimitType } from '@krgeobuk/core/enum';
 
 import { CreatorEntity } from '../entities/creator.entity.js';
 import { CreatorSearchQueryDto } from '../dto/search-query.dto.js';
@@ -29,8 +30,18 @@ export class CreatorRepository extends BaseRepository<CreatorEntity> {
   /**
    * 크리에이터 검색 (페이지네이션)
    */
-  async searchCreators(query: CreatorSearchQueryDto): Promise<[CreatorEntity[], number]> {
-    const { page = 1, limit = 30, keyword, activeOnly, userId } = query;
+  async searchCreators(query: CreatorSearchQueryDto): Promise<{
+    items: CreatorEntity[];
+    pageInfo: {
+      totalItems: number;
+      page: number;
+      limit: LimitType;
+      totalPages: number;
+      hasPreviousPage: boolean;
+      hasNextPage: boolean;
+    };
+  }> {
+    const { page = 1, limit = LimitType.THIRTY, keyword, activeOnly, userId } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.createQueryBuilder('creator').where('1=1');
@@ -53,8 +64,32 @@ export class CreatorRepository extends BaseRepository<CreatorEntity> {
     }
 
     // 정렬: 최신 순
-    queryBuilder.orderBy('creator.createdAt', 'DESC').skip(skip).take(limit);
+    queryBuilder.orderBy('creator.createdAt', 'DESC');
 
-    return queryBuilder.getManyAndCount();
+    // 전체 개수 조회
+    const total = await queryBuilder.getCount();
+
+    // 페이지네이션
+    const items = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    // 페이지네이션 메타 정보 계산
+    const totalPages = Math.ceil(total / limit);
+    const hasPreviousPage = page > 1;
+    const hasNextPage = page < totalPages;
+
+    return {
+      items,
+      pageInfo: {
+        totalItems: total,
+        page,
+        limit,
+        totalPages,
+        hasPreviousPage,
+        hasNextPage,
+      },
+    };
   }
 }

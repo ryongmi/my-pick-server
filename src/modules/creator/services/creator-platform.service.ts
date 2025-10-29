@@ -9,15 +9,15 @@ import {
 } from '../entities/creator-platform.entity.js';
 import { CreatePlatformDto } from '../dto/create-platform.dto.js';
 
-import { CreatorService } from './creator.service.js';
+// import { CreatorService } from './creator.service.js';
 
 @Injectable()
 export class CreatorPlatformService {
   private readonly logger = new Logger(CreatorPlatformService.name);
 
   constructor(
-    private readonly creatorPlatformRepository: CreatorPlatformRepository,
-    private readonly creatorService: CreatorService
+    private readonly creatorPlatformRepository: CreatorPlatformRepository
+    // private readonly creatorService: CreatorService
   ) {}
 
   // ==================== PUBLIC METHODS ====================
@@ -90,7 +90,7 @@ export class CreatorPlatformService {
    */
   async createPlatform(dto: CreatePlatformDto): Promise<CreatorPlatformEntity> {
     // 외래키 검증: 크리에이터가 존재하는지 확인
-    await this.creatorService.findByIdOrFail(dto.creatorId);
+    // await this.creatorService.findByIdOrFail(dto.creatorId);
 
     // 중복 플랫폼 체크
     const existing = await this.findByPlatformTypeAndId(dto.platformType, dto.platformId);
