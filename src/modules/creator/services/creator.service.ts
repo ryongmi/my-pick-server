@@ -1,6 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 
-import { LimitType } from '@krgeobuk/core/enum';
 import { PaginatedResult } from '@krgeobuk/core/interfaces';
 
 import { CreatorException } from '../exceptions/index.js';
@@ -11,14 +10,25 @@ import {
   CreatorStatistics,
   CreatorMetadata,
 } from '../entities/creator.entity.js';
-import { CreateCreatorDto, CreatorSearchQueryDto, CreatorSearchResultDto } from '../dto/index.js';
+import { CreatorPlatformEntity } from '../entities/creator-platform.entity.js';
+import {
+  CreateCreatorDto,
+  CreatorSearchQueryDto,
+  CreatorSearchResultDto,
+  PlatformInfo,
+} from '../dto/index.js';
 import type { ChannelInfo } from '../../creator-application/entities/creator-application.entity.js';
+
+import { CreatorPlatformService } from './creator-platform.service.js';
 
 @Injectable()
 export class CreatorService {
   private readonly logger = new Logger(CreatorService.name);
 
-  constructor(private readonly creatorRepository: CreatorRepository) {}
+  constructor(
+    private readonly creatorRepository: CreatorRepository,
+    private readonly creatorPlatformService: CreatorPlatformService
+  ) {}
 
   // ==================== PUBLIC METHODS ====================
 
@@ -59,34 +69,25 @@ export class CreatorService {
   /**
    * 크리에이터 검색 (페이지네이션)
    */
-  async searchCreators(query: CreatorSearchQueryDto): Promise<{
-    items: CreatorSearchResultDto[];
-    pageInfo: {
-      totalItems: number;
-      page: number;
-      limit: LimitType;
-      totalPages: number;
-      hasPreviousPage: boolean;
-      hasNextPage: boolean;
-    };
-  }> {
-    const [creators, total] = await this.creatorRepository.searchCreators(query);
+  async searchCreators(
+    query: CreatorSearchQueryDto
+  ): Promise<PaginatedResult<CreatorSearchResultDto>> {
+    const { items: creators, pageInfo } = await this.creatorRepository.searchCreators(query);
 
-    const items = creators.map((creator) => this.toSearchResultDto(creator));
+    // 1. 모든 creatorId 추출
+    const creatorIds = creators.map((c) => c.id);
 
-    const page = query.page || 1;
-    const limit = query.limit || LimitType.THIRTY;
+    // 2. 일괄적으로 플랫폼 정보 조회 (N+1 쿼리 방지)
+    const platformsMap = await this.getPlatformsForCreators(creatorIds);
+
+    // 3. DTO 변환
+    const items = creators.map((creator) =>
+      this.toSearchResultDto(creator, platformsMap.get(creator.id) || [])
+    );
 
     return {
       items,
-      pageInfo: {
-        totalItems: total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-        hasPreviousPage: page > 1,
-        hasNextPage: page < Math.ceil(total / limit),
-      },
+      pageInfo,
     };
   }
 
@@ -358,12 +359,14 @@ export class CreatorService {
   /**
    * CreatorEntity를 CreatorSearchResultDto로 변환
    */
-  private toSearchResultDto(creator: CreatorEntity): CreatorSearchResultDto {
+  private toSearchResultDto(
+    creator: CreatorEntity,
+    platforms: CreatorPlatformEntity[] = []
+  ): CreatorSearchResultDto {
     const result: CreatorSearchResultDto = {
       id: creator.id,
       name: creator.name,
       isActive: creator.isActive,
-      platformCount: 0, // TODO: CreatorPlatformService와 연동 필요
       createdAt: creator.createdAt,
     };
 
@@ -383,6 +386,50 @@ export class CreatorService {
       result.totalViews = creator.statistics.totalViews;
     }
 
+    // 플랫폼 정보 매핑
+    if (platforms && platforms.length > 0) {
+      result.platforms = platforms.map((platform) => {
+        const platformInfo: PlatformInfo = {
+          platformType: platform.platformType.toLowerCase() as 'youtube' | 'twitter',
+          platformId: platform.platformId,
+        };
+        if (platform.platformUsername) {
+          platformInfo.platformUsername = platform.platformUsername;
+        }
+        if (platform.platformUrl) {
+          platformInfo.platformUrl = platform.platformUrl;
+        }
+        return platformInfo;
+      });
+    }
+
     return result;
+  }
+
+  /**
+   * 여러 크리에이터의 플랫폼 정보를 일괄 조회 (N+1 방지)
+   */
+  private async getPlatformsForCreators(
+    creatorIds: string[]
+  ): Promise<Map<string, CreatorPlatformEntity[]>> {
+    if (creatorIds.length === 0) {
+      return new Map();
+    }
+
+    // 모든 크리에이터의 플랫폼 정보를 일괄 조회
+    const allPlatforms = await Promise.all(
+      creatorIds.map((creatorId) => this.creatorPlatformService.findByCreatorId(creatorId))
+    );
+
+    // Map으로 변환하여 O(1) 조회 가능하도록
+    const platformsMap = new Map<string, CreatorPlatformEntity[]>();
+    creatorIds.forEach((creatorId, index) => {
+      const platforms = allPlatforms[index];
+      if (platforms) {
+        platformsMap.set(creatorId, platforms);
+      }
+    });
+
+    return platformsMap;
   }
 }

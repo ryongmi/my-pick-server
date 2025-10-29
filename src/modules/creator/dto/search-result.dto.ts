@@ -1,4 +1,14 @@
 /**
+ * 플랫폼 정보 DTO
+ */
+export interface PlatformInfo {
+  platformType: 'youtube' | 'twitter';
+  platformId: string;
+  platformUsername?: string;
+  platformUrl?: string;
+}
+
+/**
  * 크리에이터 검색 결과 DTO
  */
 export class CreatorSearchResultDto {
@@ -13,8 +23,8 @@ export class CreatorSearchResultDto {
   videoCount?: number;
   totalViews?: number;
 
-  // 플랫폼 수
-  platformCount?: number;
+  // 플랫폼 정보
+  platforms?: PlatformInfo[];
 
   createdAt!: Date;
 }
