@@ -24,7 +24,7 @@ import { SubscribeCreatorDto, UpdateNotificationDto } from '../dto/index.js';
  */
 @Controller('subscriptions')
 @UseGuards(AccessTokenGuard)
-export class MySubscriptionController {
+export class SubscriptionController {
   constructor(private readonly userSubscriptionService: UserSubscriptionService) {}
 
   /**

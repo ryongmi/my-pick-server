@@ -9,13 +9,13 @@ import { UserSubscriptionService } from './services/user-subscription.service.js
 import {
   UserSubscriptionController,
   CreatorSubscriptionController,
-  MySubscriptionController,
+  SubscriptionController,
 } from './controllers/index.js';
 
 @Module({
   imports: [TypeOrmModule.forFeature([UserSubscriptionEntity, CreatorEntity])],
   providers: [UserSubscriptionRepository, UserSubscriptionService, CreatorRepository],
-  controllers: [UserSubscriptionController, CreatorSubscriptionController, MySubscriptionController],
+  controllers: [UserSubscriptionController, CreatorSubscriptionController, SubscriptionController],
   exports: [UserSubscriptionService],
 })
 export class UserSubscriptionModule {}
