@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsBoolean } from 'class-validator';
+import { IsOptional, IsString, IsBoolean, IsEnum } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 import { PaginateBaseDto } from '@krgeobuk/core/dtos';
@@ -9,7 +9,7 @@ import { PaginateBaseDto } from '@krgeobuk/core/dtos';
 export class CreatorSearchQueryDto extends PaginateBaseDto {
   @IsOptional()
   @IsString()
-  keyword?: string; // 이름 검색
+  name?: string; // 이름 검색
 
   @IsOptional()
   @IsBoolean()
@@ -17,6 +17,10 @@ export class CreatorSearchQueryDto extends PaginateBaseDto {
   activeOnly?: boolean; // 활성화된 크리에이터만
 
   @IsOptional()
-  @IsString()
-  userId?: string; // 특정 사용자의 크리에이터만
+  @IsEnum(['youtube', 'twitter'])
+  platform?: 'youtube' | 'twitter'; // 플랫폼 필터
+
+  @IsOptional()
+  @IsEnum(['followers', 'name', 'content', 'recent'])
+  orderBy?: 'followers' | 'name' | 'content' | 'recent'; // 크리에이터 정렬 옵션
 }

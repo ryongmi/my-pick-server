@@ -41,15 +41,14 @@ export class CreatorRepository extends BaseRepository<CreatorEntity> {
       hasNextPage: boolean;
     };
   }> {
-    const { page = 1, limit = LimitType.THIRTY, keyword, activeOnly, userId } = query;
-    const skip = (page - 1) * limit;
+    const { page = 1, limit = LimitType.THIRTY, name, activeOnly, platform, orderBy } = query;
 
     const queryBuilder = this.createQueryBuilder('creator').where('1=1');
 
-    // 키워드 검색 (이름)
-    if (keyword) {
-      queryBuilder.andWhere('creator.name LIKE :keyword', {
-        keyword: `%${keyword}%`,
+    // 이름 검색
+    if (name) {
+      queryBuilder.andWhere('creator.name LIKE :name', {
+        name: `%${name}%`,
       });
     }
 
@@ -58,17 +57,55 @@ export class CreatorRepository extends BaseRepository<CreatorEntity> {
       queryBuilder.andWhere('creator.isActive = :isActive', { isActive: true });
     }
 
-    // 사용자 필터
-    if (userId) {
-      queryBuilder.andWhere('creator.userId = :userId', { userId });
+    // 플랫폼 필터 (JOIN + DISTINCT)
+    if (platform) {
+      queryBuilder
+        .innerJoin(
+          'creator_platforms',
+          'cp',
+          'cp.creatorId = creator.id AND cp.platformType = :platformType AND cp.isActive = true',
+          { platformType: platform }
+        )
+        .distinct(true);
     }
 
-    // 정렬: 최신 순
-    queryBuilder.orderBy('creator.createdAt', 'DESC');
+    // 정렬 옵션
+    switch (orderBy) {
+      case 'followers':
+        // JSON 필드: statistics->totalSubscribers 기준 내림차순
+        // MySQL에서는 IFNULL로 NULL을 0으로 처리
+        // TypeORM 이슈: 복잡한 SQL 표현식은 addSelect로 별칭 생성 후 정렬
+        queryBuilder
+          .addSelect(
+            'IFNULL(JSON_EXTRACT(creator.statistics, "$.totalSubscribers"), 0)',
+            'follower_count'
+          )
+          .orderBy('follower_count', 'DESC');
+        break;
+      case 'name':
+        // 이름 오름차순
+        queryBuilder.orderBy('creator.name', 'ASC');
+        break;
+      case 'content':
+        // JSON 필드: statistics->totalVideos 기준 내림차순
+        // TypeORM 이슈: 복잡한 SQL 표현식은 addSelect로 별칭 생성 후 정렬
+        queryBuilder
+          .addSelect(
+            'IFNULL(JSON_EXTRACT(creator.statistics, "$.totalVideos"), 0)',
+            'video_count'
+          )
+          .orderBy('video_count', 'DESC');
+        break;
+      case 'recent':
+      default:
+        // 최신 순 (기본값)
+        queryBuilder.orderBy('creator.createdAt', 'DESC');
+        break;
+    }
 
     // 전체 개수 조회
     const total = await queryBuilder.getCount();
-
+    console.log(queryBuilder.getSql());
     // 페이지네이션
     const items = await queryBuilder
       .skip((page - 1) * limit)
