@@ -22,12 +22,12 @@ export class UserSubscriptionException {
   }
 
   /**
-   * 자기 자신을 구독할 수 없음
+   * 자신이 소유한 크리에이터를 구독할 수 없음
    */
   static cannotSubscribeSelf(): HttpException {
     return new ConflictException({
       code: 'USER_SUBSCRIPTION_103',
-      message: '자기 자신을 구독할 수 없습니다.',
+      message: '본인이 소유한 크리에이터는 구독할 수 없습니다.',
     });
   }
 }

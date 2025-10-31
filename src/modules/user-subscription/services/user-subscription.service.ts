@@ -85,6 +85,10 @@ export class UserSubscriptionService {
       throw new NotFoundException('크리에이터를 찾을 수 없습니다.');
     }
 
+    if (userId === creator.userId) {
+      throw UserSubscriptionException.cannotSubscribeSelf();
+    }
+
     // 중복 구독 체크
     const alreadySubscribed = await this.isSubscribed(userId, creatorId);
     if (alreadySubscribed) {

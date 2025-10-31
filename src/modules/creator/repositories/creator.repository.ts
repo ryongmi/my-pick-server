@@ -50,7 +50,7 @@ export class CreatorRepository extends BaseRepository<CreatorEntity> {
 
     if (userId) {
       queryBuilder.andWhere('creator.userId != :userId', {
-        userId: `%${userId}%`,
+        userId,
       });
     }
 
