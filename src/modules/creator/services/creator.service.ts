@@ -1,6 +1,9 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 import { PaginatedResult } from '@krgeobuk/core/interfaces';
+
+import { UserSubscriptionService } from '@modules/user-subscription/services/user-subscription.service.js';
+import type { ChannelInfo } from '@modules/creator-application/entities/creator-application.entity.js';
 
 import { CreatorException } from '../exceptions/index.js';
 import { CreatorRepository } from '../repositories/creator.repository.js';
@@ -17,7 +20,6 @@ import {
   CreatorSearchResultDto,
   PlatformInfo,
 } from '../dto/index.js';
-import type { ChannelInfo } from '../../creator-application/entities/creator-application.entity.js';
 
 import { CreatorPlatformService } from './creator-platform.service.js';
 
@@ -27,7 +29,8 @@ export class CreatorService {
 
   constructor(
     private readonly creatorRepository: CreatorRepository,
-    private readonly creatorPlatformService: CreatorPlatformService
+    private readonly creatorPlatformService: CreatorPlatformService,
+    private readonly userSubscriptionService: UserSubscriptionService
   ) {}
 
   // ==================== PUBLIC METHODS ====================
@@ -70,9 +73,13 @@ export class CreatorService {
    * 크리에이터 검색 (페이지네이션)
    */
   async searchCreators(
-    query: CreatorSearchQueryDto
+    query: CreatorSearchQueryDto,
+    userId?: string
   ): Promise<PaginatedResult<CreatorSearchResultDto>> {
-    const { items: creators, pageInfo } = await this.creatorRepository.searchCreators(query);
+    const { items: creators, pageInfo } = await this.creatorRepository.searchCreators(
+      query,
+      userId
+    );
 
     // 1. 모든 creatorId 추출
     const creatorIds = creators.map((c) => c.id);
@@ -80,10 +87,23 @@ export class CreatorService {
     // 2. 일괄적으로 플랫폼 정보 조회 (N+1 쿼리 방지)
     const platformsMap = await this.getPlatformsForCreators(creatorIds);
 
-    // 3. DTO 변환
-    const items = creators.map((creator) =>
-      this.toSearchResultDto(creator, platformsMap.get(creator.id) || [])
-    );
+    // 3. userId가 있으면 구독 정보 조회
+    let subscribedCreatorIds: string[] | undefined;
+    if (userId) {
+      subscribedCreatorIds = await this.userSubscriptionService.getCreatorIds(userId);
+    }
+
+    // 4. DTO 변환 (구독 여부 포함)
+    const items = creators.map((creator) => {
+      const dto = this.toSearchResultDto(creator, platformsMap.get(creator.id) || []);
+
+      // 구독 정보가 제공되었을 때만 isSubscribed 추가
+      if (subscribedCreatorIds) {
+        dto.isSubscribed = subscribedCreatorIds.includes(creator.id);
+      }
+
+      return dto;
+    });
 
     return {
       items,

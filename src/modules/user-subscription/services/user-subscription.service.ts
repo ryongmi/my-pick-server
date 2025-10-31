@@ -1,10 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
-
-import { CreatorService } from '../../creator/services/creator.service.js';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import { UserSubscriptionRepository } from '../repositories/user-subscription.repository.js';
-import { UserSubscriptionEntity } from '../entities/user-subscription.entity.js';
 import { UserSubscriptionException } from '../exceptions/user-subscription.exception.js';
+import { CreatorRepository } from '../../creator/repositories/creator.repository.js';
 
 @Injectable()
 export class UserSubscriptionService {
@@ -12,7 +10,7 @@ export class UserSubscriptionService {
 
   constructor(
     private readonly userSubscriptionRepo: UserSubscriptionRepository,
-    private readonly creatorService: CreatorService
+    private readonly creatorRepository: CreatorRepository
   ) {}
 
   // ==================== 조회 메서드 (ID 목록 반환) ====================
@@ -78,12 +76,14 @@ export class UserSubscriptionService {
     creatorId: string,
     notificationEnabled: boolean = true
   ): Promise<void> {
-    // 외래키 검증: Creator가 존재하는지 확인
-    await this.creatorService.findByIdOrFail(creatorId);
+    // 크리에이터 존재 여부 확인
+    const creator = await this.creatorRepository.findOne({
+      where: { id: creatorId },
+    });
 
-    // 자기 자신 구독 방지 (만약 userId가 creatorId와 같다면)
-    // Note: User와 Creator가 별도 엔티티이므로 일반적으로 발생하지 않음
-    // 하지만 비즈니스 로직으로 체크 가능
+    if (!creator) {
+      throw new NotFoundException('크리에이터를 찾을 수 없습니다.');
+    }
 
     // 중복 구독 체크
     const alreadySubscribed = await this.isSubscribed(userId, creatorId);
@@ -144,10 +144,7 @@ export class UserSubscriptionService {
     }
 
     // 알림 설정 업데이트
-    await this.userSubscriptionRepo.update(
-      { userId, creatorId },
-      { notificationEnabled }
-    );
+    await this.userSubscriptionRepo.update({ userId, creatorId }, { notificationEnabled });
 
     this.logger.log('Notification setting updated', {
       userId,

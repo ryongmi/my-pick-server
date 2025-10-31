@@ -30,7 +30,10 @@ export class CreatorRepository extends BaseRepository<CreatorEntity> {
   /**
    * 크리에이터 검색 (페이지네이션)
    */
-  async searchCreators(query: CreatorSearchQueryDto): Promise<{
+  async searchCreators(
+    query: CreatorSearchQueryDto,
+    userId?: string
+  ): Promise<{
     items: CreatorEntity[];
     pageInfo: {
       totalItems: number;
@@ -44,6 +47,12 @@ export class CreatorRepository extends BaseRepository<CreatorEntity> {
     const { page = 1, limit = LimitType.THIRTY, name, activeOnly, platform, orderBy } = query;
 
     const queryBuilder = this.createQueryBuilder('creator').where('1=1');
+
+    if (userId) {
+      queryBuilder.andWhere('creator.userId != :userId', {
+        userId: `%${userId}%`,
+      });
+    }
 
     // 이름 검색
     if (name) {
@@ -90,10 +99,7 @@ export class CreatorRepository extends BaseRepository<CreatorEntity> {
         // JSON 필드: statistics->totalVideos 기준 내림차순
         // TypeORM 이슈: 복잡한 SQL 표현식은 addSelect로 별칭 생성 후 정렬
         queryBuilder
-          .addSelect(
-            'IFNULL(JSON_EXTRACT(creator.statistics, "$.totalVideos"), 0)',
-            'video_count'
-          )
+          .addSelect('IFNULL(JSON_EXTRACT(creator.statistics, "$.totalVideos"), 0)', 'video_count')
           .orderBy('video_count', 'DESC');
         break;
       case 'recent':

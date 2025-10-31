@@ -26,5 +26,8 @@ export class CreatorSearchResultDto {
   // 플랫폼 정보
   platforms?: PlatformInfo[];
 
+  // 구독 여부 (로그인 시에만 포함)
+  isSubscribed?: boolean;
+
   createdAt!: Date;
 }
