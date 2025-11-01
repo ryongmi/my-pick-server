@@ -69,6 +69,113 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
   }
 
   /**
+   * 사용자가 북마크한 콘텐츠 조회 (user_interactions + content + creator 3-way JOIN)
+   */
+  async findBookmarkedContentsWithCreator(
+    userId: string,
+    options?: {
+      page?: number;
+      limit?: number;
+    }
+  ): Promise<{
+    items: Array<{
+      content: ContentEntity;
+      creator: { id: string; name: string; profileImageUrl?: string };
+    }>;
+    total: number;
+  }> {
+    const { page = 1, limit = 20 } = options || {};
+    const offset = (page - 1) * limit;
+
+    // 1. 전체 개수 조회
+    const totalQuery = this.dataSource
+      .createQueryBuilder()
+      .select('COUNT(*)', 'count')
+      .from('user_interactions', 'ui')
+      .where('ui.userId = :userId', { userId })
+      .andWhere('ui.isBookmarked = :isBookmarked', { isBookmarked: true });
+
+    const totalResult = await totalQuery.getRawOne();
+    const total = parseInt(totalResult?.count || '0', 10);
+
+    if (total === 0) {
+      return { items: [], total: 0 };
+    }
+
+    // 2. 페이지네이션이 적용된 콘텐츠 조회 (3-way JOIN)
+    const results = await this.createQueryBuilder('content')
+      .select([
+        'content.id AS contentId',
+        'content.type AS type',
+        'content.title AS title',
+        'content.description AS description',
+        'content.thumbnail AS thumbnail',
+        'content.url AS url',
+        'content.platform AS platform',
+        'content.platformId AS platformId',
+        'content.duration AS duration',
+        'content.publishedAt AS publishedAt',
+        // 'content.creatorId AS creatorId',
+        'content.language AS language',
+        'content.isLive AS isLive',
+        'content.quality AS quality',
+        'content.ageRestriction AS ageRestriction',
+        'content.status AS status',
+        'content.statistics AS statistics',
+        'content.syncInfo AS syncInfo',
+        'content.createdAt AS createdAt',
+        'content.updatedAt AS updatedAt',
+        'creator.id AS creatorId',
+        'creator.name AS name',
+        'creator.profileImageUrl AS profileImageUrl',
+      ])
+      .innerJoin('user_interactions', 'ui', 'ui.contentId = content.id')
+      .innerJoin('creators', 'creator', 'creator.id = content.creatorId')
+      .where('ui.userId = :userId', { userId })
+      .andWhere('ui.isBookmarked = :isBookmarked', { isBookmarked: true })
+      .andWhere('content.status = :status', { status: 'active' })
+      .orderBy('ui.updatedAt', 'DESC') // 최근 북마크한 순서
+      .skip(offset)
+      .take(limit)
+      .getRawMany();
+
+    const items = results.map((result) => ({
+      content: {
+        id: result.contentId,
+        type: result.type,
+        title: result.title,
+        description: result.description,
+        thumbnail: result.thumbnail,
+        url: result.url,
+        platform: result.platform,
+        platformId: result.platformId,
+        duration: result.duration,
+        publishedAt: result.publishedAt,
+        creatorId: result.creatorId,
+        language: result.language,
+        isLive: result.isLive,
+        quality: result.quality,
+        ageRestriction: result.ageRestriction,
+        status: result.status,
+        statistics: result.statistics,
+        syncInfo: result.syncInfo,
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt,
+      } as ContentEntity,
+      creator: {
+        id: result.creatorId,
+        name: result.name,
+        profileImageUrl: result.profileImageUrl,
+      },
+    }));
+
+    return {
+      items,
+      total,
+    };
+  }
+
+  /**
    * 크리에이터와 플랫폼 정보를 포함한 콘텐츠 조회
    */
   async findWithCreator(contentId: string): Promise<{

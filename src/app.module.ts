@@ -13,6 +13,7 @@ import { JwtModule } from '@common/jwt/index.js';
 import {
   CreatorModule,
   UserSubscriptionModule,
+  UserInteractionModule,
   ExternalApiModule,
   ContentModule,
   CreatorApplicationModule,
@@ -35,6 +36,8 @@ import { ImageModule } from '@modules/image/image.module.js';
     CreatorApplicationModule,
     // Phase 2: Content Management System
     ContentModule,
+    // Phase 3: User Interaction System
+    UserInteractionModule,
     // Phase 6: External API Integration
     ExternalApiModule,
     // Image Proxy Module

@@ -474,6 +474,117 @@ export class ContentService {
     };
   }
 
+  /**
+   * 북마크한 콘텐츠 목록 조회 (user_interactions JOIN 사용, 페이지네이션)
+   */
+  async findBookmarkedContents(
+    userId: string,
+    query: {
+      page?: number;
+      limit?: number;
+    }
+  ): Promise<{
+    items: ContentWithCreatorDto[];
+    pageInfo: {
+      totalItems: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+      hasPreviousPage: boolean;
+      hasNextPage: boolean;
+    };
+  }> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    // 1. Repository에서 북마크한 Content + Creator 조회 (3-way JOIN)
+    const { items: rawItems, total } = await this.contentRepository.findBookmarkedContentsWithCreator(
+      userId,
+      { page, limit }
+    );
+
+    // 2. 모든 creatorId 추출 (중복 제거)
+    const creatorIds = [...new Set(rawItems.map((item) => item.content.creatorId))];
+
+    // 3. 일괄적으로 User 정보 조회 (TCP 통신)
+    const userMap = await this.fetchUsersForCreators(creatorIds);
+
+    // 4. Content + Creator + User 매핑
+    const enrichedItems: ContentWithCreatorDto[] = rawItems.map(({ content, creator }) => {
+      const user = userMap.get(content.creatorId);
+
+      const creatorInfo: CreatorInfo = {
+        id: creator.id,
+        name: creator.name,
+      };
+
+      if (creator.profileImageUrl) {
+        const proxyUrl = convertToProxyUrl(creator.profileImageUrl);
+        if (proxyUrl) {
+          creatorInfo.profileImageUrl = proxyUrl;
+        }
+      }
+
+      if (user) {
+        creatorInfo.user = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+        };
+        if (user.profileImage) {
+          creatorInfo.user.profileImage = user.profileImage;
+        }
+      }
+
+      return {
+        id: content.id,
+        type: content.type,
+        title: content.title,
+        description: content.description ?? '',
+        thumbnail: convertToProxyUrl(content.thumbnail) ?? '',
+        url: content.url,
+        platform: content.platform,
+        platformId: content.platformId,
+        duration: content.duration ?? 0,
+        publishedAt: content.publishedAt.toISOString(),
+        language: content.language ?? 'ko',
+        isLive: content.isLive,
+        quality: content.quality ?? 'sd',
+        ageRestriction: content.ageRestriction,
+        status: content.status,
+        statistics: content.statistics!,
+        syncInfo: content.syncInfo!,
+        createdAt: content.createdAt.toISOString(),
+        updatedAt: content.updatedAt.toISOString(),
+        deletedAt: content.deletedAt ? content.deletedAt.toISOString() : null,
+        creator: creatorInfo,
+      };
+    });
+
+    // 5. 페이지네이션 메타 정보 계산
+    const totalPages = Math.ceil(total / limit);
+
+    this.logger.debug('Bookmarked contents fetched with 3-way JOIN', {
+      userId,
+      page,
+      limit,
+      total,
+      itemsReturned: enrichedItems.length,
+    });
+
+    return {
+      items: enrichedItems,
+      pageInfo: {
+        totalItems: total,
+        page,
+        limit,
+        totalPages,
+        hasPreviousPage: page > 1,
+        hasNextPage: page < totalPages,
+      },
+    };
+  }
+
   // ==================== PRIVATE HELPER METHODS ====================
 
   /**
