@@ -226,7 +226,10 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
 
     // 정렬 (JSON 필드 접근 처리)
     if (sortBy === 'views' || sortBy === 'likes') {
-      queryBuilder.orderBy(`JSON_EXTRACT(content.statistics, '$.${sortBy}')`, sortOrder);
+      queryBuilder
+        .addSelect(`IFNULL(JSON_EXTRACT(content.statistics, '$.${sortBy}'), 0)`, 'sort_count')
+        .orderBy('sort_count', sortOrder);
+      // queryBuilder.orderBy(`JSON_EXTRACT(content.statistics, '$.${sortBy}')`, sortOrder);
     } else {
       queryBuilder.orderBy(`content.${sortBy}`, sortOrder);
     }

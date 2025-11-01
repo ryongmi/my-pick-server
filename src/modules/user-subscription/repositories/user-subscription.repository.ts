@@ -37,35 +37,6 @@ export class UserSubscriptionRepository extends Repository<UserSubscriptionEntit
   }
 
   /**
-   * 구독 여부 확인
-   */
-  async isSubscribed(userId: string, creatorId: string): Promise<boolean> {
-    const count = await this.count({
-      where: { userId, creatorId },
-    });
-
-    return count > 0;
-  }
-
-  /**
-   * 구독 수 조회
-   */
-  async getSubscriptionCount(creatorId: string): Promise<number> {
-    return this.count({
-      where: { creatorId },
-    });
-  }
-
-  /**
-   * 사용자의 구독 수 조회
-   */
-  async getUserSubscriptionCount(userId: string): Promise<number> {
-    return this.count({
-      where: { userId },
-    });
-  }
-
-  /**
    * 알림 활성화된 구독만 조회
    */
   async getNotificationEnabledCreatorIds(userId: string): Promise<string[]> {
@@ -75,17 +46,5 @@ export class UserSubscriptionRepository extends Repository<UserSubscriptionEntit
     });
 
     return subscriptions.map((s) => s.creatorId);
-  }
-
-  /**
-   * 크리에이터에 구독자가 있는지 확인 (최적화)
-   */
-  async hasSubscribers(creatorId: string): Promise<boolean> {
-    const count = await this.count({
-      where: { creatorId },
-      take: 1, // 1개만 확인하면 충분
-    });
-
-    return count > 0;
   }
 }

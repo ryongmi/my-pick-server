@@ -554,7 +554,7 @@ export class ContentService {
 
       // 3. auth-server에 일괄 요청
       const usersResponse = await firstValueFrom(
-        this.authClient.send<UserResponse[]>('user.find-by-ids', userIds)
+        this.authClient.send<UserResponse[]>('user.find-by-ids', { userIds })
       );
 
       if (!usersResponse || !Array.isArray(usersResponse)) {
