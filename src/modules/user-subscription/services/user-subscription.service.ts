@@ -71,11 +71,7 @@ export class UserSubscriptionService {
   /**
    * 크리에이터 구독
    */
-  async subscribeToCreator(
-    userId: string,
-    creatorId: string,
-    notificationEnabled: boolean = true
-  ): Promise<void> {
+  async subscribeToCreator(userId: string, creatorId: string): Promise<void> {
     // 크리에이터 존재 여부 확인
     const creator = await this.creatorRepository.findOne({
       where: { id: creatorId },
@@ -99,7 +95,6 @@ export class UserSubscriptionService {
     const subscription = this.userSubscriptionRepo.create({
       userId,
       creatorId,
-      notificationEnabled,
     });
 
     await this.userSubscriptionRepo.save(subscription);
@@ -107,7 +102,6 @@ export class UserSubscriptionService {
     this.logger.log('User subscribed to creator', {
       userId,
       creatorId,
-      notificationEnabled,
     });
   }
 

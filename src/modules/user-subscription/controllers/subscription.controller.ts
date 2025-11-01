@@ -16,7 +16,7 @@ import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 
 import { UserSubscriptionService } from '../services/user-subscription.service.js';
-import { SubscribeCreatorDto, UpdateNotificationDto } from '../dto/index.js';
+import { UpdateNotificationDto } from '../dto/index.js';
 
 /**
  * 사용자 본인의 구독 관리 컨트롤러
@@ -51,17 +51,13 @@ export class SubscriptionController {
    * 크리에이터 구독
    * POST /subscriptions
    */
-  @Post()
+  @Post(':creatorId')
   @HttpCode(HttpStatus.CREATED)
   async subscribeToCreator(
     @CurrentJwt() jwt: AuthenticatedJwt,
-    @Body() dto: SubscribeCreatorDto
+    @Param('creatorId') creatorId: string
   ): Promise<void> {
-    await this.userSubscriptionService.subscribeToCreator(
-      jwt.userId,
-      dto.creatorId,
-      dto.notificationEnabled ?? true
-    );
+    await this.userSubscriptionService.subscribeToCreator(jwt.userId, creatorId);
   }
 
   /**
