@@ -2,10 +2,10 @@ import { Entity, Column, Index } from 'typeorm';
 
 import { BaseEntityUUID } from '@krgeobuk/core/entities';
 
-import { ApplicationStatus } from '../enums/index.js';
+import { RegistrationStatus } from '../enums/index.js';
 
-// Re-export ApplicationStatus for external use
-export { ApplicationStatus };
+// Re-export RegistrationStatus for external use
+export { RegistrationStatus };
 
 export enum PlatformType {
   YOUTUBE = 'youtube',
@@ -34,11 +34,11 @@ export interface ReviewInfo {
   comment?: string; // 검토 코멘트
 }
 
-@Entity('creator_applications')
+@Entity('creator_registrations')
 @Index(['userId'])
 @Index(['status'])
 @Index(['appliedAt'])
-export class CreatorApplicationEntity extends BaseEntityUUID {
+export class CreatorRegistrationEntity extends BaseEntityUUID {
   // ==================== 신청자 정보 ====================
 
   @Column({ type: 'uuid' })
@@ -51,8 +51,8 @@ export class CreatorApplicationEntity extends BaseEntityUUID {
 
   // ==================== 신청 상태 ====================
 
-  @Column({ type: 'enum', enum: ApplicationStatus, default: ApplicationStatus.PENDING })
-  status!: ApplicationStatus;
+  @Column({ type: 'enum', enum: RegistrationStatus, default: RegistrationStatus.PENDING })
+  status!: RegistrationStatus;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   appliedAt!: Date;
@@ -60,7 +60,7 @@ export class CreatorApplicationEntity extends BaseEntityUUID {
   // ==================== 신청자 메시지 ====================
 
   @Column({ type: 'text', nullable: true })
-  applicantMessage?: string; // 신청 사유/소개
+  registrationMessage?: string; // 신청 사유/소개
 
   // ==================== 검토 정보 (JSON) ====================
 

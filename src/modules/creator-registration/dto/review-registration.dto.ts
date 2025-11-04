@@ -1,10 +1,10 @@
 import { IsString, IsEnum, IsOptional } from 'class-validator';
 
-import { ApplicationStatus } from '../enums/index.js';
+import { RegistrationStatus } from '../enums/index.js';
 
-export class ReviewApplicationDto {
-  @IsEnum(ApplicationStatus)
-  status!: ApplicationStatus.APPROVED | ApplicationStatus.REJECTED;
+export class ReviewRegistrationDto {
+  @IsEnum(RegistrationStatus)
+  status!: RegistrationStatus.APPROVED | RegistrationStatus.REJECTED;
 
   @IsOptional()
   @IsString()

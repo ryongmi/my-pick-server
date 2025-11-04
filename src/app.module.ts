@@ -16,7 +16,7 @@ import {
   UserInteractionModule,
   ExternalApiModule,
   ContentModule,
-  CreatorApplicationModule,
+  CreatorRegistrationModule,
 } from '@modules/index.js';
 import { ImageModule } from '@modules/image/image.module.js';
 
@@ -33,7 +33,7 @@ import { ImageModule } from '@modules/image/image.module.js';
     // Phase 1: Creator Management System
     CreatorModule,
     UserSubscriptionModule,
-    CreatorApplicationModule,
+    CreatorRegistrationModule,
     // Phase 2: Content Management System
     ContentModule,
     // Phase 3: User Interaction System

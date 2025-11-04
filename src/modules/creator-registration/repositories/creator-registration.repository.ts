@@ -4,12 +4,12 @@ import { DataSource } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
 
-import { CreatorApplicationEntity, ApplicationStatus } from '../entities/creator-application.entity.js';
+import { CreatorRegistrationEntity, RegistrationStatus } from '../entities/creator-registration.entity.js';
 
 @Injectable()
-export class CreatorApplicationRepository extends BaseRepository<CreatorApplicationEntity> {
+export class CreatorRegistrationRepository extends BaseRepository<CreatorRegistrationEntity> {
   constructor(dataSource: DataSource) {
-    super(CreatorApplicationEntity, dataSource);
+    super(CreatorRegistrationEntity, dataSource);
   }
 
   // ==================== CUSTOM QUERY METHODS ====================
@@ -17,11 +17,11 @@ export class CreatorApplicationRepository extends BaseRepository<CreatorApplicat
   /**
    * 사용자의 활성 신청 확인 (PENDING만)
    */
-  async hasActiveApplication(userId: string): Promise<boolean> {
+  async hasActiveRegistration(userId: string): Promise<boolean> {
     const count = await this.count({
       where: {
         userId,
-        status: ApplicationStatus.PENDING,
+        status: RegistrationStatus.PENDING,
       },
     });
 
@@ -31,18 +31,18 @@ export class CreatorApplicationRepository extends BaseRepository<CreatorApplicat
   /**
    * 신청 검색 (관리자용, 페이지네이션)
    */
-  async searchApplications(options: {
-    status?: ApplicationStatus;
+  async searchRegistrations(options: {
+    status?: RegistrationStatus;
     limit?: number;
     offset?: number;
-  }): Promise<[CreatorApplicationEntity[], number]> {
-    const qb = this.createQueryBuilder('app');
+  }): Promise<[CreatorRegistrationEntity[], number]> {
+    const qb = this.createQueryBuilder('registration');
 
     if (options.status) {
-      qb.where('app.status = :status', { status: options.status });
+      qb.where('registration.status = :status', { status: options.status });
     }
 
-    qb.orderBy('app.appliedAt', 'DESC');
+    qb.orderBy('registration.appliedAt', 'DESC');
 
     if (options.limit) {
       qb.take(options.limit);
@@ -58,14 +58,14 @@ export class CreatorApplicationRepository extends BaseRepository<CreatorApplicat
   /**
    * 상태별 카운트
    */
-  async countByStatus(status: ApplicationStatus): Promise<number> {
+  async countByStatus(status: RegistrationStatus): Promise<number> {
     return this.count({ where: { status } });
   }
 
   /**
    * 사용자의 최신 신청 조회
    */
-  async findLatestByUserId(userId: string): Promise<CreatorApplicationEntity | null> {
+  async findLatestByUserId(userId: string): Promise<CreatorRegistrationEntity | null> {
     return this.findOne({
       where: { userId },
       order: { appliedAt: 'DESC' },

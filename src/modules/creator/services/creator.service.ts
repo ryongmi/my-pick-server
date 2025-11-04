@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { In } from 'typeorm';
+
 import { PaginatedResult } from '@krgeobuk/core/interfaces';
+import { LimitType } from '@krgeobuk/core/enum';
 
 import { UserSubscriptionService } from '@modules/user-subscription/services/user-subscription.service.js';
-import type { ChannelInfo } from '@modules/creator-application/entities/creator-application.entity.js';
+import type { ChannelInfo } from '@modules/creator-registration/entities/creator-registration.entity.js';
 
 import { CreatorException } from '../exceptions/index.js';
 import { CreatorRepository } from '../repositories/creator.repository.js';
@@ -186,6 +189,78 @@ export class CreatorService {
     await this.creatorRepository.update(id, { isActive: false });
 
     this.logger.log('Creator deactivated', { creatorId: id });
+  }
+
+  /**
+   * 여러 ID로 크리에이터 상세 정보 조회 (구독 목록용, 페이지네이션)
+   */
+  async findByIdsWithDetails(
+    creatorIds: string[],
+    options?: {
+      page?: number;
+      limit?: LimitType;
+    }
+  ): Promise<PaginatedResult<CreatorSearchResultDto>> {
+    if (creatorIds.length === 0) {
+      return {
+        items: [],
+        pageInfo: {
+          totalItems: 0,
+          page: options?.page ?? 1,
+          limit: (options?.limit ?? LimitType.THIRTY) as LimitType,
+          totalPages: 0,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        },
+      };
+    }
+
+    const page = options?.page ?? 1;
+    const limit = (options?.limit ?? LimitType.THIRTY) as LimitType;
+    const offset = (page - 1) * limit;
+
+    // 1. 페이지네이션 적용 (클라이언트 레벨)
+    const paginatedIds = creatorIds.slice(offset, offset + limit);
+
+    // 2. 크리에이터 조회
+    const creators = await this.creatorRepository.find({
+      where: {
+        id: In(paginatedIds),
+        isActive: true,
+      },
+    });
+
+    // 3. 플랫폼 정보 조회
+    const platformsMap = await this.getPlatformsForCreators(paginatedIds);
+
+    // 4. DTO 변환 (isSubscribed는 항상 true로 설정 - 구독한 크리에이터만 조회)
+    const items = creators.map((creator) => {
+      const dto = this.toSearchResultDto(creator, platformsMap.get(creator.id) || []);
+      dto.isSubscribed = true; // 구독한 크리에이터만 조회하므로 항상 true
+      return dto;
+    });
+
+    // 5. 페이지네이션 메타 정보
+    const totalPages = Math.ceil(creatorIds.length / limit);
+
+    this.logger.debug('Found creators by IDs with details', {
+      requestedCount: creatorIds.length,
+      page,
+      limit,
+      returnedCount: items.length,
+    });
+
+    return {
+      items,
+      pageInfo: {
+        totalItems: creatorIds.length,
+        page,
+        limit,
+        totalPages,
+        hasPreviousPage: page > 1,
+        hasNextPage: page < totalPages,
+      },
+    };
   }
 
   // ==================== EXTENDED METHODS (신규 추가) ====================
