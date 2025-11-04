@@ -1,8 +1,8 @@
 import { IsString, IsEnum, IsOptional, IsUrl } from 'class-validator';
 
-import { PlatformType } from '../entities/creator-application.entity.js';
+import { PlatformType } from '../entities/creator-registration.entity.js';
 
-export class CreateApplicationDto {
+export class CreateRegistrationDto {
   @IsEnum(PlatformType)
   platform!: PlatformType;
 
@@ -14,5 +14,5 @@ export class CreateApplicationDto {
 
   @IsOptional()
   @IsString()
-  applicantMessage?: string; // 신청 사유/소개
+  registrationMessage?: string; // 신청 사유/소개
 }

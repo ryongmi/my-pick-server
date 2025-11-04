@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Body,
+  Query,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -14,9 +15,14 @@ import {
 import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
+import { PaginateBaseDto } from '@krgeobuk/core/dtos';
+import { PaginatedResult } from '@krgeobuk/core/interfaces';
+import { LimitType } from '@krgeobuk/core/enum';
 
 import { UserSubscriptionService } from '../services/user-subscription.service.js';
 import { UpdateNotificationDto } from '../dto/index.js';
+import { CreatorService } from '../../creator/services/creator.service.js';
+import { CreatorSearchResultDto } from '../../creator/dto/index.js';
 
 /**
  * 사용자 본인의 구독 관리 컨트롤러
@@ -25,15 +31,29 @@ import { UpdateNotificationDto } from '../dto/index.js';
 @Controller('subscriptions')
 @UseGuards(AccessTokenGuard)
 export class SubscriptionController {
-  constructor(private readonly userSubscriptionService: UserSubscriptionService) {}
+  constructor(
+    private readonly userSubscriptionService: UserSubscriptionService,
+    private readonly creatorService: CreatorService
+  ) {}
 
   /**
-   * 내가 구독한 크리에이터 ID 목록 조회
-   * GET /subscriptions
+   * 내가 구독한 크리에이터 상세 정보 조회 (페이지네이션)
+   * GET /subscriptions?page=1&limit=20
    */
   @Get()
-  async getMySubscriptions(@CurrentJwt() jwt: AuthenticatedJwt): Promise<string[]> {
-    return this.userSubscriptionService.getCreatorIds(jwt.userId);
+  async getMySubscriptions(
+    @CurrentJwt() jwt: AuthenticatedJwt,
+    @Query() query: PaginateBaseDto
+  ): Promise<PaginatedResult<CreatorSearchResultDto>> {
+    // 1. 구독한 크리에이터 ID 목록 조회
+    const creatorIds = await this.userSubscriptionService.getCreatorIds(jwt.userId);
+
+    // 2. CreatorService를 통해 전체 정보 조회 (페이지네이션 포함)
+    const options: { page?: number; limit?: LimitType } = {};
+    if (query.page !== undefined) options.page = query.page;
+    if (query.limit !== undefined) options.limit = query.limit;
+
+    return await this.creatorService.findByIdsWithDetails(creatorIds, options);
   }
 
   /**

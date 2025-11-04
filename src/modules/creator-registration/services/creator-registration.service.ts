@@ -7,21 +7,21 @@ import { PlatformType as CommonPlatformType } from '@common/enums/index.js';
 import { CreatorService } from '../../creator/services/creator.service.js';
 import { CreatorPlatformService } from '../../creator/services/creator-platform.service.js';
 import { YouTubeApiService } from '../../external-api/services/youtube-api.service.js';
-import { CreatorApplicationRepository } from '../repositories/creator-application.repository.js';
+import { CreatorRegistrationRepository } from '../repositories/creator-registration.repository.js';
 import {
-  CreatorApplicationEntity,
+  CreatorRegistrationEntity,
   PlatformType,
-  ApplicationStatus,
-} from '../entities/creator-application.entity.js';
-import { CreateApplicationDto, ApplicationDetailDto } from '../dto/index.js';
-import { CreatorApplicationException } from '../exceptions/index.js';
+  RegistrationStatus,
+} from '../entities/creator-registration.entity.js';
+import { CreateRegistrationDto, RegistrationDetailDto } from '../dto/index.js';
+import { CreatorRegistrationException } from '../exceptions/index.js';
 
 @Injectable()
-export class CreatorApplicationService {
-  private readonly logger = new Logger(CreatorApplicationService.name);
+export class CreatorRegistrationService {
+  private readonly logger = new Logger(CreatorRegistrationService.name);
 
   constructor(
-    private readonly applicationRepo: CreatorApplicationRepository,
+    private readonly registrationRepo: CreatorRegistrationRepository,
     private readonly youtubeApi: YouTubeApiService,
     private readonly creatorService: CreatorService,
     private readonly creatorPlatformService: CreatorPlatformService,
@@ -33,18 +33,18 @@ export class CreatorApplicationService {
   /**
    * 크리에이터 신청 제출
    */
-  async submitApplication(userId: string, dto: CreateApplicationDto): Promise<string> {
+  async submitRegistration(userId: string, dto: CreateRegistrationDto): Promise<string> {
     // 1. 중복 신청 체크 (PENDING 상태만)
-    const hasActive = await this.applicationRepo.hasActiveApplication(userId);
+    const hasActive = await this.registrationRepo.hasActiveRegistration(userId);
     if (hasActive) {
-      throw CreatorApplicationException.activeApplicationExists();
+      throw CreatorRegistrationException.activeRegistrationExists();
     }
 
     // 2. YouTube API로 채널 정보 검증 (실제 존재하는 채널인지)
     if (dto.platform === PlatformType.YOUTUBE) {
       const channelInfo = await this.youtubeApi.getChannelInfo(dto.channelId);
       if (!channelInfo) {
-        throw CreatorApplicationException.channelNotFound();
+        throw CreatorRegistrationException.channelNotFound();
       }
 
       // 3. 이미 등록된 채널인지 확인
@@ -53,7 +53,7 @@ export class CreatorApplicationService {
         dto.channelId
       );
       if (existingPlatform) {
-        throw CreatorApplicationException.channelAlreadyRegistered();
+        throw CreatorRegistrationException.channelAlreadyRegistered();
       }
 
       // 4. 신청 엔티티 생성 (YouTube 데이터 포함)
@@ -78,23 +78,23 @@ export class CreatorApplicationService {
       }
       channelData.publishedAt = channelInfo.publishedAt.toISOString();
 
-      const applicationData: any = {
+      const registrationData: any = {
         userId,
         channelInfo: channelData,
-        status: ApplicationStatus.PENDING,
+        status: RegistrationStatus.PENDING,
         appliedAt: new Date(),
       };
 
-      if (dto.applicantMessage) {
-        applicationData.applicantMessage = dto.applicantMessage;
+      if (dto.registrationMessage) {
+        registrationData.registrationMessage = dto.registrationMessage;
       }
 
-      const application = this.applicationRepo.create(applicationData);
-      const saved = await this.applicationRepo.save(application);
-      const savedEntity = (Array.isArray(saved) ? saved[0] : saved) as CreatorApplicationEntity;
+      const registration = this.registrationRepo.create(registrationData);
+      const saved = await this.registrationRepo.save(registration);
+      const savedEntity = (Array.isArray(saved) ? saved[0] : saved) as CreatorRegistrationEntity;
 
-      this.logger.log('Creator application submitted', {
-        applicationId: savedEntity.id,
+      this.logger.log('Creator registration submitted', {
+        registrationId: savedEntity.id,
         userId,
         channelId: dto.channelId,
         channelName: channelInfo.title,
@@ -103,42 +103,42 @@ export class CreatorApplicationService {
       return savedEntity.id;
     }
 
-    throw CreatorApplicationException.platformNotSupported();
+    throw CreatorRegistrationException.platformNotSupported();
   }
 
   /**
    * 사용자의 활성 신청 조회 (PENDING만)
    */
-  async findActiveApplication(userId: string): Promise<CreatorApplicationEntity | null> {
-    return this.applicationRepo.findOne({
-      where: { userId, status: ApplicationStatus.PENDING },
+  async findActiveRegistration(userId: string): Promise<CreatorRegistrationEntity | null> {
+    return this.registrationRepo.findOne({
+      where: { userId, status: RegistrationStatus.PENDING },
     });
   }
 
   /**
    * 신청 상태 조회 (사용자)
    */
-  async getMyApplicationStatus(userId: string): Promise<ApplicationDetailDto | null> {
-    const application = await this.applicationRepo.findLatestByUserId(userId);
+  async getMyRegistrationStatus(userId: string): Promise<RegistrationDetailDto | null> {
+    const registration = await this.registrationRepo.findLatestByUserId(userId);
 
-    return application;
+    return registration;
   }
 
   /**
    * 신청 상세 조회 (권한 체크 포함)
    */
-  async getApplicationById(
-    applicationId: string,
+  async getRegistrationById(
+    registrationId: string,
     requestUserId: string
-  ): Promise<ApplicationDetailDto> {
-    const application = await this.findByIdOrFail(applicationId);
+  ): Promise<RegistrationDetailDto> {
+    const registration = await this.findByIdOrFail(registrationId);
 
     // 본인 신청만 조회 가능
-    if (application.userId !== requestUserId) {
-      throw CreatorApplicationException.notApplicationOwner();
+    if (registration.userId !== requestUserId) {
+      throw CreatorRegistrationException.notRegistrationOwner();
     }
 
-    return application;
+    return registration;
   }
 
   // ==================== PUBLIC METHODS (관리자) ====================
@@ -146,30 +146,30 @@ export class CreatorApplicationService {
   /**
    * 신청 승인 (트랜잭션)
    */
-  async approveApplication(
-    applicationId: string,
+  async approveRegistration(
+    registrationId: string,
     reviewerId: string,
     comment?: string
   ): Promise<string> {
     return this.dataSource.transaction(async (manager) => {
-      const application = await manager.findOne(CreatorApplicationEntity, {
-        where: { id: applicationId },
+      const registration = await manager.findOne(CreatorRegistrationEntity, {
+        where: { id: registrationId },
       });
 
-      if (!application) {
-        throw CreatorApplicationException.applicationNotFound();
+      if (!registration) {
+        throw CreatorRegistrationException.registrationNotFound();
       }
 
-      if (application.status !== ApplicationStatus.PENDING) {
-        throw CreatorApplicationException.applicationAlreadyReviewed();
+      if (registration.status !== RegistrationStatus.PENDING) {
+        throw CreatorRegistrationException.registrationAlreadyReviewed();
       }
 
-      const channelInfo = application.channelInfo;
+      const channelInfo = registration.channelInfo;
 
       // 1. Creator 생성 (CreatorService의 createFromApplication 사용)
       const creator = await this.creatorService.createFromApplication(
-        application.userId,
-        applicationId,
+        registration.userId,
+        registrationId,
         channelInfo
       );
 
@@ -191,7 +191,7 @@ export class CreatorApplicationService {
       await this.creatorPlatformService.createPlatform(platformData);
 
       // 3. 신청 상태 업데이트
-      application.status = ApplicationStatus.APPROVED;
+      registration.status = RegistrationStatus.APPROVED;
 
       const reviewInfoData: any = {
         reviewerId,
@@ -200,12 +200,12 @@ export class CreatorApplicationService {
       if (comment) {
         reviewInfoData.comment = comment;
       }
-      application.reviewInfo = reviewInfoData;
+      registration.reviewInfo = reviewInfoData;
 
-      await manager.save(application);
+      await manager.save(registration);
 
-      this.logger.log('Creator application approved', {
-        applicationId,
+      this.logger.log('Creator registration approved', {
+        registrationId,
         creatorId: creator.id,
         reviewerId,
       });
@@ -217,19 +217,19 @@ export class CreatorApplicationService {
   /**
    * 신청 거부
    */
-  async rejectApplication(
-    applicationId: string,
+  async rejectRegistration(
+    registrationId: string,
     reviewerId: string,
     reason: string,
     comment?: string
   ): Promise<void> {
-    const application = await this.findByIdOrFail(applicationId);
+    const registration = await this.findByIdOrFail(registrationId);
 
-    if (application.status !== ApplicationStatus.PENDING) {
-      throw CreatorApplicationException.applicationAlreadyReviewed();
+    if (registration.status !== RegistrationStatus.PENDING) {
+      throw CreatorRegistrationException.registrationAlreadyReviewed();
     }
 
-    application.status = ApplicationStatus.REJECTED;
+    registration.status = RegistrationStatus.REJECTED;
 
     const reviewInfoData: any = {
       reviewerId,
@@ -239,12 +239,12 @@ export class CreatorApplicationService {
     if (comment) {
       reviewInfoData.comment = comment;
     }
-    application.reviewInfo = reviewInfoData;
+    registration.reviewInfo = reviewInfoData;
 
-    await this.applicationRepo.save(application);
+    await this.registrationRepo.save(registration);
 
-    this.logger.log('Creator application rejected', {
-      applicationId,
+    this.logger.log('Creator registration rejected', {
+      registrationId,
       reviewerId,
       reason,
     });
@@ -253,28 +253,28 @@ export class CreatorApplicationService {
   /**
    * 신청 목록 조회 (관리자, 페이지네이션)
    */
-  async searchApplications(options: {
-    status?: ApplicationStatus;
+  async searchRegistrations(options: {
+    status?: RegistrationStatus;
     limit?: number;
     offset?: number;
-  }): Promise<{ applications: CreatorApplicationEntity[]; total: number }> {
-    const [applications, total] = await this.applicationRepo.searchApplications(options);
+  }): Promise<{ registrations: CreatorRegistrationEntity[]; total: number }> {
+    const [registrations, total] = await this.registrationRepo.searchRegistrations(options);
 
-    return { applications, total };
+    return { registrations, total };
   }
 
   /**
    * 신청 통계 조회 (관리자)
    */
-  async getApplicationStats(): Promise<{
+  async getRegistrationStats(): Promise<{
     pending: number;
     approved: number;
     rejected: number;
     total: number;
   }> {
-    const pending = await this.applicationRepo.countByStatus(ApplicationStatus.PENDING);
-    const approved = await this.applicationRepo.countByStatus(ApplicationStatus.APPROVED);
-    const rejected = await this.applicationRepo.countByStatus(ApplicationStatus.REJECTED);
+    const pending = await this.registrationRepo.countByStatus(RegistrationStatus.PENDING);
+    const approved = await this.registrationRepo.countByStatus(RegistrationStatus.APPROVED);
+    const rejected = await this.registrationRepo.countByStatus(RegistrationStatus.REJECTED);
 
     return {
       pending,
@@ -286,11 +286,11 @@ export class CreatorApplicationService {
 
   // ==================== PRIVATE HELPER METHODS ====================
 
-  async findByIdOrFail(id: string): Promise<CreatorApplicationEntity> {
-    const application = await this.applicationRepo.findOne({ where: { id } });
-    if (!application) {
-      throw CreatorApplicationException.applicationNotFound();
+  async findByIdOrFail(id: string): Promise<CreatorRegistrationEntity> {
+    const registration = await this.registrationRepo.findOne({ where: { id } });
+    if (!registration) {
+      throw CreatorRegistrationException.registrationNotFound();
     }
-    return application;
+    return registration;
   }
 }
