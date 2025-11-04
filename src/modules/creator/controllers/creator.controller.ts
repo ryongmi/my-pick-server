@@ -8,12 +8,16 @@ import { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 
 import { CreatorService } from '../services/creator.service.js';
-import { CreatorSearchQueryDto, CreatorSearchResultDto } from '../dto/index.js';
-import { CreatorEntity } from '../entities/creator.entity.js';
+import { CreatorPlatformService } from '../services/creator-platform.service.js';
+import { CreatorSearchQueryDto, CreatorSearchResultDto, CreatorDetailDto } from '../dto/index.js';
+import { CreatorPlatformEntity } from '../entities/creator-platform.entity.js';
 
 @Controller('creators')
 export class CreatorController {
-  constructor(private readonly creatorService: CreatorService) {}
+  constructor(
+    private readonly creatorService: CreatorService,
+    private readonly creatorPlatformService: CreatorPlatformService
+  ) {}
 
   /**
    * 크리에이터 검색
@@ -35,7 +39,7 @@ export class CreatorController {
   }
 
   /**
-   * 크리에이터 상세 조회
+   * 크리에이터 상세 조회 (플랫폼 + 사용자 정보 포함)
    * GET /creators/:id
    */
   @Get(':id')
@@ -44,7 +48,25 @@ export class CreatorController {
   @Serialize({
     message: '크리에이터 상세 조회 성공',
   })
-  async getCreatorDetail(@Param('id') id: string): Promise<CreatorEntity> {
-    return await this.creatorService.findByIdOrFail(id);
+  async getCreatorDetail(@Param('id') id: string): Promise<CreatorDetailDto> {
+    return await this.creatorService.getDetailById(id);
+  }
+
+  /**
+   * 크리에이터 연동 플랫폼 목록 조회
+   * GET /creators/:id/platforms
+   */
+  @Get(':id/platforms')
+  @UseGuards(AccessTokenGuard, AuthorizationGuard)
+  @HttpCode(200)
+  @Serialize({
+    message: '크리에이터 플랫폼 목록 조회 성공',
+  })
+  async getCreatorPlatforms(@Param('id') id: string): Promise<CreatorPlatformEntity[]> {
+    // 크리에이터 존재 여부 확인
+    await this.creatorService.findByIdOrFail(id);
+
+    // 플랫폼 목록 조회
+    return await this.creatorPlatformService.findByCreatorId(id);
   }
 }

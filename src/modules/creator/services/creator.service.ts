@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 
 import { In } from 'typeorm';
+import { firstValueFrom, timeout } from 'rxjs';
 
 import { PaginatedResult } from '@krgeobuk/core/interfaces';
 import { LimitType } from '@krgeobuk/core/enum';
@@ -21,6 +23,8 @@ import {
   CreateCreatorDto,
   CreatorSearchQueryDto,
   CreatorSearchResultDto,
+  CreatorDetailDto,
+  CreatorUserDto,
   PlatformInfo,
 } from '../dto/index.js';
 
@@ -33,7 +37,8 @@ export class CreatorService {
   constructor(
     private readonly creatorRepository: CreatorRepository,
     private readonly creatorPlatformService: CreatorPlatformService,
-    private readonly userSubscriptionService: UserSubscriptionService
+    private readonly userSubscriptionService: UserSubscriptionService,
+    @Inject('AUTH_SERVICE') private readonly authServiceClient: ClientProxy
   ) {}
 
   // ==================== PUBLIC METHODS ====================
@@ -56,6 +61,30 @@ export class CreatorService {
       throw CreatorException.creatorNotFound();
     }
     return creator;
+  }
+
+  /**
+   * 크리에이터 상세 정보 조회 (플랫폼 + 사용자 정보 포함)
+   * 관리자 페이지 상세 조회용
+   */
+  async getDetailById(id: string): Promise<CreatorDetailDto> {
+    // 1. 크리에이터 기본 정보
+    const creator = await this.findByIdOrFail(id);
+
+    // 2. 플랫폼 정보와 사용자 정보 병렬 조회
+    const [platforms, user] = await Promise.all([
+      this.creatorPlatformService.findByCreatorId(id),
+      this.getUserInfo(creator.userId),
+    ]);
+
+    // 3. CreatorDetailDto 생성
+    const detail: CreatorDetailDto = Object.assign(new CreatorDetailDto(), {
+      ...creator,
+      platforms,
+      user,
+    });
+
+    return detail;
   }
 
   /**
@@ -527,4 +556,34 @@ export class CreatorService {
 
     return platformsMap;
   }
+
+  /**
+   * TCP 통신으로 auth-server에서 사용자 정보 조회
+   */
+  private async getUserInfo(userId: string): Promise<CreatorUserDto> {
+    try {
+      const user = await firstValueFrom(
+        this.authServiceClient.send('user.find-by-id', { userId }).pipe(timeout(5000))
+      );
+
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        profileImage: user.profileImage,
+      };
+    } catch (error) {
+      this.logger.warn(`Failed to fetch user info for userId: ${userId}`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      // 사용자 정보 조회 실패 시 기본값 반환
+      return {
+        id: userId,
+        email: 'unknown@example.com',
+        name: 'Unknown User',
+      };
+    }
+  }
 }
+
