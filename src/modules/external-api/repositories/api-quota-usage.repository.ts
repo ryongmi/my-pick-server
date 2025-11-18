@@ -42,7 +42,7 @@ export class ApiQuotaUsageRepository extends BaseRepository<ApiQuotaUsageEntity>
   }
 
   async deleteOldRecords(cutoffDate: Date): Promise<{ deletedCount: number }> {
-    const deleteResult = await this.delete({
+    const deleteResult = await this.softDelete({
       createdAt: LessThan(cutoffDate),
     });
 

@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CreatorModule } from '@modules/creator/creator.module.js';
 import { UserInteractionModule } from '@modules/user-interaction/user-interaction.module.js';
+import { ExternalApiModule } from '@modules/external-api/external-api.module.js';
 
 import { ContentEntity } from './entities/content.entity.js';
 import { ContentCategoryEntity } from './entities/content-category.entity.js';
@@ -26,6 +27,7 @@ import { ContentController } from './controllers/content.controller.js';
     // 순환 참조 방지를 위해 forwardRef 사용
     forwardRef(() => CreatorModule),
     UserInteractionModule,
+    ExternalApiModule,
   ],
   controllers: [ContentController],
   providers: [

@@ -11,13 +11,15 @@ import { ContentService } from '../services/content.service.js';
 import { ContentSearchQueryDto } from '../dto/search-query.dto.js';
 import { ContentWithCreatorDto } from '../dto/content-response.dto.js';
 import { UserInteractionService } from '../../user-interaction/services/user-interaction.service.js';
+import { YouTubeSyncScheduler } from '../../external-api/services/youtube-sync.scheduler.js';
 
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
 @Controller('content')
 export class ContentController {
   constructor(
     private readonly contentService: ContentService,
-    private readonly interactionService: UserInteractionService
+    private readonly interactionService: UserInteractionService,
+    private readonly youtubeSyncScheduler: YouTubeSyncScheduler
   ) {}
 
   /**
@@ -146,5 +148,30 @@ export class ContentController {
     @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
     await this.interactionService.unlikeContent(userId, contentId);
+  }
+
+  // ==================== ADMIN SYNC ENDPOINTS ====================
+
+  /**
+   * 플랫폼 콘텐츠 수동 동기화 (관리자용)
+   * POST /content/sync/:platformId
+   *
+   * Note: 관리자 권한 검증은 추후 추가 예정
+   */
+  @Post('sync/:platformId')
+  @HttpCode(200)
+  @Serialize({
+    message: '콘텐츠 동기화 요청 처리 완료',
+  })
+  async syncPlatformContent(
+    @Param('platformId') platformId: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    syncedCount?: number;
+    error?: string;
+  }> {
+    const result = await this.youtubeSyncScheduler.syncSinglePlatform(platformId);
+    return result;
   }
 }
