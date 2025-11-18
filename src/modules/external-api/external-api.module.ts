@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -18,9 +18,9 @@ import { YouTubeApiService, QuotaMonitorService, YouTubeSyncScheduler } from './
     }),
     ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([ApiQuotaUsageEntity]),
-    // Creator/Content 모듈 import
+    // Creator/Content 모듈 import (순환 참조 방지를 위해 forwardRef 사용)
     CreatorModule,
-    ContentModule,
+    forwardRef(() => ContentModule),
   ],
   providers: [
     // Repositories

@@ -27,7 +27,7 @@ import { ContentController } from './controllers/content.controller.js';
     // 순환 참조 방지를 위해 forwardRef 사용
     forwardRef(() => CreatorModule),
     UserInteractionModule,
-    ExternalApiModule,
+    forwardRef(() => ExternalApiModule),
   ],
   controllers: [ContentController],
   providers: [
