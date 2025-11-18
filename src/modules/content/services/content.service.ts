@@ -371,8 +371,8 @@ export class ContentService {
   async searchContents(query: {
     page?: number;
     limit?: LimitType;
-    creatorId?: string;
-    platform?: PlatformType;
+    creatorIds?: string[];
+    platforms?: PlatformType[];
     type?: ContentType;
     sortBy?: string;
     sortOrder?: 'ASC' | 'DESC';
@@ -465,7 +465,7 @@ export class ContentService {
       page: pageInfo.page,
       totalItems: pageInfo.totalItems,
       creatorsEnriched: userMap.size,
-      filterCount: [query.creatorId, query.platform, query.type].filter(Boolean).length,
+      filterCount: [query.creatorIds, query.platforms, query.type].filter(Boolean).length,
     });
 
     return {

@@ -290,8 +290,8 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
   async searchContents(options: {
     page?: number;
     limit?: LimitType;
-    creatorId?: string;
-    platform?: string;
+    creatorIds?: string[];
+    platforms?: string[];
     type?: string;
     sortBy?: string;
     sortOrder?: SortOrderType;
@@ -309,8 +309,8 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
     const {
       page = 1,
       limit = LimitType.THIRTY,
-      creatorId,
-      platform,
+      creatorIds,
+      platforms,
       type,
       sortBy = 'publishedAt',
       sortOrder = SortOrderType.DESC,
@@ -320,13 +320,17 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
       status: 'active',
     });
 
-    // 필터링
-    if (creatorId) {
-      queryBuilder.andWhere('content.creatorId = :creatorId', { creatorId });
+    // 필터링 - 다중 크리에이터
+    if (creatorIds && creatorIds.length > 0) {
+      queryBuilder.andWhere('content.creatorId IN (:...creatorIds)', { creatorIds });
     }
-    if (platform) {
-      queryBuilder.andWhere('content.platform = :platform', { platform });
+
+    // 필터링 - 다중 플랫폼
+    if (platforms && platforms.length > 0) {
+      queryBuilder.andWhere('content.platform IN (:...platforms)', { platforms });
     }
+
+    // 필터링 - 콘텐츠 타입
     if (type) {
       queryBuilder.andWhere('content.type = :type', { type });
     }

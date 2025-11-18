@@ -1,4 +1,5 @@
-import { IsOptional, IsString, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsArray } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 import { PaginateBaseDto } from '@krgeobuk/core/dtos';
 
@@ -11,12 +12,24 @@ import { ContentType } from '../enums/index.js';
  */
 export class ContentSearchQueryDto extends PaginateBaseDto {
   @IsOptional()
-  @IsString()
-  creatorId?: string;
+  @IsArray()
+  @IsString({ each: true })
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') return value.split(',');
+    return [];
+  })
+  creatorIds?: string[];
 
   @IsOptional()
-  @IsEnum(PlatformType)
-  platform?: PlatformType;
+  @IsArray()
+  @IsEnum(PlatformType, { each: true })
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') return value.split(',');
+    return [];
+  })
+  platforms?: PlatformType[];
 
   @IsOptional()
   @IsEnum(ContentType)
