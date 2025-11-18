@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { CreatorModule } from '../creator/creator.module.js';
 import { ContentModule } from '../content/content.module.js';
@@ -15,6 +16,7 @@ import { YouTubeApiService, QuotaMonitorService, YouTubeSyncScheduler } from './
       timeout: 10000,
       maxRedirects: 3,
     }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([ApiQuotaUsageEntity]),
     // Creator/Content 모듈 import
     CreatorModule,
