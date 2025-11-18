@@ -250,10 +250,39 @@ export class ContentService {
   }
 
   /**
-   * 콘텐츠 배치 생성 (YouTube 동기화용)
+   * 플랫폼 ID 목록으로 콘텐츠 조회 (UPSERT 용)
+   */
+  async findByPlatformIds(
+    platformIds: Array<{ platform: PlatformType; platformId: string }>
+  ): Promise<ContentEntity[]> {
+    return this.contentRepository.findByPlatformIds(platformIds);
+  }
+
+  /**
+   * 콘텐츠 배치 생성 (YouTube 동기화용) - UPSERT 지원
    */
   async createBatch(dtos: CreateContentInput[]): Promise<ContentEntity[]> {
-    const contents = dtos.map((dto) => {
+    if (dtos.length === 0) {
+      return [];
+    }
+
+    // 1. 기존 콘텐츠 조회 (platform + platformId로)
+    const platformIds = dtos.map((dto) => ({
+      platform: dto.platform,
+      platformId: dto.platformId,
+    }));
+
+    const existing = await this.findByPlatformIds(platformIds);
+    const existingMap = new Map(existing.map((c) => [`${c.platform}-${c.platformId}`, c]));
+
+    // 2. 새 콘텐츠와 기존 콘텐츠 분리
+    const toCreate: ContentEntity[] = [];
+    const toUpdate: ContentEntity[] = [];
+
+    for (const dto of dtos) {
+      const key = `${dto.platform}-${dto.platformId}`;
+      const existingContent = existingMap.get(key);
+
       const contentData: {
         type: ContentType;
         title: string;
@@ -297,6 +326,7 @@ export class ContentService {
           syncStatus: 'completed',
         },
       };
+
       if (dto.description !== undefined) {
         contentData.description = dto.description;
       }
@@ -310,16 +340,54 @@ export class ContentService {
         contentData.quality = dto.quality;
       }
 
-      return this.contentRepository.create(contentData);
-    });
+      if (existingContent) {
+        // 기존 콘텐츠 업데이트 (메타데이터만 업데이트, 통계는 updateStatistics로)
+        const updateData: Partial<ContentEntity> = {
+          ...existingContent,
+          title: contentData.title,
+          thumbnail: contentData.thumbnail,
+          url: contentData.url,
+          isLive: contentData.isLive,
+          ageRestriction: contentData.ageRestriction,
+          syncInfo: contentData.syncInfo,
+        };
 
-    const saved = await this.contentRepository.save(contents);
+        if (contentData.description !== undefined) {
+          updateData.description = contentData.description;
+        }
+        if (contentData.duration !== undefined) {
+          updateData.duration = contentData.duration;
+        }
+        if (contentData.language !== undefined) {
+          updateData.language = contentData.language;
+        }
+        if (contentData.quality !== undefined) {
+          updateData.quality = contentData.quality;
+        }
 
-    // const saved = await this.contentRepository.saveBatch(contents);
+        toUpdate.push(this.contentRepository.create(updateData));
+      } else {
+        // 새 콘텐츠 생성
+        toCreate.push(this.contentRepository.create(contentData));
+      }
+    }
 
-    this.logger.log('Content batch created', { count: saved.length });
+    // 3. 저장
+    const results: ContentEntity[] = [];
 
-    return saved;
+    if (toCreate.length > 0) {
+      const created = await this.contentRepository.save(toCreate);
+      results.push(...created);
+      this.logger.log('Content batch - created', { count: created.length });
+    }
+
+    if (toUpdate.length > 0) {
+      const updated = await this.contentRepository.save(toUpdate);
+      results.push(...updated);
+      this.logger.log('Content batch - updated', { count: updated.length });
+    }
+
+    return results;
   }
 
   /**

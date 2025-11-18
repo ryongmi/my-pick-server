@@ -371,5 +371,36 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
       },
     };
   }
+
+  /**
+   * 플랫폼 타입과 플랫폼 ID 조합으로 여러 콘텐츠 조회 (UPSERT 용)
+   */
+  async findByPlatformIds(
+    platformIds: Array<{ platform: PlatformType; platformId: string }>
+  ): Promise<ContentEntity[]> {
+    if (platformIds.length === 0) {
+      return [];
+    }
+
+    const queryBuilder = this.createQueryBuilder('content');
+
+    // WHERE (platform = ? AND platformId = ?) OR (platform = ? AND platformId = ?) ...
+    const conditions = platformIds
+      .map(
+        (_, index) =>
+          `(content.platform = :platform${index} AND content.platformId = :platformId${index})`
+      )
+      .join(' OR ');
+
+    const parameters = platformIds.reduce((acc, item, index) => {
+      acc[`platform${index}`] = item.platform;
+      acc[`platformId${index}`] = item.platformId;
+      return acc;
+    }, {} as Record<string, string>);
+
+    queryBuilder.where(conditions, parameters);
+
+    return queryBuilder.getMany();
+  }
 }
 
