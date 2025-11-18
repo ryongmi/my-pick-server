@@ -296,6 +296,249 @@ export class YouTubeSyncScheduler {
   }
 
   /**
+   * 크리에이터의 모든 콘텐츠 동기화 (전체 동기화)
+   * 사용 사례: 크리에이터 승인 후 전체 콘텐츠 수집
+   */
+  async syncAllContent(
+    platformId: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    totalCount?: number;
+    estimatedQuotaUsage?: number;
+    error?: string;
+  }> {
+    try {
+      const platform = await this.creatorPlatformService.findById(platformId);
+
+      if (!platform) {
+        return { success: false, message: '플랫폼을 찾을 수 없습니다.' };
+      }
+
+      if (!platform.isActive) {
+        return { success: false, message: '비활성화된 플랫폼입니다.' };
+      }
+
+      // 1. 동기화 상태를 초기 상태로 리셋
+      await this.creatorPlatformService.updateSyncProgress(platform.id, {
+        videoSyncStatus: VideoSyncStatus.IN_PROGRESS,
+        isFullSyncMode: true,
+        initialSyncCompleted: false,
+        syncedVideoCount: 0,
+        fullSyncStartedAt: new Date().toISOString(),
+        syncStartedAt: new Date().toISOString(),
+      });
+
+      // 2. YouTube API에서 전체 비디오 개수 조회
+      const channelInfo = await this.youtubeApi.getChannelInfo(platform.platformId);
+      const totalVideoCount = parseInt(String(channelInfo?.statistics.videoCount || '0'), 10);
+      const estimatedCallsNeeded = Math.ceil(totalVideoCount / 50);
+      const estimatedQuota = estimatedCallsNeeded * 2;
+
+      this.logger.log('Starting full sync for platform', {
+        platformId: platform.id,
+        platformUsername: platform.platformUsername,
+        totalVideoCount,
+        estimatedQuota,
+      });
+
+      // 3. 전체 콘텐츠 재귀적 동기화
+      await this.syncAllContentRecursive(platform, totalVideoCount);
+
+      return {
+        success: true,
+        message: '전체 콘텐츠 동기화가 완료되었습니다.',
+        totalCount: totalVideoCount,
+        estimatedQuotaUsage: estimatedQuota,
+      };
+    } catch (error: unknown) {
+      this.logger.error('Full sync failed', {
+        platformId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+
+      return {
+        success: false,
+        message: '동기화 중 오류가 발생했습니다.',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * 재귀적 전체 콘텐츠 동기화 (nextPageToken 처리)
+   */
+  private async syncAllContentRecursive(
+    platform: CreatorPlatformEntity,
+    totalCount: number,
+    pageToken?: string
+  ): Promise<void> {
+    // 할당량 체크 (90% 초과 시 일시정지)
+    const quotaSummary = await this.quotaMonitor.getQuotaSummary();
+    const youtubeQuota = quotaSummary.youtube;
+
+    if (youtubeQuota && youtubeQuota.usagePercentage > 90) {
+      this.logger.warn('YouTube quota approaching limit, pausing full sync', {
+        usagePercentage: youtubeQuota.usagePercentage.toFixed(1) + '%',
+        platformId: platform.id,
+      });
+      // 현재 상태 저장하고 중단 (관리자가 수동으로 재개 가능)
+      return;
+    }
+
+    const maxResults = 50;
+    const options: { maxResults: number; pageToken?: string } = { maxResults };
+
+    if (pageToken) {
+      options.pageToken = pageToken;
+    }
+
+    try {
+      // YouTube API로 비디오 가져오기
+      const result = await this.youtubeApi.getChannelVideos(platform.platformId, options);
+
+      if (result.videos.length > 0) {
+        // Content 변환 및 저장
+        const contentDtos = result.videos.map((video) =>
+          mapYouTubeVideoToContent(video, platform.creatorId)
+        );
+
+        const savedContents = await this.contentService.createBatch(contentDtos);
+
+        this.logger.debug('Saved batch of contents', {
+          platformId: platform.id,
+          count: savedContents.length,
+        });
+
+        // 카테고리 업데이트
+        const categoryDtos = result.videos
+          .filter((video) => video.categoryId)
+          .map((video) => mapYouTubeCategoryToContentCategory(video.categoryId!, platform.platformType))
+          .filter((dto): dto is NonNullable<typeof dto> => dto !== null);
+
+        if (categoryDtos.length > 0) {
+          await this.contentCategoryService.addBatch(categoryDtos);
+        }
+
+        // 통계 업데이트
+        for (let i = 0; i < result.videos.length; i++) {
+          const video = result.videos[i];
+          const content = savedContents[i];
+          if (!video || !content) continue;
+          const statistics = mapYouTubeStatisticsToContentStatistics(video);
+          await this.contentService.updateStatistics(content.id, statistics);
+        }
+
+        // 진행 상황 업데이트
+        const newSyncedCount = (platform.syncProgress?.syncedVideoCount || 0) + result.videos.length;
+        const remainingCount = Math.max(0, totalCount - newSyncedCount);
+        const progressPercent = totalCount > 0 ? Math.round((newSyncedCount / totalCount) * 100) : 0;
+
+        const updateData: Partial<typeof platform.syncProgress> = {
+          videoSyncStatus: VideoSyncStatus.IN_PROGRESS,
+          syncedVideoCount: newSyncedCount,
+          fullSyncProgress: {
+            syncedCount: newSyncedCount,
+            remainingCount,
+            progressPercent,
+          },
+        };
+
+        if (result.nextPageToken) {
+          updateData.nextPageToken = result.nextPageToken;
+        }
+
+        await this.creatorPlatformService.updateSyncProgress(platform.id, updateData);
+
+        this.logger.log('Full sync progress updated', {
+          platformId: platform.id,
+          syncedCount: newSyncedCount,
+          totalCount,
+          progressPercent: `${progressPercent}%`,
+        });
+      }
+
+      // 다음 페이지 확인
+      if (result.nextPageToken) {
+        // 재귀: 다음 페이지 처리
+        await this.syncAllContentRecursive(platform, totalCount, result.nextPageToken);
+      } else {
+        // 모든 페이지 처리 완료
+        await this.creatorPlatformService.updateSyncProgress(platform.id, {
+          videoSyncStatus: VideoSyncStatus.SYNCED,
+          initialSyncCompleted: true,
+          isFullSyncMode: false,
+          lastVideoSyncAt: new Date().toISOString(),
+          syncCompletedAt: new Date().toISOString(),
+        });
+
+        this.logger.log('Full sync completed for platform', {
+          platformId: platform.id,
+          totalSynced: platform.syncProgress?.syncedVideoCount,
+        });
+      }
+    } catch (error: unknown) {
+      this.logger.error('Full sync recursive step failed', {
+        platformId: platform.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      // 에러 상태 저장하고 재귀 중단
+      await this.creatorPlatformService.updateSyncProgress(platform.id, {
+        videoSyncStatus: VideoSyncStatus.FAILED,
+        lastSyncError: error instanceof Error ? error.message : 'Unknown error',
+        failedSyncCount: (platform.syncProgress?.failedSyncCount || 0) + 1,
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * 초기 동기화 재개 (실패한 경우)
+   */
+  async resumeInitialSync(
+    platformId: string
+  ): Promise<{ success: boolean; message: string; resumedCount?: number; error?: string }> {
+    try {
+      const platform = await this.creatorPlatformService.findById(platformId);
+
+      if (!platform) {
+        return { success: false, message: '플랫폼을 찾을 수 없습니다.' };
+      }
+
+      // initialSyncCompleted = false인 경우만 재개 가능
+      if (platform.syncProgress?.initialSyncCompleted) {
+        return {
+          success: false,
+          message: '초기 동기화가 이미 완료되었습니다.',
+        };
+      }
+
+      // 현재 진행 상황에서 이어서 시작
+      await this.syncPlatform(platform);
+
+      return {
+        success: true,
+        message: '초기 동기화가 재개되었습니다.',
+        resumedCount: platform.syncProgress?.syncedVideoCount || 0,
+      };
+    } catch (error: unknown) {
+      this.logger.error('Resume sync failed', {
+        platformId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      return {
+        success: false,
+        message: '재개 중 오류가 발생했습니다.',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
    * 매일 자정 할당량 정리
    */
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)

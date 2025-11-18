@@ -30,6 +30,16 @@ export interface SyncProgress {
   // Phase 1 & 2: 페이지네이션 지원
   initialSyncCompleted?: boolean; // 최초 동기화 완료 여부
   nextPageToken?: string; // YouTube API 페이지네이션 토큰
+
+  // Phase 3: 전체 동기화 모드
+  isFullSyncMode?: boolean; // 전체 동기화 진행 중 여부
+  fullSyncStartedAt?: string; // 전체 동기화 시작 시간
+  fullSyncProgress?: {
+    // 진행 상황 추적
+    syncedCount: number;
+    remainingCount: number;
+    progressPercent: number;
+  };
 }
 
 @Entity('creator_platforms')

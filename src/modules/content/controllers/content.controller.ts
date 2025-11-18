@@ -174,4 +174,59 @@ export class ContentController {
     const result = await this.youtubeSyncScheduler.syncSinglePlatform(platformId);
     return result;
   }
+
+  /**
+   * 크리에이터 전체 콘텐츠 동기화 (초기 동기화)
+   * POST /content/sync/:platformId/full
+   *
+   * 사용 사례:
+   * - 크리에이터 신청 승인 후 처음으로 모든 콘텐츠 수집
+   * - 관리자가 특정 채널의 전체 데이터를 다시 수집
+   *
+   * Note: 관리자 권한 검증은 추후 추가 예정
+   */
+  @Post('sync/:platformId/full')
+  @HttpCode(200)
+  @Serialize({
+    message: '전체 콘텐츠 동기화 요청 처리 완료',
+  })
+  async syncAllPlatformContent(
+    @Param('platformId') platformId: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    totalCount?: number;
+    estimatedQuotaUsage?: number;
+    error?: string;
+  }> {
+    const result = await this.youtubeSyncScheduler.syncAllContent(platformId);
+    return result;
+  }
+
+  /**
+   * 초기 동기화 재개
+   * POST /content/sync/:platformId/resume
+   *
+   * 사용 사례:
+   * - 일시 중지되었던 초기 동기화를 다시 시작
+   * - 실패했던 동기화를 재시도
+   *
+   * Note: 관리자 권한 검증은 추후 추가 예정
+   */
+  @Post('sync/:platformId/resume')
+  @HttpCode(200)
+  @Serialize({
+    message: '초기 동기화 재개 요청 처리 완료',
+  })
+  async resumeInitialSync(
+    @Param('platformId') platformId: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    resumedCount?: number;
+    error?: string;
+  }> {
+    const result = await this.youtubeSyncScheduler.resumeInitialSync(platformId);
+    return result;
+  }
 }
