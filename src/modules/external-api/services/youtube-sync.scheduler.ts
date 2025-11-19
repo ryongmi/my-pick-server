@@ -413,8 +413,11 @@ export class YouTubeSyncScheduler {
 
         // 카테고리 업데이트
         const categoryDtos = result.videos
-          .filter((video) => video.categoryId)
-          .map((video) => mapYouTubeCategoryToContentCategory(video.categoryId!, platform.platformType))
+          .map((video, index) => {
+            const content = savedContents[index];
+            if (!video.categoryId || !content) return null;
+            return mapYouTubeCategoryToContentCategory(content.id, video.categoryId);
+          })
           .filter((dto): dto is NonNullable<typeof dto> => dto !== null);
 
         if (categoryDtos.length > 0) {
