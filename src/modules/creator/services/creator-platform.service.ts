@@ -152,6 +152,9 @@ export class CreatorPlatformService {
 
   /**
    * 동기화 진행 상태 업데이트 (YouTube 스케줄러용)
+   *
+   * undefined 값을 전달하면 해당 필드를 제거합니다.
+   * 이를 통해 동기화 완료 시 nextPageToken, fullSyncProgress 등을 정리할 수 있습니다.
    */
   async updateSyncProgress(id: string, syncProgress: Partial<SyncProgress>): Promise<void> {
     const platform = await this.findByIdOrFail(id);
@@ -159,10 +162,21 @@ export class CreatorPlatformService {
     // 기존 syncProgress가 없으면 빈 객체로 초기화
     const currentProgress = platform.syncProgress || {};
 
-    const updatedProgress: Partial<SyncProgress> = {
-      ...currentProgress,
-      ...syncProgress,
-    };
+    // 기존 값으로 시작
+    const updatedProgress: Record<string, any> = { ...currentProgress };
+
+    // 새 값 처리: undefined는 필드 제거, 그 외는 덮어쓰기
+    const clearedFields: string[] = [];
+    Object.entries(syncProgress).forEach(([key, value]) => {
+      if (value === undefined) {
+        // undefined는 필드 제거
+        delete updatedProgress[key];
+        clearedFields.push(key);
+      } else {
+        // 그 외 값은 덮어쓰기
+        updatedProgress[key] = value;
+      }
+    });
 
     // json 필드 병합을 위해 as any 사용
     // Typeorm이 json 필드의 부분 업데이트를 지원하지 않음
@@ -173,6 +187,7 @@ export class CreatorPlatformService {
     this.logger.debug('Sync progress updated', {
       platformId: id,
       videoSyncStatus: updatedProgress.videoSyncStatus,
+      clearedFields: clearedFields.length > 0 ? clearedFields : undefined,
     });
   }
 

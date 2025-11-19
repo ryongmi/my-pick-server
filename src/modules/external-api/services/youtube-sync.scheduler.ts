@@ -257,13 +257,14 @@ export class YouTubeSyncScheduler {
             hasMorePages: true,
           });
         } else {
-          // 최초 동기화 완료 (nextPageToken 필드는 생략 - 제거하지 않고 유지)
+          // 최초 동기화 완료 - nextPageToken 제거
           await this.creatorPlatformService.updateSyncProgress(platform.id, {
             videoSyncStatus: VideoSyncStatus.SYNCED,
             initialSyncCompleted: true,
             lastVideoSyncAt: new Date().toISOString(),
             syncedVideoCount: newSyncedCount,
             failedSyncCount: 0,
+            nextPageToken: undefined, // 명시적 제거
           });
 
           this.logger.log(`Initial sync completed for platform ${platform.id}`, {
@@ -467,13 +468,15 @@ export class YouTubeSyncScheduler {
         // 재귀: 다음 페이지 처리
         await this.syncAllContentRecursive(platform, totalCount, result.nextPageToken);
       } else {
-        // 모든 페이지 처리 완료
+        // 모든 페이지 처리 완료 - nextPageToken, fullSyncProgress 제거
         await this.creatorPlatformService.updateSyncProgress(platform.id, {
           videoSyncStatus: VideoSyncStatus.SYNCED,
           initialSyncCompleted: true,
           isFullSyncMode: false,
           lastVideoSyncAt: new Date().toISOString(),
           syncCompletedAt: new Date().toISOString(),
+          nextPageToken: undefined, // 명시적 제거
+          fullSyncProgress: undefined, // 명시적 제거
         });
 
         this.logger.log('Full sync completed for platform', {
