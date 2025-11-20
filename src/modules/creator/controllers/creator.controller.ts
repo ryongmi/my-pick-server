@@ -143,4 +143,95 @@ export class CreatorController {
     // 플랫폼 목록 조회
     return await this.creatorPlatformService.findByCreatorId(id);
   }
+
+  // ==================== CREATOR DASHBOARD APIs ====================
+
+  /**
+   * 현재 로그인한 사용자의 크리에이터 정보 조회
+   * GET /creators/me
+   */
+  @SwaggerApiOperation({
+    summary: '내 크리에이터 정보 조회',
+    description: '현재 로그인한 사용자의 크리에이터 정보를 조회합니다.',
+  })
+  @SwaggerApiBearerAuth()
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '크리에이터 정보 조회 성공',
+    dto: CreatorDetailDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '크리에이터 정보를 찾을 수 없습니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
+  @Get('me')
+  @UseGuards(AccessTokenGuard, AuthorizationGuard)
+  @HttpCode(200)
+  @Serialize({
+    message: '크리에이터 정보 조회 성공',
+  })
+  async getMyCreatorInfo(@CurrentJwt() { userId }: AuthenticatedJwt): Promise<CreatorDetailDto> {
+    // userId로 크리에이터 조회
+    const creator = await this.creatorService.findOneByUserIdOrFail(userId);
+
+    // 크리에이터 상세 정보 조회 (플랫폼 + 사용자 정보 포함)
+    return await this.creatorService.getDetailById(creator.id);
+  }
+
+  /**
+   * 크리에이터 대시보드 통계 조회
+   * GET /creators/me/dashboard
+   */
+  @SwaggerApiOperation({
+    summary: '크리에이터 대시보드 통계',
+    description: '크리에이터의 총 콘텐츠 수, 총 조회수, 플랫폼 수 등을 조회합니다.',
+  })
+  @SwaggerApiBearerAuth()
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '대시보드 통계 조회 성공',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '크리에이터 정보를 찾을 수 없습니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
+  @Get('me/dashboard')
+  @UseGuards(AccessTokenGuard, AuthorizationGuard)
+  @HttpCode(200)
+  @Serialize({
+    message: '대시보드 통계 조회 성공',
+  })
+  async getMyDashboardStats(
+    @CurrentJwt() { userId }: AuthenticatedJwt
+  ): Promise<{
+    creator: CreatorDetailDto;
+    stats: {
+      totalContents: number;
+      totalViews: number;
+      totalLikes: number;
+      platformCount: number;
+    };
+  }> {
+    // userId로 크리에이터 조회
+    const creator = await this.creatorService.findOneByUserIdOrFail(userId);
+
+    // 크리에이터 상세 정보 및 통계 조회
+    const [creatorDetail, stats] = await Promise.all([
+      this.creatorService.getDetailById(creator.id),
+      this.creatorService.getDashboardStats(creator.id),
+    ]);
+
+    return {
+      creator: creatorDetail,
+      stats,
+    };
+  }
 }

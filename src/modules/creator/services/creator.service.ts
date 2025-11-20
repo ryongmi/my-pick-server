@@ -586,5 +586,53 @@ export class CreatorService {
       };
     }
   }
+
+  // ==================== CREATOR DASHBOARD METHODS ====================
+
+  /**
+   * userId로 크리에이터 정보 조회 (단일)
+   * 한 사용자가 여러 크리에이터를 가질 수 있지만, 대부분 하나만 가짐
+   */
+  async findOneByUserId(userId: string): Promise<CreatorEntity | null> {
+    const creators = await this.findByUserId(userId);
+    return creators.length > 0 ? creators[0]! : null;
+  }
+
+  /**
+   * userId로 크리에이터 정보 조회 (없으면 예외)
+   */
+  async findOneByUserIdOrFail(userId: string): Promise<CreatorEntity> {
+    const creator = await this.findOneByUserId(userId);
+    if (!creator) {
+      throw CreatorException.creatorNotFound();
+    }
+    return creator;
+  }
+
+  /**
+   * 크리에이터 대시보드 통계
+   * 총 콘텐츠 수, 총 조회수, 총 좋아요, 플랫폼 수 등
+   */
+  async getDashboardStats(
+    creatorId: string
+  ): Promise<{
+    totalContents: number;
+    totalViews: number;
+    totalLikes: number;
+    platformCount: number;
+  }> {
+    const creator = await this.findByIdOrFail(creatorId);
+    const platforms = await this.creatorPlatformService.findByCreatorId(creatorId);
+
+    // 크리에이터 statistics 필드에서 통계 가져오기
+    const stats = creator.statistics;
+
+    return {
+      totalContents: stats?.totalVideos || 0,
+      totalViews: stats?.totalViews || 0,
+      totalLikes: 0, // 현재 Creator 엔티티에 totalLikes 필드 없음
+      platformCount: platforms.length,
+    };
+  }
 }
 

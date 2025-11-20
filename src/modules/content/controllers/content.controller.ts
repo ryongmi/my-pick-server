@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Delete, Query, Param, HttpCode, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Query,
+  Param,
+  Body,
+  HttpCode,
+  UseGuards,
+} from '@nestjs/common';
 
 import { Serialize } from '@krgeobuk/core/decorators';
 import { PaginatedResult } from '@krgeobuk/core/interfaces';
@@ -19,6 +30,8 @@ import {
 import { ContentService } from '../services/content.service.js';
 import { ContentSearchQueryDto } from '../dto/search-query.dto.js';
 import { ContentWithCreatorDto } from '../dto/content-response.dto.js';
+import { UpdateContentStatusDto } from '../dto/update-content-status.dto.js';
+import { BulkUpdateContentStatusDto } from '../dto/bulk-update-content-status.dto.js';
 import { UserInteractionService } from '../../user-interaction/services/user-interaction.service.js';
 import { YouTubeSyncScheduler } from '../../external-api/services/youtube-sync.scheduler.js';
 
@@ -462,5 +475,117 @@ export class ContentController {
   }> {
     const result = await this.youtubeSyncScheduler.resumeInitialSync(platformId);
     return result;
+  }
+
+  // ==================== CREATOR DASHBOARD APIs ====================
+
+  /**
+   * 크리에이터가 자신의 콘텐츠 상태 변경 (공개/비공개 전환 등)
+   * PATCH /content/:id/status
+   */
+  @SwaggerApiOperation({
+    summary: '콘텐츠 상태 변경 (크리에이터 전용)',
+    description: '크리에이터가 자신의 콘텐츠 상태를 변경합니다 (공개/비공개 등).',
+  })
+  @SwaggerApiParam({
+    name: 'id',
+    type: String,
+    description: '콘텐츠 ID',
+  })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '콘텐츠 상태 변경 성공',
+    dto: null,
+  })
+  @SwaggerApiErrorResponse({
+    status: 403,
+    description: '권한 없음 (본인의 콘텐츠만 수정 가능)',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '콘텐츠를 찾을 수 없습니다',
+  })
+  @Patch(':id/status')
+  @HttpCode(200)
+  @Serialize({
+    message: '콘텐츠 상태가 변경되었습니다',
+  })
+  async updateContentStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateContentStatusDto,
+    @CurrentJwt() { userId }: AuthenticatedJwt
+  ): Promise<void> {
+    await this.contentService.updateContentStatusByCreator(id, userId, dto.status);
+  }
+
+  /**
+   * 크리에이터가 자신의 콘텐츠 삭제 (소프트 삭제)
+   * DELETE /content/:id
+   */
+  @SwaggerApiOperation({
+    summary: '콘텐츠 삭제 (크리에이터 전용)',
+    description: '크리에이터가 자신의 콘텐츠를 삭제합니다 (소프트 삭제).',
+  })
+  @SwaggerApiParam({
+    name: 'id',
+    type: String,
+    description: '콘텐츠 ID',
+  })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '콘텐츠 삭제 성공',
+    dto: null,
+  })
+  @SwaggerApiErrorResponse({
+    status: 403,
+    description: '권한 없음 (본인의 콘텐츠만 삭제 가능)',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '콘텐츠를 찾을 수 없습니다',
+  })
+  @Delete(':id')
+  @HttpCode(200)
+  @Serialize({
+    message: '콘텐츠가 삭제되었습니다',
+  })
+  async deleteContent(
+    @Param('id') id: string,
+    @CurrentJwt() { userId }: AuthenticatedJwt
+  ): Promise<void> {
+    await this.contentService.deleteContentByCreator(id, userId);
+  }
+
+  /**
+   * 크리에이터가 자신의 여러 콘텐츠 상태 일괄 변경
+   * PATCH /content/bulk-update-status
+   */
+  @SwaggerApiOperation({
+    summary: '콘텐츠 일괄 상태 변경 (크리에이터 전용)',
+    description: '크리에이터가 자신의 여러 콘텐츠 상태를 동시에 변경합니다.',
+  })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '콘텐츠 일괄 상태 변경 성공',
+    dto: null,
+  })
+  @SwaggerApiErrorResponse({
+    status: 403,
+    description: '권한 없음 (본인의 콘텐츠만 수정 가능)',
+  })
+  @SwaggerApiErrorResponse({
+    status: 400,
+    description: '잘못된 요청 (contentIds가 비어있음)',
+  })
+  @Patch('bulk-update-status')
+  @HttpCode(200)
+  @Serialize({
+    message: '콘텐츠 상태가 일괄 변경되었습니다',
+  })
+  async bulkUpdateContentStatus(
+    @Body() dto: BulkUpdateContentStatusDto,
+    @CurrentJwt() { userId }: AuthenticatedJwt
+  ): Promise<void> {
+    await this.contentService.bulkUpdateContentStatusByCreator(dto.contentIds, userId, dto.status);
   }
 }

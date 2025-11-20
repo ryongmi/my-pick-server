@@ -762,4 +762,82 @@ export class ContentService {
       return userMap;
     }
   }
+
+  // ==================== CREATOR DASHBOARD METHODS ====================
+
+  /**
+   * 크리에이터 권한 검증
+   * 콘텐츠의 크리에이터가 현재 사용자인지 확인
+   */
+  private async verifyCreatorOwnership(contentId: string, userId: string): Promise<void> {
+    const content = await this.findByIdOrFail(contentId);
+    const creator = await this.creatorService.findById(content.creatorId);
+
+    if (!creator || creator.userId !== userId) {
+      throw ContentException.forbidden('본인의 콘텐츠만 수정할 수 있습니다.');
+    }
+  }
+
+  /**
+   * 크리에이터가 자신의 콘텐츠 상태 변경
+   * (공개/비공개 전환 등)
+   */
+  async updateContentStatusByCreator(
+    contentId: string,
+    userId: string,
+    status: ContentStatus
+  ): Promise<void> {
+    // 1. 권한 검증
+    await this.verifyCreatorOwnership(contentId, userId);
+
+    // 2. 상태 업데이트
+    await this.updateStatus(contentId, status);
+
+    this.logger.log('Content status updated by creator', {
+      contentId,
+      userId,
+      status,
+    });
+  }
+
+  /**
+   * 크리에이터가 자신의 콘텐츠 삭제 (소프트 삭제)
+   * status를 REMOVED로 변경
+   */
+  async deleteContentByCreator(contentId: string, userId: string): Promise<void> {
+    // 1. 권한 검증
+    await this.verifyCreatorOwnership(contentId, userId);
+
+    // 2. 소프트 삭제 (status = REMOVED)
+    await this.updateStatus(contentId, ContentStatus.REMOVED);
+
+    this.logger.log('Content deleted by creator', {
+      contentId,
+      userId,
+    });
+  }
+
+  /**
+   * 크리에이터가 자신의 여러 콘텐츠 상태 일괄 변경
+   */
+  async bulkUpdateContentStatusByCreator(
+    contentIds: string[],
+    userId: string,
+    status: ContentStatus
+  ): Promise<void> {
+    // 1. 모든 콘텐츠에 대한 권한 검증
+    for (const contentId of contentIds) {
+      await this.verifyCreatorOwnership(contentId, userId);
+    }
+
+    // 2. 일괄 업데이트
+    await this.contentRepository.update(contentIds, { status });
+
+    this.logger.log('Content status bulk updated by creator', {
+      contentIds,
+      userId,
+      status,
+      count: contentIds.length,
+    });
+  }
 }
