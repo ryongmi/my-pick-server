@@ -13,7 +13,7 @@ import { ContentException } from '../exceptions/index.js';
 import { CreatorService } from '../../creator/services/creator.service.js';
 import { ContentRepository } from '../repositories/content.repository.js';
 import { ContentEntity, ContentStatistics, ContentSyncInfo } from '../entities/content.entity.js';
-import { ContentType } from '../enums/index.js';
+import { ContentType, ContentStatus, ContentQuality, ContentSyncStatus } from '../enums/index.js';
 import { ContentWithCreatorDto, CreatorInfo } from '../dto/content-response.dto.js';
 import { CreatorEntity } from '../../creator/entities/creator.entity.js';
 
@@ -30,7 +30,7 @@ export interface CreateContentInput {
   creatorId: string;
   language?: string;
   isLive?: boolean;
-  quality?: 'sd' | 'hd' | '4k';
+  quality?: ContentQuality;
   ageRestriction?: boolean;
 }
 
@@ -60,7 +60,7 @@ export class ContentService {
    */
   async findById(id: string): Promise<ContentEntity | null> {
     return this.contentRepository.findOne({
-      where: { id, status: 'active' },
+      where: { id, status: ContentStatus.ACTIVE },
     });
   }
 
@@ -191,13 +191,13 @@ export class ContentService {
       creatorId: string;
       isLive: boolean;
       ageRestriction: boolean;
-      status: 'active' | 'inactive' | 'under_review' | 'flagged' | 'removed';
+      status: ContentStatus;
       statistics: ContentStatistics;
       syncInfo: ContentSyncInfo;
       description?: string;
       duration?: number;
       language?: string;
-      quality?: 'sd' | 'hd' | '4k';
+      quality?: ContentQuality;
     } = {
       type: dto.type,
       title: dto.title,
@@ -209,7 +209,7 @@ export class ContentService {
       creatorId: dto.creatorId,
       isLive: dto.isLive ?? false,
       ageRestriction: dto.ageRestriction ?? false,
-      status: 'active',
+      status: ContentStatus.ACTIVE,
       statistics: {
         views: 0,
         likes: 0,
@@ -220,7 +220,7 @@ export class ContentService {
       },
       syncInfo: {
         lastSyncedAt: new Date().toISOString(),
-        syncStatus: 'completed',
+        syncStatus: ContentSyncStatus.COMPLETED,
       },
     };
     if (dto.description !== undefined) {
@@ -294,13 +294,13 @@ export class ContentService {
         creatorId: string;
         isLive: boolean;
         ageRestriction: boolean;
-        status: 'active' | 'inactive' | 'under_review' | 'flagged' | 'removed';
+        status: ContentStatus;
         statistics: ContentStatistics;
         syncInfo: ContentSyncInfo;
         description?: string;
         duration?: number;
         language?: string;
-        quality?: 'sd' | 'hd' | '4k';
+        quality?: ContentQuality;
       } = {
         type: dto.type,
         title: dto.title,
@@ -312,7 +312,7 @@ export class ContentService {
         creatorId: dto.creatorId,
         isLive: dto.isLive ?? false,
         ageRestriction: dto.ageRestriction ?? false,
-        status: 'active',
+        status: ContentStatus.ACTIVE,
         statistics: {
           views: 0,
           likes: 0,
@@ -323,7 +323,7 @@ export class ContentService {
         },
         syncInfo: {
           lastSyncedAt: new Date().toISOString(),
-          syncStatus: 'completed',
+          syncStatus: ContentSyncStatus.COMPLETED,
         },
       };
 
@@ -423,10 +423,7 @@ export class ContentService {
   /**
    * 콘텐츠 상태 변경
    */
-  async updateStatus(
-    id: string,
-    status: 'active' | 'inactive' | 'under_review' | 'flagged' | 'removed'
-  ): Promise<void> {
+  async updateStatus(id: string, status: ContentStatus): Promise<void> {
     await this.findByIdOrFail(id);
     await this.contentRepository.update(id, { status });
 
@@ -517,7 +514,7 @@ export class ContentService {
         publishedAt: content.publishedAt.toISOString(),
         language: content.language ?? 'ko',
         isLive: content.isLive,
-        quality: content.quality ?? 'sd',
+        quality: content.quality ?? ContentQuality.SD,
         ageRestriction: content.ageRestriction,
         status: content.status,
         statistics: content.statistics!,
@@ -566,10 +563,8 @@ export class ContentService {
     const limit = query.limit ?? 20;
 
     // 1. Repository에서 북마크한 Content + Creator 조회 (3-way JOIN)
-    const { items: rawItems, total } = await this.contentRepository.findBookmarkedContentsWithCreator(
-      userId,
-      { page, limit }
-    );
+    const { items: rawItems, total } =
+      await this.contentRepository.findBookmarkedContentsWithCreator(userId, query);
 
     // 2. 모든 creatorId 추출 (중복 제거)
     const creatorIds = [...new Set(rawItems.map((item) => item.content.creatorId))];
@@ -617,7 +612,7 @@ export class ContentService {
         publishedAt: content.publishedAt.toISOString(),
         language: content.language ?? 'ko',
         isLive: content.isLive,
-        quality: content.quality ?? 'sd',
+        quality: content.quality ?? ContentQuality.SD,
         ageRestriction: content.ageRestriction,
         status: content.status,
         statistics: content.statistics!,

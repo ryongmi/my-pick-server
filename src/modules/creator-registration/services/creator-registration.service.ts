@@ -2,17 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { DataSource } from 'typeorm';
 
-import { PlatformType as CommonPlatformType } from '@common/enums/index.js';
+import { PlatformType } from '@modules/creator/enums/index.js';
 
 import { CreatorService } from '../../creator/services/creator.service.js';
 import { CreatorPlatformService } from '../../creator/services/creator-platform.service.js';
 import { YouTubeApiService } from '../../external-api/services/youtube-api.service.js';
 import { CreatorRegistrationRepository } from '../repositories/creator-registration.repository.js';
-import {
-  CreatorRegistrationEntity,
-  PlatformType,
-  RegistrationStatus,
-} from '../entities/creator-registration.entity.js';
+import { CreatorRegistrationEntity } from '../entities/creator-registration.entity.js';
+import { RegistrationStatus } from '../enums/index.js';
 import { CreateRegistrationDto, RegistrationDetailDto } from '../dto/index.js';
 import { CreatorRegistrationException } from '../exceptions/index.js';
 
@@ -49,7 +46,7 @@ export class CreatorRegistrationService {
 
       // 3. 이미 등록된 채널인지 확인
       const existingPlatform = await this.creatorPlatformService.findByPlatformTypeAndId(
-        CommonPlatformType.YOUTUBE as any,
+        PlatformType.YOUTUBE,
         dto.channelId
       );
       if (existingPlatform) {
@@ -176,7 +173,7 @@ export class CreatorRegistrationService {
       // 2. CreatorPlatform 생성
       const platformData: any = {
         creatorId: creator.id,
-        platformType: CommonPlatformType.YOUTUBE,
+        platformType: PlatformType.YOUTUBE,
         platformId: channelInfo.channelId,
         isActive: true,
       };
@@ -294,3 +291,4 @@ export class CreatorRegistrationService {
     return registration;
   }
 }
+

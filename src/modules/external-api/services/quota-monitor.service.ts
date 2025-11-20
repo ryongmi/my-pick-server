@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 
 import { ApiQuotaUsageEntity } from '../entities/index.js';
-import { ApiProvider, ApiOperation } from '../enums/index.js';
+import { ApiProvider, ApiOperation, WarningLevel } from '../enums/index.js';
 import { ApiQuotaUsageRepository } from '../repositories/api-quota-usage.repository.js';
 
 interface QuotaConfig {
@@ -117,7 +117,7 @@ export class QuotaMonitorService {
     usagePercentage: number;
     operationBreakdown: Record<string, { requests: number; units: number }>;
     errorCount: number;
-    warningLevel: 'safe' | 'warning' | 'critical';
+    warningLevel: WarningLevel;
   }> {
     try {
       const targetDate = date || new Date().toISOString().split('T')[0]!;
@@ -150,11 +150,11 @@ export class QuotaMonitorService {
       });
 
       // 경고 레벨 결정
-      let warningLevel: 'safe' | 'warning' | 'critical' = 'safe';
+      let warningLevel = WarningLevel.SAFE;
       if (usagePercentage >= this.quotaConfig[apiProvider].criticalThreshold * 100) {
-        warningLevel = 'critical';
+        warningLevel = WarningLevel.CRITICAL;
       } else if (usagePercentage >= this.quotaConfig[apiProvider].warningThreshold * 100) {
-        warningLevel = 'warning';
+        warningLevel = WarningLevel.WARNING;
       }
 
       this.logger.debug('Daily quota usage calculated', {
@@ -273,7 +273,7 @@ export class QuotaMonitorService {
     try {
       const usage = await this.getDailyQuotaUsage(apiProvider, date);
 
-      if (usage.warningLevel === 'critical') {
+      if (usage.warningLevel === WarningLevel.CRITICAL) {
         this.logger.error('CRITICAL: API quota usage exceeded critical threshold', {
           apiProvider,
           date,
@@ -282,7 +282,7 @@ export class QuotaMonitorService {
           dailyLimit: this.quotaConfig[apiProvider].dailyLimit,
           remainingUnits: this.quotaConfig[apiProvider].dailyLimit - usage.totalUnits,
         });
-      } else if (usage.warningLevel === 'warning') {
+      } else if (usage.warningLevel === WarningLevel.WARNING) {
         this.logger.warn('WARNING: API quota usage exceeded warning threshold', {
           apiProvider,
           date,
@@ -403,7 +403,7 @@ export class QuotaMonitorService {
       totalUnits: number;
       totalRequests: number;
       errorCount: number;
-      warningLevel: 'safe' | 'warning' | 'critical';
+      warningLevel: WarningLevel;
     } | null;
     twitter: {
       dailyUsage: number;
@@ -414,7 +414,7 @@ export class QuotaMonitorService {
       totalUnits: number;
       totalRequests: number;
       errorCount: number;
-      warningLevel: 'safe' | 'warning' | 'critical';
+      warningLevel: WarningLevel;
     } | null;
     totalRecords: number;
   }> {
@@ -434,7 +434,7 @@ export class QuotaMonitorService {
               dailyLimit: this.quotaConfig.youtube.dailyLimit,
               usagePercentage: youtubeUsage.usagePercentage,
               remainingQuota: this.quotaConfig.youtube.dailyLimit - youtubeUsage.totalUnits,
-              canUse: youtubeUsage.warningLevel !== 'critical',
+              canUse: youtubeUsage.warningLevel !== WarningLevel.CRITICAL,
               totalUnits: youtubeUsage.totalUnits,
               totalRequests: youtubeUsage.totalRequests,
               errorCount: youtubeUsage.errorCount,
@@ -447,7 +447,7 @@ export class QuotaMonitorService {
               dailyLimit: this.quotaConfig.twitter.dailyLimit,
               usagePercentage: twitterUsage.usagePercentage,
               remainingQuota: this.quotaConfig.twitter.dailyLimit - twitterUsage.totalUnits,
-              canUse: twitterUsage.warningLevel !== 'critical',
+              canUse: twitterUsage.warningLevel !== WarningLevel.CRITICAL,
               totalUnits: twitterUsage.totalUnits,
               totalRequests: twitterUsage.totalRequests,
               errorCount: twitterUsage.errorCount,

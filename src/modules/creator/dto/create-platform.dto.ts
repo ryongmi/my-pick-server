@@ -1,6 +1,6 @@
 import { IsString, IsEnum, IsOptional, IsUrl, IsUUID } from 'class-validator';
 
-import { PlatformType } from '../entities/creator-platform.entity.js';
+import { PlatformType } from '../enums/index.js';
 
 export class CreatePlatformDto {
   @IsUUID()

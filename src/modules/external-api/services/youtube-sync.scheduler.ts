@@ -2,15 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { PlatformType } from '@common/enums/index.js';
+import { CreatorPlatformEntity } from '@modules/creator/entities/index.js';
+import { VideoSyncStatus } from '@modules/creator/enums/index.js';
 
 import { CreatorService } from '../../creator/services/creator.service.js';
 import { CreatorPlatformService } from '../../creator/services/creator-platform.service.js';
 import { ContentService } from '../../content/services/content.service.js';
 import { ContentCategoryService } from '../../content/services/content-category.service.js';
-import {
-  CreatorPlatformEntity,
-  VideoSyncStatus,
-} from '../../creator/entities/creator-platform.entity.js';
 import { ApiProvider } from '../enums/index.js';
 import {
   mapYouTubeVideoToContent,
@@ -300,9 +298,7 @@ export class YouTubeSyncScheduler {
    * 크리에이터의 모든 콘텐츠 동기화 (전체 동기화)
    * 사용 사례: 크리에이터 승인 후 전체 콘텐츠 수집
    */
-  async syncAllContent(
-    platformId: string
-  ): Promise<{
+  async syncAllContent(platformId: string): Promise<{
     success: boolean;
     message: string;
     totalCount?: number;
@@ -435,9 +431,11 @@ export class YouTubeSyncScheduler {
         }
 
         // 진행 상황 업데이트
-        const newSyncedCount = (platform.syncProgress?.syncedVideoCount || 0) + result.videos.length;
+        const newSyncedCount =
+          (platform.syncProgress?.syncedVideoCount || 0) + result.videos.length;
         const remainingCount = Math.max(0, totalCount - newSyncedCount);
-        const progressPercent = totalCount > 0 ? Math.round((newSyncedCount / totalCount) * 100) : 0;
+        const progressPercent =
+          totalCount > 0 ? Math.round((newSyncedCount / totalCount) * 100) : 0;
 
         const updateData: Partial<typeof platform.syncProgress> = {
           videoSyncStatus: VideoSyncStatus.IN_PROGRESS,

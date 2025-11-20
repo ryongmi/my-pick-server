@@ -1,9 +1,18 @@
-import { IsString, IsEnum, IsOptional, IsUrl, IsUUID, IsDate, IsNumber, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsEnum,
+  IsOptional,
+  IsUrl,
+  IsUUID,
+  IsDate,
+  IsNumber,
+  IsBoolean,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 import { PlatformType } from '@common/enums/index.js';
 
-import { ContentType } from '../enums/index.js';
+import { ContentType, ContentQuality } from '../enums/index.js';
 
 export class CreateContentDto {
   @IsEnum(ContentType)
@@ -48,8 +57,8 @@ export class CreateContentDto {
   isLive?: boolean;
 
   @IsOptional()
-  @IsEnum(['sd', 'hd', '4k'])
-  quality?: 'sd' | 'hd' | '4k';
+  @IsEnum(ContentQuality)
+  quality?: ContentQuality;
 
   @IsOptional()
   @IsBoolean()

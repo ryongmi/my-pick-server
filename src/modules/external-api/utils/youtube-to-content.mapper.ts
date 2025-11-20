@@ -1,7 +1,7 @@
 import { PlatformType } from '@common/enums/index.js';
 
 import { YouTubeVideoDto } from '../dto/youtube-video.dto.js';
-import { ContentType } from '../../content/enums/index.js';
+import { ContentType, ContentQuality, ContentCategorySource } from '../../content/enums/index.js';
 import type { CreateContentInput } from '../../content/services/content.service.js';
 import type { AddCategoryDto } from '../../content/services/content-category.service.js';
 
@@ -9,7 +9,6 @@ import type { AddCategoryDto } from '../../content/services/content-category.ser
  * YouTube API DTO를 Content 생성 DTO로 변환
  * (CreateContentInput의 alias)
  */
-export type CreateContentFromYouTubeDto = CreateContentInput;
 
 /**
  * YouTube 비디오를 Content 생성 DTO로 변환
@@ -17,8 +16,8 @@ export type CreateContentFromYouTubeDto = CreateContentInput;
 export function mapYouTubeVideoToContent(
   video: YouTubeVideoDto,
   creatorId: string
-): CreateContentFromYouTubeDto {
-  const result: CreateContentFromYouTubeDto = {
+): CreateContentInput {
+  const result: CreateContentInput = {
     type: ContentType.YOUTUBE_VIDEO,
     title: video.title,
     ...(video.description ? { description: video.description } : {}),
@@ -71,7 +70,7 @@ export function mapYouTubeCategoryToContentCategory(
     contentId,
     category,
     isPrimary: true,
-    source: 'platform',
+    source: ContentCategorySource.PLATFORM,
   };
 }
 
@@ -86,8 +85,7 @@ export function mapYouTubeStatisticsToContentStatistics(video: YouTubeVideoDto):
   engagementRate: number;
 } {
   const { viewCount, likeCount, commentCount } = video.statistics;
-  const engagementRate =
-    viewCount > 0 ? ((likeCount + commentCount) / viewCount) * 100 : 0;
+  const engagementRate = viewCount > 0 ? ((likeCount + commentCount) / viewCount) * 100 : 0;
 
   return {
     views: viewCount,
@@ -101,8 +99,8 @@ export function mapYouTubeStatisticsToContentStatistics(video: YouTubeVideoDto):
 /**
  * 썸네일 품질로 비디오 품질 추정
  */
-function determineVideoQuality(thumbnails: YouTubeVideoDto['thumbnails']): 'sd' | 'hd' | '4k' {
-  if (thumbnails.maxres) return '4k';
-  if (thumbnails.standard || thumbnails.high) return 'hd';
-  return 'sd';
+function determineVideoQuality(thumbnails: YouTubeVideoDto['thumbnails']): ContentQuality {
+  if (thumbnails.maxres) return ContentQuality._4K;
+  if (thumbnails.standard || thumbnails.high) return ContentQuality.HD;
+  return ContentQuality.SD;
 }

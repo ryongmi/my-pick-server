@@ -1,15 +1,17 @@
 import { SwaggerApiProperty } from '@krgeobuk/swagger';
 
+import { PlatformType } from '../enums/creator-platform.enum.js';
+
 /**
  * 플랫폼 정보 DTO
  */
 export class PlatformInfo {
   @SwaggerApiProperty({
     description: '플랫폼 타입',
-    enum: ['youtube', 'twitter'],
-    example: 'youtube',
+    enum: PlatformType,
+    example: PlatformType.YOUTUBE,
   })
-  platformType!: 'youtube' | 'twitter';
+  platformType!: PlatformType;
 
   @SwaggerApiProperty({
     description: '플랫폼 고유 ID',

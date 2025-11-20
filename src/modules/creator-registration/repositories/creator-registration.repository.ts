@@ -4,7 +4,8 @@ import { DataSource } from 'typeorm';
 
 import { BaseRepository } from '@krgeobuk/core/repositories';
 
-import { CreatorRegistrationEntity, RegistrationStatus } from '../entities/creator-registration.entity.js';
+import { CreatorRegistrationEntity } from '../entities/creator-registration.entity.js';
+import { RegistrationStatus } from '../enums/index.js';
 
 @Injectable()
 export class CreatorRegistrationRepository extends BaseRepository<CreatorRegistrationEntity> {
@@ -72,3 +73,4 @@ export class CreatorRegistrationRepository extends BaseRepository<CreatorRegistr
     });
   }
 }
+

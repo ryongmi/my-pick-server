@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 
 import { ContentCategoryRepository } from '../repositories/content-category.repository.js';
 import { ContentCategoryEntity } from '../entities/content-category.entity.js';
+import { ContentCategorySource } from '../enums/index.js';
 
 import { ContentService } from './content.service.js';
 
@@ -11,7 +12,7 @@ export interface AddCategoryDto {
   isPrimary?: boolean;
   subcategory?: string;
   confidence?: number;
-  source?: 'manual' | 'ai' | 'platform';
+  source?: ContentCategorySource;
   classifiedBy?: string;
 }
 
@@ -91,7 +92,7 @@ export class ContentCategoryService {
       category: string;
       isPrimary: boolean;
       confidence: number;
-      source: 'manual' | 'ai' | 'platform';
+      source: ContentCategorySource;
       subcategory?: string;
       classifiedBy?: string;
     } = {
@@ -99,7 +100,7 @@ export class ContentCategoryService {
       category: dto.category,
       isPrimary: dto.isPrimary ?? false,
       confidence: dto.confidence ?? 1.0,
-      source: dto.source ?? 'platform',
+      source: dto.source ?? ContentCategorySource.PLATFORM,
     };
     if (dto.subcategory !== undefined) {
       categoryData.subcategory = dto.subcategory;
@@ -131,7 +132,7 @@ export class ContentCategoryService {
         category: string;
         isPrimary: boolean;
         confidence: number;
-        source: 'manual' | 'ai' | 'platform';
+        source: ContentCategorySource;
         subcategory?: string;
         classifiedBy?: string;
       } = {
@@ -139,7 +140,7 @@ export class ContentCategoryService {
         category: dto.category,
         isPrimary: dto.isPrimary ?? false,
         confidence: dto.confidence ?? 1.0,
-        source: dto.source ?? 'platform',
+        source: dto.source ?? ContentCategorySource.PLATFORM,
       };
       if (dto.subcategory !== undefined) {
         categoryData.subcategory = dto.subcategory;

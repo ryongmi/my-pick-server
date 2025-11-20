@@ -6,6 +6,15 @@ import { AccessTokenGuard } from '@krgeobuk/jwt/guards';
 import { AuthorizationGuard } from '@krgeobuk/authorization/guards';
 import { CurrentJwt } from '@krgeobuk/jwt/decorators';
 import type { AuthenticatedJwt } from '@krgeobuk/jwt/interfaces';
+import {
+  SwaggerApiTags,
+  SwaggerApiOperation,
+  SwaggerApiOkResponse,
+  SwaggerApiPaginatedResponse,
+  SwaggerApiErrorResponse,
+  SwaggerApiParam,
+  SwaggerApiBearerAuth,
+} from '@krgeobuk/swagger';
 
 import { ContentService } from '../services/content.service.js';
 import { ContentSearchQueryDto } from '../dto/search-query.dto.js';
@@ -13,6 +22,8 @@ import { ContentWithCreatorDto } from '../dto/content-response.dto.js';
 import { UserInteractionService } from '../../user-interaction/services/user-interaction.service.js';
 import { YouTubeSyncScheduler } from '../../external-api/services/youtube-sync.scheduler.js';
 
+@SwaggerApiTags({ tags: ['content'] })
+@SwaggerApiBearerAuth()
 @UseGuards(AccessTokenGuard, AuthorizationGuard)
 @Controller('content')
 export class ContentController {
@@ -26,6 +37,23 @@ export class ContentController {
    * 콘텐츠 검색
    * GET /content?page=1&limit=30&creatorId=xxx&platform=youtube&sortBy=views
    */
+  @SwaggerApiOperation({
+    summary: '콘텐츠 검색',
+    description: '크리에이터, 플랫폼, 타입 등 다양한 조건으로 콘텐츠를 검색합니다.',
+  })
+  @SwaggerApiPaginatedResponse({
+    status: 200,
+    description: '콘텐츠 목록 조회 성공',
+    dto: ContentWithCreatorDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: 400,
+    description: '잘못된 검색 파라미터',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
   @Get()
   @HttpCode(200)
   @Serialize({
@@ -41,6 +69,19 @@ export class ContentController {
    * 북마크한 콘텐츠 목록 조회 (전체 콘텐츠 정보 포함)
    * GET /content/bookmarks?page=1&limit=20
    */
+  @SwaggerApiOperation({
+    summary: '북마크 목록 조회',
+    description: '현재 사용자가 북마크한 콘텐츠 목록을 조회합니다.',
+  })
+  @SwaggerApiPaginatedResponse({
+    status: 200,
+    description: '북마크 목록 조회 성공',
+    dto: ContentWithCreatorDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
   @Get('bookmarks')
   @HttpCode(200)
   @Serialize({
@@ -73,6 +114,30 @@ export class ContentController {
    * 콘텐츠 상세 조회
    * GET /content/:id
    */
+  @SwaggerApiOperation({
+    summary: '콘텐츠 상세 조회',
+    description: '특정 콘텐츠의 상세 정보를 조회합니다. 크리에이터 정보도 함께 포함됩니다.',
+  })
+  @SwaggerApiParam({
+    name: 'id',
+    type: String,
+    description: '콘텐츠 ID',
+    required: true,
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '콘텐츠 상세 조회 성공',
+    dto: ContentWithCreatorDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '콘텐츠를 찾을 수 없습니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
   @Get(':id')
   @HttpCode(200)
   @Serialize({
@@ -88,6 +153,33 @@ export class ContentController {
    * 북마크 추가
    * POST /content/:id/bookmark
    */
+  @SwaggerApiOperation({
+    summary: '북마크 추가',
+    description: '콘텐츠를 북마크에 추가합니다.',
+  })
+  @SwaggerApiParam({
+    name: 'id',
+    type: String,
+    description: '콘텐츠 ID',
+    required: true,
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @SwaggerApiOkResponse({
+    status: 204,
+    description: '북마크 추가 성공',
+  })
+  @SwaggerApiErrorResponse({
+    status: 400,
+    description: '이미 북마크에 추가된 콘텐츠입니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '콘텐츠를 찾을 수 없습니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
   @Post(':id/bookmark')
   @HttpCode(204)
   @Serialize({
@@ -104,6 +196,29 @@ export class ContentController {
    * 북마크 제거
    * DELETE /content/:id/bookmark
    */
+  @SwaggerApiOperation({
+    summary: '북마크 제거',
+    description: '콘텐츠를 북마크에서 제거합니다.',
+  })
+  @SwaggerApiParam({
+    name: 'id',
+    type: String,
+    description: '콘텐츠 ID',
+    required: true,
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @SwaggerApiOkResponse({
+    status: 204,
+    description: '북마크 제거 성공',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '북마크를 찾을 수 없습니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
   @Delete(':id/bookmark')
   @HttpCode(204)
   @Serialize({
@@ -122,6 +237,33 @@ export class ContentController {
    * 좋아요 추가
    * POST /content/:id/like
    */
+  @SwaggerApiOperation({
+    summary: '좋아요 추가',
+    description: '콘텐츠에 좋아요를 추가합니다.',
+  })
+  @SwaggerApiParam({
+    name: 'id',
+    type: String,
+    description: '콘텐츠 ID',
+    required: true,
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @SwaggerApiOkResponse({
+    status: 204,
+    description: '좋아요 추가 성공',
+  })
+  @SwaggerApiErrorResponse({
+    status: 400,
+    description: '이미 좋아요를 누른 콘텐츠입니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '콘텐츠를 찾을 수 없습니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
   @Post(':id/like')
   @HttpCode(204)
   @Serialize({
@@ -138,6 +280,29 @@ export class ContentController {
    * 좋아요 제거
    * DELETE /content/:id/like
    */
+  @SwaggerApiOperation({
+    summary: '좋아요 제거',
+    description: '콘텐츠에서 좋아요를 제거합니다.',
+  })
+  @SwaggerApiParam({
+    name: 'id',
+    type: String,
+    description: '콘텐츠 ID',
+    required: true,
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @SwaggerApiOkResponse({
+    status: 204,
+    description: '좋아요 제거 성공',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '좋아요를 찾을 수 없습니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
   @Delete(':id/like')
   @HttpCode(204)
   @Serialize({
@@ -158,6 +323,29 @@ export class ContentController {
    *
    * Note: 관리자 권한 검증은 추후 추가 예정
    */
+  @SwaggerApiOperation({
+    summary: '플랫폼 콘텐츠 수동 동기화',
+    description: '특정 플랫폼의 콘텐츠를 수동으로 동기화합니다. (관리자용)',
+  })
+  @SwaggerApiParam({
+    name: 'platformId',
+    type: String,
+    description: '플랫폼 ID',
+    required: true,
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '콘텐츠 동기화 요청 처리 완료 (응답: { success: boolean, message: string, syncedCount?: number, error?: string })',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '플랫폼을 찾을 수 없습니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
   @Post('sync/:platformId')
   @HttpCode(200)
   @Serialize({
@@ -185,6 +373,29 @@ export class ContentController {
    *
    * Note: 관리자 권한 검증은 추후 추가 예정
    */
+  @SwaggerApiOperation({
+    summary: '전체 콘텐츠 동기화',
+    description: '특정 플랫폼의 모든 콘텐츠를 동기화합니다. 초기 동기화 또는 전체 재수집 시 사용합니다. (관리자용)',
+  })
+  @SwaggerApiParam({
+    name: 'platformId',
+    type: String,
+    description: '플랫폼 ID',
+    required: true,
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '전체 콘텐츠 동기화 요청 처리 완료 (응답: { success: boolean, message: string, totalCount?: number, estimatedQuotaUsage?: number, error?: string })',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '플랫폼을 찾을 수 없습니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
   @Post('sync/:platformId/full')
   @HttpCode(200)
   @Serialize({
@@ -213,6 +424,29 @@ export class ContentController {
    *
    * Note: 관리자 권한 검증은 추후 추가 예정
    */
+  @SwaggerApiOperation({
+    summary: '초기 동기화 재개',
+    description: '일시 중지되었던 초기 동기화를 재개합니다. (관리자용)',
+  })
+  @SwaggerApiParam({
+    name: 'platformId',
+    type: String,
+    description: '플랫폼 ID',
+    required: true,
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '초기 동기화 재개 요청 처리 완료 (응답: { success: boolean, message: string, resumedCount?: number, error?: string })',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '플랫폼을 찾을 수 없습니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
   @Post('sync/:platformId/resume')
   @HttpCode(200)
   @Serialize({

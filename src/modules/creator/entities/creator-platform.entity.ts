@@ -3,17 +3,7 @@ import { Entity, Column, Index } from 'typeorm';
 import { SwaggerApiProperty } from '@krgeobuk/swagger';
 import { BaseEntityUUID } from '@krgeobuk/core/entities';
 
-export enum PlatformType {
-  YOUTUBE = 'youtube',
-  TWITTER = 'twitter',
-}
-
-export enum VideoSyncStatus {
-  NOT_SYNCED = 'not_synced',
-  IN_PROGRESS = 'in_progress',
-  SYNCED = 'synced',
-  FAILED = 'failed',
-}
+import { PlatformType, VideoSyncStatus } from '../enums/creator-platform.enum.js';
 
 // JSON 필드 타입 정의
 export interface SyncProgress {
@@ -35,12 +25,14 @@ export interface SyncProgress {
   // Phase 3: 전체 동기화 모드
   isFullSyncMode?: boolean; // 전체 동기화 진행 중 여부
   fullSyncStartedAt?: string; // 전체 동기화 시작 시간
-  fullSyncProgress?: {
-    // 진행 상황 추적
-    syncedCount: number;
-    remainingCount: number;
-    progressPercent: number;
-  } | undefined; // undefined로 제거 가능
+  fullSyncProgress?:
+    | {
+        // 진행 상황 추적
+        syncedCount: number;
+        remainingCount: number;
+        progressPercent: number;
+      }
+    | undefined; // undefined로 제거 가능
 }
 
 @Entity('creator_platforms')

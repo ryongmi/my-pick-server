@@ -27,6 +27,7 @@ import {
   CreatorUserDto,
   PlatformInfo,
 } from '../dto/index.js';
+import { PlatformType } from '../enums/index.js';
 
 import { CreatorPlatformService } from './creator-platform.service.js';
 
@@ -514,7 +515,7 @@ export class CreatorService {
     if (platforms && platforms.length > 0) {
       result.platforms = platforms.map((platform) => {
         const platformInfo: PlatformInfo = {
-          platformType: platform.platformType.toLowerCase() as 'youtube' | 'twitter',
+          platformType: platform.platformType.toLowerCase() as PlatformType,
           platformId: platform.platformId,
         };
         if (platform.platformUsername) {

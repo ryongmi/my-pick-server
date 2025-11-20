@@ -2,11 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { CreatorException } from '../exceptions/index.js';
 import { CreatorPlatformRepository } from '../repositories/creator-platform.repository.js';
-import {
-  CreatorPlatformEntity,
-  PlatformType,
-  SyncProgress,
-} from '../entities/creator-platform.entity.js';
+import { CreatorPlatformEntity, SyncProgress } from '../entities/creator-platform.entity.js';
+import { PlatformType } from '../enums/index.js';
 import { CreatePlatformDto } from '../dto/create-platform.dto.js';
 
 // import { CreatorService } from './creator.service.js';

@@ -2,15 +2,9 @@ import { Entity, Column, Index } from 'typeorm';
 
 import { BaseEntityUUID } from '@krgeobuk/core/entities';
 
+import { PlatformType } from '@modules/creator/enums/index.js';
+
 import { RegistrationStatus } from '../enums/index.js';
-
-// Re-export RegistrationStatus for external use
-export { RegistrationStatus };
-
-export enum PlatformType {
-  YOUTUBE = 'youtube',
-  TWITTER = 'twitter',
-}
 
 // JSON 필드 타입 정의
 export interface ChannelInfo {
@@ -67,3 +61,4 @@ export class CreatorRegistrationEntity extends BaseEntityUUID {
   @Column({ type: 'json', nullable: true })
   reviewInfo?: ReviewInfo;
 }
+

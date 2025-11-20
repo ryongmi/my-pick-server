@@ -4,7 +4,7 @@ import { BaseEntityUUID } from '@krgeobuk/core/entities';
 
 import { PlatformType } from '@common/enums/index.js';
 
-import { ContentType } from '../enums/index.js';
+import { ContentType, ContentSyncStatus, ContentStatus, ContentQuality } from '../enums/index.js';
 
 /**
  * 콘텐츠 통계 정보 (1:1 관계를 JSON으로 통합)
@@ -28,7 +28,7 @@ export interface ContentSyncInfo {
   syncError?: string; // 동기화 오류 메시지
   syncRetryCount?: number; // 동기화 재시도 횟수
   nextSyncAt?: string; // 다음 동기화 예정 시간
-  syncStatus: 'pending' | 'syncing' | 'completed' | 'failed';
+  syncStatus: ContentSyncStatus;
 }
 
 @Entity('content')
@@ -84,22 +84,22 @@ export class ContentEntity extends BaseEntityUUID {
 
   @Column({
     type: 'enum',
-    enum: ['sd', 'hd', '4k'],
+    enum: ContentQuality,
     nullable: true,
     comment: '영상 품질',
   })
-  quality?: 'sd' | 'hd' | '4k';
+  quality?: ContentQuality;
 
   @Column({ default: false, comment: '연령 제한 콘텐츠 여부' })
   ageRestriction!: boolean;
 
   @Column({
     type: 'enum',
-    enum: ['active', 'inactive', 'under_review', 'flagged', 'removed'],
-    default: 'active',
+    enum: ContentStatus,
+    default: ContentStatus.ACTIVE,
     comment: '콘텐츠 상태',
   })
-  status!: 'active' | 'inactive' | 'under_review' | 'flagged' | 'removed';
+  status!: ContentStatus;
 
   // ==================== JSON 필드 통합 ====================
 
@@ -117,3 +117,4 @@ export class ContentEntity extends BaseEntityUUID {
   @Column({ type: 'json', nullable: true })
   syncInfo?: ContentSyncInfo;
 }
+
