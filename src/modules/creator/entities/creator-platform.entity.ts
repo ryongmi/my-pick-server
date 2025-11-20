@@ -1,5 +1,6 @@
 import { Entity, Column, Index } from 'typeorm';
 
+import { SwaggerApiProperty } from '@krgeobuk/swagger';
 import { BaseEntityUUID } from '@krgeobuk/core/entities';
 
 export enum PlatformType {
@@ -47,24 +48,56 @@ export interface SyncProgress {
 @Index(['creatorId'])
 @Index(['platformType', 'isActive'])
 export class CreatorPlatformEntity extends BaseEntityUUID {
+  @SwaggerApiProperty({
+    description: '크리에이터 ID',
+    example: 'ado',
+  })
   @Column({ type: 'uuid' })
   creatorId!: string;
 
+  @SwaggerApiProperty({
+    description: '플랫폼 타입',
+    enum: PlatformType,
+    example: PlatformType.YOUTUBE,
+  })
   @Column({ type: 'enum', enum: PlatformType })
   platformType!: PlatformType;
 
+  @SwaggerApiProperty({
+    description: '플랫폼 고유 ID',
+    example: 'UCk2NN3Bfbv-dMLKVrx7dAjQ',
+  })
   @Column()
   platformId!: string;
 
+  @SwaggerApiProperty({
+    description: '플랫폼 사용자명',
+    example: '@Ado1024',
+    required: false,
+  })
   @Column({ nullable: true })
   platformUsername?: string;
 
+  @SwaggerApiProperty({
+    description: '플랫폼 URL',
+    example: 'https://www.youtube.com/@Ado1024',
+    required: false,
+  })
   @Column({ nullable: true })
   platformUrl?: string;
 
+  @SwaggerApiProperty({
+    description: '동기화 진행 상황',
+    required: false,
+    example: null,
+  })
   @Column({ type: 'json', nullable: true })
   syncProgress?: SyncProgress;
 
+  @SwaggerApiProperty({
+    description: '활성화 상태',
+    example: true,
+  })
   @Column({ default: true })
   isActive!: boolean;
 }
