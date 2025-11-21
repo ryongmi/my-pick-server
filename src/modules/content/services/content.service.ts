@@ -770,7 +770,15 @@ export class ContentService {
    * 콘텐츠의 크리에이터가 현재 사용자인지 확인
    */
   private async verifyCreatorOwnership(contentId: string, userId: string): Promise<void> {
-    const content = await this.findByIdOrFail(contentId);
+    // 상태와 관계없이 콘텐츠 조회 (크리에이터가 본인의 비활성화된 콘텐츠도 관리할 수 있어야 함)
+    const content = await this.contentRepository.findOne({
+      where: { id: contentId },
+    });
+
+    if (!content) {
+      throw ContentException.contentNotFound();
+    }
+
     const creator = await this.creatorService.findById(content.creatorId);
 
     if (!creator || creator.userId !== userId) {
