@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEnum, IsArray } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsArray, IsBoolean } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 import { SwaggerApiProperty } from '@krgeobuk/swagger';
@@ -52,6 +52,17 @@ export class ContentSearchQueryDto extends PaginateBaseDto {
   @IsOptional()
   @IsEnum(ContentType)
   type?: ContentType;
+
+  @SwaggerApiProperty({
+    description:
+      '모든 상태의 콘텐츠 포함 여부 (true: 모든 상태, false: ACTIVE만) - 크리에이터 본인 콘텐츠 조회 시만 사용',
+    example: false,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => value === 'true' || value === true)
+  includeAllStatuses?: boolean;
 
   // TODO: UserInteraction 기능 추가 시 구현
   // @IsOptional()

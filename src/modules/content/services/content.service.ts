@@ -441,6 +441,7 @@ export class ContentService {
     type?: ContentType;
     sortBy?: string;
     sortOrder?: 'ASC' | 'DESC';
+    includeAllStatuses?: boolean;
   }): Promise<{
     items: ContentWithCreatorDto[];
     pageInfo: {

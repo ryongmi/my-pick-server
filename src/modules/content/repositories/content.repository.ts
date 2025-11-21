@@ -295,6 +295,7 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
     type?: string;
     sortBy?: string;
     sortOrder?: SortOrderType;
+    includeAllStatuses?: boolean;
   }): Promise<{
     items: ContentEntity[];
     pageInfo: {
@@ -314,11 +315,17 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
       type,
       sortBy = 'publishedAt',
       sortOrder = SortOrderType.DESC,
+      includeAllStatuses = false,
     } = options;
 
-    const queryBuilder = this.createQueryBuilder('content').where('content.status = :status', {
-      status: 'active',
-    });
+    const queryBuilder = this.createQueryBuilder('content');
+
+    // 크리에이터 대시보드가 아닌 경우에만 ACTIVE 상태 필터링
+    if (!includeAllStatuses) {
+      queryBuilder.where('content.status = :status', {
+        status: 'active',
+      });
+    }
 
     // 필터링 - 다중 크리에이터
     if (creatorIds && creatorIds.length > 0) {

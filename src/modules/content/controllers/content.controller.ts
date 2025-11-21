@@ -73,8 +73,26 @@ export class ContentController {
     message: '콘텐츠 목록 조회 성공',
   })
   async searchContents(
-    @Query() query: ContentSearchQueryDto
+    @Query() query: ContentSearchQueryDto,
+    @CurrentJwt() jwt?: AuthenticatedJwt
   ): Promise<PaginatedResult<ContentWithCreatorDto>> {
+    // includeAllStatuses가 true인 경우, 본인의 크리에이터 콘텐츠인지 검증
+    if (query.includeAllStatuses && query.creatorIds && query.creatorIds.length > 0) {
+      if (!jwt) {
+        throw new Error('인증이 필요합니다.');
+      }
+
+      // 모든 creatorId가 현재 사용자의 것인지 확인
+      for (const creatorId of query.creatorIds) {
+        const creator = await this.contentService['creatorService'].findById(creatorId);
+        if (!creator || creator.userId !== jwt.userId) {
+          // 본인의 크리에이터가 아닌 경우, includeAllStatuses를 무시하고 ACTIVE만 조회
+          query.includeAllStatuses = false;
+          break;
+        }
+      }
+    }
+
     return await this.contentService.searchContents(query);
   }
 
