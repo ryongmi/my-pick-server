@@ -1,39 +1,14 @@
 version: '3.8'
+#
+# my-pick-server는 중앙 집중식 인프라(krgeobuk-infrastructure)를 사용합니다.
+# MySQL과 Redis는 krgeobuk-infrastructure/docker-compose/docker-compose.yaml에서 제공됩니다.
+#
+# 실행 순서:
+# 1. krgeobuk-infrastructure 먼저 시작: cd ../../krgeobuk-infrastructure/docker-compose/ && docker-compose up -d
+# 2. my-pick-server 시작: npm run docker:local:up
+#
+
 services:
-  mysql:
-    image: mysql:8
-    container_name: my-pick-mysql
-    ports:
-      - 3310:3306
-    env_file:
-      - ./envs/.env.local
-    environment:
-      - MYSQL_CHARSET=utf8mb4
-      - MYSQL_COLLATION=utf8mb4_general_ci
-      - MYSQL_TIMEZONE=Asia/Seoul
-      - TZ=Asia/Seoul
-    volumes:
-      - ./data/mysql:/var/lib/mysql
-    networks:
-      - my-pick-network
-
-  redis:
-    image: redis:alpine
-    container_name: my-pick-redis
-    ports:
-      - 6383:6379
-    env_file:
-      - ./envs/.env.local
-    environment:
-      - TZ=Asia/Seoul
-    volumes:
-      - ./data/redis:/data
-    networks:
-      - my-pick-network
-    command: ['redis-server', '--requirepass', '1234qwer']
-    depends_on:
-      - mysql
-
   server:
     image: krgeobuk/my-pick-server:local
     container_name: my-pick-server
@@ -57,16 +32,13 @@ services:
       - /app/dist
       - /app/node_modules # 익명 볼륨
     networks:
-      - my-pick-network
-      - msa-network
-    depends_on:
-      - redis
-      - mysql
+      - krgeobuk-network # 중앙 인프라 접근 (MySQL, Redis)
+      - msa-network # 마이크로서비스 간 통신
+    restart: unless-stopped
 
 networks:
-  my-pick-network:
-    driver: bridge
-  msa-network:
+  krgeobuk-network:
     external: true
-  shared-network:
+    name: krgeobuk-network
+  msa-network:
     external: true
