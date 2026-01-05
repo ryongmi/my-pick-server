@@ -19,6 +19,7 @@ import {
   CreatorRegistrationModule,
 } from '@modules/index.js';
 import { ImageModule } from '@modules/image/image.module.js';
+import { AccountMergeModule } from '@modules/account-merge/account-merge.module.js';
 
 @Module({
   imports: [
@@ -42,6 +43,8 @@ import { ImageModule } from '@modules/image/image.module.js';
     ExternalApiModule,
     // Image Proxy Module
     ImageModule,
+    // Account Merge Module
+    AccountMergeModule,
   ],
   providers: [
     {
