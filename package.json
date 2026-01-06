@@ -29,6 +29,7 @@
     "logs:prod": "docker logs my-pick-server-prod -f"
   },
   "dependencies": {
+    "@krgeobuk/account-merge": "^1.0.0",
     "@krgeobuk/authorization": "^1.0.0",
     "@krgeobuk/core": "^1.0.0",
     "@krgeobuk/database-config": "^1.0.0",

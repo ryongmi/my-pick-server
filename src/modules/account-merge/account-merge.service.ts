@@ -50,28 +50,46 @@ export class AccountMergeService {
    *
    * @param sourceUserId User B (원래 소유자)
    * @param targetUserId User A (병합 대상)
-   * @param snapshot 백업된 데이터 (필요시 사용)
+   * @param snapshot 백업된 데이터 (sourceCreatorIds, sourceContentIds 포함)
    */
   async rollbackMerge(
     sourceUserId: string,
     targetUserId: string,
-    snapshot?: any
+    snapshot?: {
+      sourceCreatorIds?: string[];
+      sourceContentIds?: string[];
+    }
   ): Promise<void> {
     try {
       this.logger.log('Starting MyPick user data merge rollback', {
         sourceUserId,
         targetUserId,
+        hasSnapshot: !!snapshot,
       });
 
+      // 스냅샷에서 원본 데이터 추출
+      const sourceCreatorIds = snapshot?.sourceCreatorIds;
+      const sourceContentIds = snapshot?.sourceContentIds;
+
       // 1. 사용자 구독 롤백
-      await this.userSubscriptionService.rollbackMerge(sourceUserId, targetUserId);
+      await this.userSubscriptionService.rollbackMerge(
+        sourceUserId,
+        targetUserId,
+        sourceCreatorIds
+      );
 
       // 2. 사용자 인터랙션 롤백
-      await this.userInteractionService.rollbackMerge(sourceUserId, targetUserId);
+      await this.userInteractionService.rollbackMerge(
+        sourceUserId,
+        targetUserId,
+        sourceContentIds
+      );
 
       this.logger.log('MyPick user data merge rollback completed successfully', {
         sourceUserId,
         targetUserId,
+        restoredSubscriptions: sourceCreatorIds?.length || 0,
+        restoredInteractions: sourceContentIds?.length || 0,
       });
     } catch (error: unknown) {
       this.logger.error('MyPick user data merge rollback failed', {
