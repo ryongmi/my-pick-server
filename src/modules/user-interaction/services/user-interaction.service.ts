@@ -155,6 +155,24 @@ export class UserInteractionService {
     return new Map(interactions.map((i) => [i.contentId, i]));
   }
 
+  /**
+   * 사용자의 모든 인터랙션 contentId 목록 조회
+   * (계정 병합 스냅샷 수집용)
+   */
+  async getContentIds(userId: string): Promise<string[]> {
+    const interactions = await this.repo.find({
+      where: { userId },
+      select: ['contentId'],
+    });
+
+    this.logger.debug('User interaction contentIds fetched', {
+      userId,
+      count: interactions.length,
+    });
+
+    return interactions.map((i) => i.contentId);
+  }
+
   // ==================== PRIVATE HELPER METHODS ====================
 
   /**

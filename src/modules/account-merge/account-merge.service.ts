@@ -15,12 +15,26 @@ export class AccountMergeService {
   /**
    * MyPick 사용자 데이터 병합
    * sourceUserId의 모든 데이터를 targetUserId로 병합
+   *
+   * @returns 롤백을 위한 스냅샷 데이터 (sourceCreatorIds, sourceContentIds)
    */
-  async mergeUserData(sourceUserId: string, targetUserId: string): Promise<void> {
+  async mergeUserData(
+    sourceUserId: string,
+    targetUserId: string
+  ): Promise<{ sourceCreatorIds: string[]; sourceContentIds: string[] }> {
     try {
       this.logger.log('Starting MyPick user data merge', {
         sourceUserId,
         targetUserId,
+      });
+
+      // 0. 병합 전 스냅샷 수집 (롤백을 위해 원본 데이터 저장)
+      const sourceCreatorIds = await this.userSubscriptionService.getCreatorIds(sourceUserId);
+      const sourceContentIds = await this.userInteractionService.getContentIds(sourceUserId);
+
+      this.logger.log('Snapshot collected before merge', {
+        sourceCreatorIds: sourceCreatorIds.length,
+        sourceContentIds: sourceContentIds.length,
       });
 
       // 1. 사용자 구독 병합
@@ -32,7 +46,14 @@ export class AccountMergeService {
       this.logger.log('MyPick user data merge completed successfully', {
         sourceUserId,
         targetUserId,
+        mergedSubscriptions: sourceCreatorIds.length,
+        mergedInteractions: sourceContentIds.length,
       });
+
+      return {
+        sourceCreatorIds,
+        sourceContentIds,
+      };
     } catch (error: unknown) {
       this.logger.error('MyPick user data merge failed', {
         error: error instanceof Error ? error.message : 'Unknown error',

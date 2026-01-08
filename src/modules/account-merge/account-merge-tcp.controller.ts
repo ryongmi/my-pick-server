@@ -13,21 +13,31 @@ export class AccountMergeTcpController {
 
   /**
    * MyPick 사용자 데이터 병합 (TCP)
+   * @returns 롤백을 위한 스냅샷 데이터 (sourceCreatorIds, sourceContentIds)
    */
   @MessagePattern(AccountMergeTcpPatterns.MERGE_USER_DATA)
-  async mergeUserData(@Payload() data: TcpMergeUserData): Promise<void> {
+  async mergeUserData(
+    @Payload() data: TcpMergeUserData
+  ): Promise<{ sourceCreatorIds: string[]; sourceContentIds: string[] }> {
     try {
       this.logger.log('TCP: Merging MyPick user data', {
         sourceUserId: data.sourceUserId,
         targetUserId: data.targetUserId,
       });
 
-      await this.accountMergeService.mergeUserData(data.sourceUserId, data.targetUserId);
+      const snapshot = await this.accountMergeService.mergeUserData(
+        data.sourceUserId,
+        data.targetUserId
+      );
 
       this.logger.log('TCP: MyPick user data merged successfully', {
         sourceUserId: data.sourceUserId,
         targetUserId: data.targetUserId,
+        snapshotCreatorIds: snapshot.sourceCreatorIds.length,
+        snapshotContentIds: snapshot.sourceContentIds.length,
       });
+
+      return snapshot;
     } catch (error: unknown) {
       this.logger.error('TCP: Failed to merge MyPick user data', {
         error: error instanceof Error ? error.message : 'Unknown error',
