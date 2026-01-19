@@ -2,7 +2,7 @@ import { Controller, Logger } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 
 import { AccountMergeTcpPatterns, TcpMergeUserData } from '@krgeobuk/account-merge/tcp';
-import type { MyPickSnapshotData } from '@krgeobuk/account-merge/tcp/interfaces';
+import type { MyPickSnapshotData, TcpRollbackMergeData } from '@krgeobuk/account-merge/tcp/interfaces';
 
 import { AccountMergeService } from './account-merge.service.js';
 
@@ -54,14 +54,19 @@ export class AccountMergeTcpController {
    * MyPick 사용자 데이터 병합 롤백 (TCP 보상 트랜잭션)
    */
   @MessagePattern(AccountMergeTcpPatterns.ROLLBACK_MERGE)
-  async rollbackMerge(@Payload() data: TcpMergeUserData): Promise<void> {
+  async rollbackMerge(@Payload() data: TcpRollbackMergeData): Promise<void> {
     try {
       this.logger.log('TCP: Rolling back MyPick user data merge', {
         sourceUserId: data.sourceUserId,
         targetUserId: data.targetUserId,
+        hasSnapshot: !!data.snapshot,
       });
 
-      await this.accountMergeService.rollbackMerge(data.sourceUserId, data.targetUserId);
+      await this.accountMergeService.rollbackMerge(
+        data.sourceUserId,
+        data.targetUserId,
+        data.snapshot
+      );
 
       this.logger.log('TCP: MyPick user data rollback successful', {
         sourceUserId: data.sourceUserId,
