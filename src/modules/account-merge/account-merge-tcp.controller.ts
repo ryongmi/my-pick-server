@@ -2,6 +2,7 @@ import { Controller, Logger } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 
 import { AccountMergeTcpPatterns, TcpMergeUserData } from '@krgeobuk/account-merge/tcp';
+import type { MyPickSnapshotData } from '@krgeobuk/account-merge/tcp/interfaces';
 
 import { AccountMergeService } from './account-merge.service.js';
 
@@ -18,7 +19,7 @@ export class AccountMergeTcpController {
   @MessagePattern(AccountMergeTcpPatterns.MERGE_USER_DATA)
   async mergeUserData(
     @Payload() data: TcpMergeUserData
-  ): Promise<{ sourceCreatorIds: string[]; sourceContentIds: string[] }> {
+  ): Promise<MyPickSnapshotData> {
     try {
       this.logger.log('TCP: Merging MyPick user data', {
         sourceUserId: data.sourceUserId,

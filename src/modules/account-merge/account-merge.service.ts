@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import type { MyPickSnapshotData } from '@krgeobuk/account-merge/tcp/interfaces';
+
 import { UserSubscriptionService } from '../user-subscription/services/user-subscription.service.js';
 import { UserInteractionService } from '../user-interaction/services/user-interaction.service.js';
 
@@ -21,7 +23,7 @@ export class AccountMergeService {
   async mergeUserData(
     sourceUserId: string,
     targetUserId: string
-  ): Promise<{ sourceCreatorIds: string[]; sourceContentIds: string[] }> {
+  ): Promise<MyPickSnapshotData> {
     try {
       this.logger.log('Starting MyPick user data merge', {
         sourceUserId,
