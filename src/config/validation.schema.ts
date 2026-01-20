@@ -28,6 +28,9 @@ const redisConfigSchema = {
   REDIS_HOST: Joi.string().required(),
   REDIS_PORT: Joi.number().required(),
   REDIS_PASSWORD: Joi.string().required(),
+  // Redis 키 환경별 분리를 위한 prefix (선택사항)
+  // 예: dev, staging, prod 또는 빈 문자열
+  REDIS_KEY_PREFIX: Joi.string().allow('').optional(),
 };
 
 const youtubeConfigSchema = {
@@ -46,4 +49,3 @@ export const validationSchema = Joi.object({
   ...youtubeConfigSchema,
   ...jwtConfigSchema,
 });
-
