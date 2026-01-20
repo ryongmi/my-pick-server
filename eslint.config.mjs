@@ -14,7 +14,7 @@ export default [
     },
   },
   {
-    files: ['**/*.{ts,tsx,js,jsx}'],
+    files: ['**/*.{js,cjs,ts}'],
     languageOptions: {
       parserOptions: {
         project: './tsconfig.json', // 타입 체킹 활성화
