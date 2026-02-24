@@ -31,6 +31,14 @@ export interface ContentSyncInfo {
   syncStatus: ContentSyncStatus;
 }
 
+/**
+ * 콘텐츠 엔티티
+ *
+ * ID: UUID
+ * - 보안: 공개 URL 노출 시 콘텐츠 ID 예측 방지 (/content/{uuid})
+ * - 프라이버시: 전체 콘텐츠 수 추정 불가
+ * - Enumerate Attack 차단: 순차적 스크래핑 방지
+ */
 @Entity('content')
 @Index(['creatorId'])
 @Index(['platform', 'platformId'], { unique: true })

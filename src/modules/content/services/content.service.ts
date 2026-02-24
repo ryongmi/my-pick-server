@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 
 import { firstValueFrom } from 'rxjs';
+import { In } from 'typeorm';
 
 import { LimitType } from '@krgeobuk/core/enum';
 // import { UserTcpPatterns } from '@krgeobuk/user/tcp';
@@ -59,8 +60,24 @@ export class ContentService {
    * ID로 콘텐츠 조회
    */
   async findById(id: string): Promise<ContentEntity | null> {
+    return this.contentRepository.findOneById(id);
+  }
+
+  /**
+   * ID로 콘텐츠 조회
+   */
+  async findActiveContentById(id: string): Promise<ContentEntity | null> {
     return this.contentRepository.findOne({
       where: { id, status: ContentStatus.ACTIVE },
+    });
+  }
+
+  /**
+   * ID로 콘텐츠 조회
+   */
+  async findByIds(ids: string[]): Promise<ContentEntity[]> {
+    return this.contentRepository.find({
+      where: { id: In(ids) },
     });
   }
 
@@ -88,21 +105,21 @@ export class ContentService {
   /**
    * 크리에이터의 콘텐츠 목록 조회
    */
-  async findByCreatorId(
-    creatorId: string,
-    options?: {
-      limit?: number;
-      offset?: number;
-    }
-  ): Promise<ContentEntity[]> {
-    return this.contentRepository.findByCreatorId(creatorId, options);
-  }
+  // async findByCreatorId(
+  //   creatorId: string,
+  //   options?: {
+  //     limit?: number;
+  //     offset?: number;
+  //   }
+  // ): Promise<ContentEntity[]> {
+  //   return this.contentRepository.findByCreatorId(creatorId, options);
+  // }
 
   /**
    * 크리에이터와 함께 콘텐츠 조회
    */
   async findWithCreator(contentId: string): Promise<ContentWithCreatorDto | null> {
-    const content = await this.findById(contentId);
+    const content = await this.findActiveContentById(contentId);
     if (!content) {
       return null;
     }
@@ -166,88 +183,88 @@ export class ContentService {
   /**
    * 콘텐츠 생성 (YouTube 동기화용)
    */
-  async createContent(dto: CreateContentInput): Promise<ContentEntity> {
-    // 중복 콘텐츠 체크
-    const existing = await this.findByPlatformAndId(dto.platform, dto.platformId);
-    if (existing) {
-      this.logger.warn('Content already exists', {
-        platform: dto.platform,
-        platformId: dto.platformId,
-      });
-      return existing;
-    }
+  // async createContent(dto: CreateContentInput): Promise<ContentEntity> {
+  //   // 중복 콘텐츠 체크
+  //   const existing = await this.findByPlatformAndId(dto.platform, dto.platformId);
+  //   if (existing) {
+  //     this.logger.warn('Content already exists', {
+  //       platform: dto.platform,
+  //       platformId: dto.platformId,
+  //     });
+  //     return existing;
+  //   }
 
-    // 외래키 검증: Creator가 존재하는지 확인
-    await this.creatorService.findByIdOrFail(dto.creatorId);
+  //   // 외래키 검증: Creator가 존재하는지 확인
+  //   await this.creatorService.findByIdOrFail(dto.creatorId);
 
-    const contentData: {
-      type: ContentType;
-      title: string;
-      thumbnail: string;
-      url: string;
-      platform: PlatformType;
-      platformId: string;
-      publishedAt: Date;
-      creatorId: string;
-      isLive: boolean;
-      ageRestriction: boolean;
-      status: ContentStatus;
-      statistics: ContentStatistics;
-      syncInfo: ContentSyncInfo;
-      description?: string;
-      duration?: number;
-      language?: string;
-      quality?: ContentQuality;
-    } = {
-      type: dto.type,
-      title: dto.title,
-      thumbnail: dto.thumbnail,
-      url: dto.url,
-      platform: dto.platform,
-      platformId: dto.platformId,
-      publishedAt: dto.publishedAt,
-      creatorId: dto.creatorId,
-      isLive: dto.isLive ?? false,
-      ageRestriction: dto.ageRestriction ?? false,
-      status: ContentStatus.ACTIVE,
-      statistics: {
-        views: 0,
-        likes: 0,
-        comments: 0,
-        shares: 0,
-        engagementRate: 0,
-        updatedAt: new Date().toISOString(),
-      },
-      syncInfo: {
-        lastSyncedAt: new Date().toISOString(),
-        syncStatus: ContentSyncStatus.COMPLETED,
-      },
-    };
-    if (dto.description !== undefined) {
-      contentData.description = dto.description;
-    }
-    if (dto.duration !== undefined) {
-      contentData.duration = dto.duration;
-    }
-    if (dto.language !== undefined) {
-      contentData.language = dto.language;
-    }
-    if (dto.quality !== undefined) {
-      contentData.quality = dto.quality;
-    }
+  //   const contentData: {
+  //     type: ContentType;
+  //     title: string;
+  //     thumbnail: string;
+  //     url: string;
+  //     platform: PlatformType;
+  //     platformId: string;
+  //     publishedAt: Date;
+  //     creatorId: string;
+  //     isLive: boolean;
+  //     ageRestriction: boolean;
+  //     status: ContentStatus;
+  //     statistics: ContentStatistics;
+  //     syncInfo: ContentSyncInfo;
+  //     description?: string;
+  //     duration?: number;
+  //     language?: string;
+  //     quality?: ContentQuality;
+  //   } = {
+  //     type: dto.type,
+  //     title: dto.title,
+  //     thumbnail: dto.thumbnail,
+  //     url: dto.url,
+  //     platform: dto.platform,
+  //     platformId: dto.platformId,
+  //     publishedAt: dto.publishedAt,
+  //     creatorId: dto.creatorId,
+  //     isLive: dto.isLive ?? false,
+  //     ageRestriction: dto.ageRestriction ?? false,
+  //     status: ContentStatus.ACTIVE,
+  //     statistics: {
+  //       views: 0,
+  //       likes: 0,
+  //       comments: 0,
+  //       shares: 0,
+  //       engagementRate: 0,
+  //       updatedAt: new Date().toISOString(),
+  //     },
+  //     syncInfo: {
+  //       lastSyncedAt: new Date().toISOString(),
+  //       syncStatus: ContentSyncStatus.COMPLETED,
+  //     },
+  //   };
+  //   if (dto.description !== undefined) {
+  //     contentData.description = dto.description;
+  //   }
+  //   if (dto.duration !== undefined) {
+  //     contentData.duration = dto.duration;
+  //   }
+  //   if (dto.language !== undefined) {
+  //     contentData.language = dto.language;
+  //   }
+  //   if (dto.quality !== undefined) {
+  //     contentData.quality = dto.quality;
+  //   }
 
-    const content = this.contentRepository.create(contentData);
+  //   const content = this.contentRepository.create(contentData);
 
-    const saved = await this.contentRepository.save(content);
+  //   const saved = await this.contentRepository.save(content);
 
-    this.logger.log('Content created successfully', {
-      contentId: saved.id,
-      platform: saved.platform,
-      platformId: saved.platformId,
-    });
+  //   this.logger.log('Content created successfully', {
+  //     contentId: saved.id,
+  //     platform: saved.platform,
+  //     platformId: saved.platformId,
+  //   });
 
-    return saved;
-  }
+  //   return saved;
+  // }
 
   /**
    * 플랫폼 ID 목록으로 콘텐츠 조회 (UPSERT 용)
@@ -424,7 +441,7 @@ export class ContentService {
    * 콘텐츠 상태 변경
    */
   async updateStatus(id: string, status: ContentStatus): Promise<void> {
-    await this.findByIdOrFail(id);
+    // await this.findByIdOrFail(id);
     await this.contentRepository.update(id, { status });
 
     this.logger.log('Content status updated', { contentId: id, status });
@@ -772,9 +789,7 @@ export class ContentService {
    */
   private async verifyCreatorOwnership(contentId: string, userId: string): Promise<void> {
     // 상태와 관계없이 콘텐츠 조회 (크리에이터가 본인의 비활성화된 콘텐츠도 관리할 수 있어야 함)
-    const content = await this.contentRepository.findOne({
-      where: { id: contentId },
-    });
+    const content = await this.findById(contentId);
 
     if (!content) {
       throw ContentException.contentNotFound();
@@ -810,23 +825,6 @@ export class ContentService {
   }
 
   /**
-   * 크리에이터가 자신의 콘텐츠 삭제 (소프트 삭제)
-   * status를 REMOVED로 변경
-   */
-  async deleteContentByCreator(contentId: string, userId: string): Promise<void> {
-    // 1. 권한 검증
-    await this.verifyCreatorOwnership(contentId, userId);
-
-    // 2. 소프트 삭제 (status = REMOVED)
-    await this.updateStatus(contentId, ContentStatus.REMOVED);
-
-    this.logger.log('Content deleted by creator', {
-      contentId,
-      userId,
-    });
-  }
-
-  /**
    * 크리에이터가 자신의 여러 콘텐츠 상태 일괄 변경
    */
   async bulkUpdateContentStatusByCreator(
@@ -834,9 +832,19 @@ export class ContentService {
     userId: string,
     status: ContentStatus
   ): Promise<void> {
+    // for (const contentId of contentIds) {
+    //   await this.verifyCreatorOwnership(contentId, userId);
+    // }
+
     // 1. 모든 콘텐츠에 대한 권한 검증
-    for (const contentId of contentIds) {
-      await this.verifyCreatorOwnership(contentId, userId);
+    const contents = await this.findByIds(contentIds);
+    if (contents.length !== contentIds.length) {
+      throw ContentException.contentNotFound();
+    }
+
+    const nonOwnedContents = contents.filter((content) => content.creatorId !== userId);
+    if (nonOwnedContents.length > 0) {
+      throw ContentException.forbidden('본인의 콘텐츠만 수정할 수 있습니다.');
     }
 
     // 2. 일괄 업데이트

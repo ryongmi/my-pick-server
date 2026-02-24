@@ -3,3 +3,4 @@ export * from './create-platform.dto.js';
 export * from './creator-detail.dto.js';
 export * from './search-query.dto.js';
 export * from './search-result.dto.js';
+export * from './update-platform.dto.js';

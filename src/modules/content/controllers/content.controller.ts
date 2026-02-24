@@ -34,6 +34,7 @@ import { UpdateContentStatusDto } from '../dto/update-content-status.dto.js';
 import { BulkUpdateContentStatusDto } from '../dto/bulk-update-content-status.dto.js';
 import { UserInteractionService } from '../../user-interaction/services/user-interaction.service.js';
 import { YouTubeSyncScheduler } from '../../external-api/services/youtube-sync.scheduler.js';
+import { ContentStatus } from '../enums/content.enum.js';
 
 @SwaggerApiTags({ tags: ['content'] })
 @SwaggerApiBearerAuth()
@@ -367,7 +368,8 @@ export class ContentController {
   })
   @SwaggerApiOkResponse({
     status: 200,
-    description: '콘텐츠 동기화 요청 처리 완료 (응답: { success: boolean, message: string, syncedCount?: number, error?: string })',
+    description:
+      '콘텐츠 동기화 요청 처리 완료 (응답: { success: boolean, message: string, syncedCount?: number, error?: string })',
   })
   @SwaggerApiErrorResponse({
     status: 404,
@@ -382,9 +384,7 @@ export class ContentController {
   @Serialize({
     message: '콘텐츠 동기화 요청 처리 완료',
   })
-  async syncPlatformContent(
-    @Param('platformId') platformId: string
-  ): Promise<{
+  async syncPlatformContent(@Param('platformId') platformId: string): Promise<{
     success: boolean;
     message: string;
     syncedCount?: number;
@@ -406,7 +406,8 @@ export class ContentController {
    */
   @SwaggerApiOperation({
     summary: '전체 콘텐츠 동기화',
-    description: '특정 플랫폼의 모든 콘텐츠를 동기화합니다. 초기 동기화 또는 전체 재수집 시 사용합니다. (관리자용)',
+    description:
+      '특정 플랫폼의 모든 콘텐츠를 동기화합니다. 초기 동기화 또는 전체 재수집 시 사용합니다. (관리자용)',
   })
   @SwaggerApiParam({
     name: 'platformId',
@@ -417,7 +418,8 @@ export class ContentController {
   })
   @SwaggerApiOkResponse({
     status: 200,
-    description: '전체 콘텐츠 동기화 요청 처리 완료 (응답: { success: boolean, message: string, totalCount?: number, estimatedQuotaUsage?: number, error?: string })',
+    description:
+      '전체 콘텐츠 동기화 요청 처리 완료 (응답: { success: boolean, message: string, totalCount?: number, estimatedQuotaUsage?: number, error?: string })',
   })
   @SwaggerApiErrorResponse({
     status: 404,
@@ -432,9 +434,7 @@ export class ContentController {
   @Serialize({
     message: '전체 콘텐츠 동기화 요청 처리 완료',
   })
-  async syncAllPlatformContent(
-    @Param('platformId') platformId: string
-  ): Promise<{
+  async syncAllPlatformContent(@Param('platformId') platformId: string): Promise<{
     success: boolean;
     message: string;
     totalCount?: number;
@@ -468,7 +468,8 @@ export class ContentController {
   })
   @SwaggerApiOkResponse({
     status: 200,
-    description: '초기 동기화 재개 요청 처리 완료 (응답: { success: boolean, message: string, resumedCount?: number, error?: string })',
+    description:
+      '초기 동기화 재개 요청 처리 완료 (응답: { success: boolean, message: string, resumedCount?: number, error?: string })',
   })
   @SwaggerApiErrorResponse({
     status: 404,
@@ -483,9 +484,7 @@ export class ContentController {
   @Serialize({
     message: '초기 동기화 재개 요청 처리 완료',
   })
-  async resumeInitialSync(
-    @Param('platformId') platformId: string
-  ): Promise<{
+  async resumeInitialSync(@Param('platformId') platformId: string): Promise<{
     success: boolean;
     message: string;
     resumedCount?: number;
@@ -571,7 +570,7 @@ export class ContentController {
     @Param('id') id: string,
     @CurrentJwt() { userId }: AuthenticatedJwt
   ): Promise<void> {
-    await this.contentService.deleteContentByCreator(id, userId);
+    await this.contentService.updateContentStatusByCreator(id, userId, ContentStatus.REMOVED);
   }
 
   /**

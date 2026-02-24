@@ -613,9 +613,7 @@ export class CreatorService {
    * 크리에이터 대시보드 통계
    * 총 콘텐츠 수, 총 조회수, 총 좋아요, 플랫폼 수 등
    */
-  async getDashboardStats(
-    creatorId: string
-  ): Promise<{
+  async getDashboardStats(creatorId: string): Promise<{
     totalContents: number;
     totalViews: number;
     totalLikes: number;
@@ -633,6 +631,19 @@ export class CreatorService {
       totalLikes: 0, // 현재 Creator 엔티티에 totalLikes 필드 없음
       platformCount: platforms.length,
     };
+  }
+
+  /**
+   * 플랫폼 소유권 검증
+   * userId의 크리에이터가 해당 플랫폼을 소유하고 있는지 확인
+   */
+  async verifyPlatformOwnership(userId: string, platformId: string): Promise<void> {
+    const creator = await this.findOneByUserIdOrFail(userId);
+    const platform = await this.creatorPlatformService.findByIdOrFail(platformId);
+
+    if (platform.creatorId !== creator.id) {
+      throw CreatorException.forbidden('본인의 플랫폼만 수정할 수 있습니다.');
+    }
   }
 }
 

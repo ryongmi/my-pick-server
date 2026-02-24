@@ -1,4 +1,15 @@
-import { Controller, Get, Query, Param, HttpCode, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Query,
+  Param,
+  Body,
+  HttpCode,
+  UseGuards,
+} from '@nestjs/common';
 
 import { PaginatedResult } from '@krgeobuk/core/interfaces';
 import { Serialize } from '@krgeobuk/core/decorators';
@@ -18,7 +29,13 @@ import {
 
 import { CreatorService } from '../services/creator.service.js';
 import { CreatorPlatformService } from '../services/creator-platform.service.js';
-import { CreatorSearchQueryDto, CreatorSearchResultDto, CreatorDetailDto } from '../dto/index.js';
+import {
+  CreatorSearchQueryDto,
+  CreatorSearchResultDto,
+  CreatorDetailDto,
+  CreatePlatformDto,
+  UpdatePlatformDto,
+} from '../dto/index.js';
 import { CreatorPlatformEntity } from '../entities/creator-platform.entity.js';
 
 @SwaggerApiTags({ tags: ['creators'] })
@@ -37,7 +54,8 @@ export class CreatorController {
    */
   @SwaggerApiOperation({
     summary: '크리에이터 검색',
-    description: '크리에이터를 이름, 플랫폼, 정렬 기준으로 검색합니다. 로그인 시 구독 여부(isSubscribed)가 포함됩니다.',
+    description:
+      '크리에이터를 이름, 플랫폼, 정렬 기준으로 검색합니다. 로그인 시 구독 여부(isSubscribed)가 포함됩니다.',
   })
   @SwaggerApiPaginatedResponse({
     status: 200,
@@ -62,12 +80,49 @@ export class CreatorController {
   }
 
   /**
+   * 현재 로그인한 사용자의 크리에이터 정보 조회
+   * GET /creators/me
+   */
+  @SwaggerApiOperation({
+    summary: '내 크리에이터 정보 조회',
+    description: '현재 로그인한 사용자의 크리에이터 정보를 조회합니다.',
+  })
+  @SwaggerApiBearerAuth()
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '크리에이터 정보 조회 성공',
+    dto: CreatorDetailDto,
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '크리에이터 정보를 찾을 수 없습니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
+  @Get('me')
+  @UseGuards(AccessTokenGuard, AuthorizationGuard)
+  @HttpCode(200)
+  @Serialize({
+    message: '크리에이터 정보 조회 성공',
+  })
+  async getMyCreatorInfo(@CurrentJwt() { userId }: AuthenticatedJwt): Promise<CreatorDetailDto> {
+    // userId로 크리에이터 조회
+    const creator = await this.creatorService.findOneByUserIdOrFail(userId);
+
+    // 크리에이터 상세 정보 조회 (플랫폼 + 사용자 정보 포함)
+    return await this.creatorService.getDetailById(creator.id);
+  }
+
+  /**
    * 크리에이터 상세 조회 (플랫폼 + 사용자 정보 포함)
    * GET /creators/:id
    */
   @SwaggerApiOperation({
     summary: '크리에이터 상세 조회',
-    description: '특정 크리에이터의 상세 정보를 조회합니다. 플랫폼 계정 목록과 사용자 정보가 포함됩니다.',
+    description:
+      '특정 크리에이터의 상세 정보를 조회합니다. 플랫폼 계정 목록과 사용자 정보가 포함됩니다.',
   })
   @SwaggerApiBearerAuth()
   @SwaggerApiParam({
@@ -147,42 +202,6 @@ export class CreatorController {
   // ==================== CREATOR DASHBOARD APIs ====================
 
   /**
-   * 현재 로그인한 사용자의 크리에이터 정보 조회
-   * GET /creators/me
-   */
-  @SwaggerApiOperation({
-    summary: '내 크리에이터 정보 조회',
-    description: '현재 로그인한 사용자의 크리에이터 정보를 조회합니다.',
-  })
-  @SwaggerApiBearerAuth()
-  @SwaggerApiOkResponse({
-    status: 200,
-    description: '크리에이터 정보 조회 성공',
-    dto: CreatorDetailDto,
-  })
-  @SwaggerApiErrorResponse({
-    status: 404,
-    description: '크리에이터 정보를 찾을 수 없습니다',
-  })
-  @SwaggerApiErrorResponse({
-    status: 401,
-    description: '인증이 필요합니다',
-  })
-  @Get('me')
-  @UseGuards(AccessTokenGuard, AuthorizationGuard)
-  @HttpCode(200)
-  @Serialize({
-    message: '크리에이터 정보 조회 성공',
-  })
-  async getMyCreatorInfo(@CurrentJwt() { userId }: AuthenticatedJwt): Promise<CreatorDetailDto> {
-    // userId로 크리에이터 조회
-    const creator = await this.creatorService.findOneByUserIdOrFail(userId);
-
-    // 크리에이터 상세 정보 조회 (플랫폼 + 사용자 정보 포함)
-    return await this.creatorService.getDetailById(creator.id);
-  }
-
-  /**
    * 크리에이터 대시보드 통계 조회
    * GET /creators/me/dashboard
    */
@@ -209,9 +228,7 @@ export class CreatorController {
   @Serialize({
     message: '대시보드 통계 조회 성공',
   })
-  async getMyDashboardStats(
-    @CurrentJwt() { userId }: AuthenticatedJwt
-  ): Promise<{
+  async getMyDashboardStats(@CurrentJwt() { userId }: AuthenticatedJwt): Promise<{
     creator: CreatorDetailDto;
     stats: {
       totalContents: number;
@@ -233,5 +250,149 @@ export class CreatorController {
       creator: creatorDetail,
       stats,
     };
+  }
+
+  /**
+   * 플랫폼 추가
+   * POST /creators/me/platforms
+   */
+  @SwaggerApiOperation({
+    summary: '플랫폼 추가',
+    description: '크리에이터에 새로운 플랫폼을 연동합니다.',
+  })
+  @SwaggerApiBearerAuth()
+  @SwaggerApiOkResponse({
+    status: 201,
+    description: '플랫폼 추가 성공',
+  })
+  @SwaggerApiErrorResponse({
+    status: 400,
+    description: '잘못된 요청 데이터',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 409,
+    description: '이미 연동된 플랫폼입니다',
+  })
+  @Post('me/platforms')
+  @UseGuards(AccessTokenGuard, AuthorizationGuard)
+  @HttpCode(201)
+  @Serialize({
+    message: '플랫폼 추가 성공',
+  })
+  async addPlatform(
+    @CurrentJwt() { userId }: AuthenticatedJwt,
+    @Body() dto: CreatePlatformDto
+  ): Promise<void> {
+    // userId로 크리에이터 조회
+    const creator = await this.creatorService.findOneByUserIdOrFail(userId);
+
+    // 플랫폼 추가 시 creatorId 설정
+    await this.creatorService['creatorPlatformService'].createPlatform({
+      ...dto,
+      creatorId: creator.id,
+    });
+  }
+
+  /**
+   * 플랫폼 수정
+   * PATCH /creators/me/platforms/:platformId
+   */
+  @SwaggerApiOperation({
+    summary: '플랫폼 정보 수정',
+    description: '연동된 플랫폼의 정보를 수정합니다.',
+  })
+  @SwaggerApiBearerAuth()
+  @SwaggerApiParam({
+    name: 'platformId',
+    description: '플랫폼 ID',
+    type: String,
+  })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '플랫폼 수정 성공',
+  })
+  @SwaggerApiErrorResponse({
+    status: 400,
+    description: '잘못된 요청 데이터',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 403,
+    description: '본인의 플랫폼만 수정할 수 있습니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '플랫폼을 찾을 수 없습니다',
+  })
+  @Patch('me/platforms/:platformId')
+  @UseGuards(AccessTokenGuard, AuthorizationGuard)
+  @HttpCode(200)
+  @Serialize({
+    message: '플랫폼 수정 성공',
+  })
+  async updatePlatform(
+    @CurrentJwt() { userId }: AuthenticatedJwt,
+    @Param('platformId') platformId: string,
+    @Body() dto: UpdatePlatformDto
+  ): Promise<void> {
+    // 플랫폼 소유권 검증
+    await this.creatorService.verifyPlatformOwnership(userId, platformId);
+
+    // 플랫폼 정보 수정
+    await this.creatorService['creatorPlatformService'].updatePlatform(platformId, dto);
+  }
+
+  /**
+   * 플랫폼 삭제 (비활성화)
+   * DELETE /creators/me/platforms/:platformId
+   */
+  @SwaggerApiOperation({
+    summary: '플랫폼 삭제',
+    description: '연동된 플랫폼을 비활성화합니다.',
+  })
+  @SwaggerApiBearerAuth()
+  @SwaggerApiParam({
+    name: 'platformId',
+    description: '플랫폼 ID',
+    type: String,
+  })
+  @SwaggerApiOkResponse({
+    status: 200,
+    description: '플랫폼 삭제 성공',
+  })
+  @SwaggerApiErrorResponse({
+    status: 401,
+    description: '인증이 필요합니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 403,
+    description: '본인의 플랫폼만 삭제할 수 있습니다',
+  })
+  @SwaggerApiErrorResponse({
+    status: 404,
+    description: '플랫폼을 찾을 수 없습니다',
+  })
+  @Delete('me/platforms/:platformId')
+  @UseGuards(AccessTokenGuard, AuthorizationGuard)
+  @HttpCode(200)
+  @Serialize({
+    message: '플랫폼 삭제 성공',
+  })
+  async deletePlatform(
+    @CurrentJwt() { userId }: AuthenticatedJwt,
+    @Param('platformId') platformId: string
+  ): Promise<void> {
+    // 플랫폼 소유권 검증
+    await this.creatorService.verifyPlatformOwnership(userId, platformId);
+
+    // 플랫폼 비활성화
+    await this.creatorService['creatorPlatformService'].deactivatePlatform(platformId);
   }
 }

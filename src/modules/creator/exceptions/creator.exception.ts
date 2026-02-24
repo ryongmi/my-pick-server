@@ -55,4 +55,14 @@ export class CreatorException {
       message: '이미 등록된 플랫폼입니다.',
     });
   }
+
+  /**
+   * 권한이 없음 (일반적인 경우)
+   */
+  static forbidden(message: string): HttpException {
+    return new ForbiddenException({
+      code: 'CREATOR_106',
+      message,
+    });
+  }
 }

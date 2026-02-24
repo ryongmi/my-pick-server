@@ -35,6 +35,14 @@ export interface CreatorMetadata {
   tags?: string[]; // 시스템 태그 (예: 'trending', 'verified')
 }
 
+/**
+ * 크리에이터 엔티티
+ *
+ * ID: UUID
+ * - 보안: 공개 프로필 URL 노출 시 크리에이터 ID 예측 방지 (/info/{uuid})
+ * - 프라이버시: 크리에이터 계정은 User와 동급의 보안 필요
+ * - Enumerate Attack 차단: 전체 크리에이터 정보 스크래핑 방지
+ */
 @Entity('creators')
 @Index(['name'])
 @Index(['isActive'])

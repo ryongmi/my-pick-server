@@ -8,6 +8,7 @@ import { LimitType, SortOrderType } from '@krgeobuk/core/enum';
 import { PlatformType } from '@common/enums/index.js';
 
 import { ContentEntity } from '../entities/content.entity.js';
+import { ContentStatistics } from '../dto/content-response.dto.js';
 
 @Injectable()
 export class ContentRepository extends BaseRepository<ContentEntity> {
@@ -244,23 +245,14 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
   /**
    * 배치 저장 (YouTube 동기화용)
    */
-  async saveBatch(contents: Partial<ContentEntity>[]): Promise<ContentEntity[]> {
-    return this.save(contents);
-  }
+  // async saveBatch(contents: Partial<ContentEntity>[]): Promise<ContentEntity[]> {
+  //   return this.save(contents);
+  // }
 
   /**
    * 통계 정보 업데이트
    */
-  async updateStatistics(
-    id: string,
-    statistics: {
-      views: number;
-      likes: number;
-      comments: number;
-      shares: number;
-      engagementRate: number;
-    }
-  ): Promise<void> {
+  async updateStatistics(id: string, statistics: Partial<ContentStatistics>): Promise<void> {
     await this.update(id, {
       statistics: {
         ...statistics,
@@ -399,11 +391,14 @@ export class ContentRepository extends BaseRepository<ContentEntity> {
       )
       .join(' OR ');
 
-    const parameters = platformIds.reduce((acc, item, index) => {
-      acc[`platform${index}`] = item.platform;
-      acc[`platformId${index}`] = item.platformId;
-      return acc;
-    }, {} as Record<string, string>);
+    const parameters = platformIds.reduce(
+      (acc, item, index) => {
+        acc[`platform${index}`] = item.platform;
+        acc[`platformId${index}`] = item.platformId;
+        return acc;
+      },
+      {} as Record<string, string>
+    );
 
     queryBuilder.where(conditions, parameters);
 
