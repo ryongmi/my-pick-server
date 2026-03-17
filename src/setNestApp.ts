@@ -62,7 +62,7 @@ export function setNestApp(
   app.use(cookieParser());
 
   // 모든 엔드포인트에 api 추가
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('mypick');
 
   // winston 설정
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
