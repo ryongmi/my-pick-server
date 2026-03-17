@@ -33,7 +33,6 @@ services:
       - /app/node_modules # 익명 볼륨
     networks:
       - krgeobuk-network # 중앙 인프라 접근 (MySQL, Redis)
-      - msa-network # 마이크로서비스 간 통신
     restart: unless-stopped
 
 networks:
