@@ -3,6 +3,7 @@ export interface DefaultConfig {
   port: number | undefined;
   tcpPort: number | undefined;
   corsOrigins: string | undefined;
+  myPickServerUrl: string;
 }
 
 export interface ClientConfig {

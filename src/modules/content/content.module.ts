@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CreatorModule } from '@modules/creator/creator.module.js';
 import { UserInteractionModule } from '@modules/user-interaction/user-interaction.module.js';
 import { ExternalApiModule } from '@modules/external-api/external-api.module.js';
+import { ImageModule } from '@modules/image/image.module.js';
 
 import { ContentEntity } from './entities/content.entity.js';
 import { ContentCategoryEntity } from './entities/content-category.entity.js';
@@ -28,6 +29,7 @@ import { ContentController } from './controllers/content.controller.js';
     forwardRef(() => CreatorModule),
     UserInteractionModule,
     forwardRef(() => ExternalApiModule),
+    ImageModule,
   ],
   controllers: [ContentController],
   providers: [

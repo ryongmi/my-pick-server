@@ -8,8 +8,8 @@ import { LimitType } from '@krgeobuk/core/enum';
 // import { UserTcpPatterns } from '@krgeobuk/user/tcp';
 
 import { PlatformType } from '@common/enums/index.js';
-import { convertToProxyUrl } from '@utils/imageUrlUtils.js';
 
+import { ImageProxyService } from '../../image/image-proxy.service.js';
 import { ContentException } from '../exceptions/index.js';
 import { CreatorService } from '../../creator/services/creator.service.js';
 import { ContentRepository } from '../repositories/content.repository.js';
@@ -51,6 +51,7 @@ export class ContentService {
     // 순환 참조 방지를 위해 Inject + forwardRef 사용
     @Inject(forwardRef(() => CreatorService))
     private readonly creatorService: CreatorService,
+    private readonly imageProxyService: ImageProxyService,
     @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy
   ) {}
 
@@ -139,7 +140,7 @@ export class ContentService {
       creatorInfo.displayName = creator.profile.displayName;
     }
     if (creator?.profileImageUrl) {
-      const proxyUrl = convertToProxyUrl(creator.profileImageUrl);
+      const proxyUrl = this.imageProxyService.convertToProxyUrl(creator.profileImageUrl);
       if (proxyUrl) {
         creatorInfo.profileImageUrl = proxyUrl;
       }
@@ -160,7 +161,7 @@ export class ContentService {
       type: content.type,
       title: content.title,
       description: content.description ?? '',
-      thumbnail: convertToProxyUrl(content.thumbnail) ?? '',
+      thumbnail: this.imageProxyService.convertToProxyUrl(content.thumbnail) ?? '',
       url: content.url,
       platform: content.platform,
       platformId: content.platformId,
@@ -503,7 +504,7 @@ export class ContentService {
         creatorInfo.displayName = creator.profile.displayName;
       }
       if (creator?.profileImageUrl) {
-        const proxyUrl = convertToProxyUrl(creator.profileImageUrl);
+        const proxyUrl = this.imageProxyService.convertToProxyUrl(creator.profileImageUrl);
         if (proxyUrl) {
           creatorInfo.profileImageUrl = proxyUrl;
         }
@@ -524,7 +525,7 @@ export class ContentService {
         type: content.type,
         title: content.title,
         description: content.description ?? '',
-        thumbnail: convertToProxyUrl(content.thumbnail) ?? '',
+        thumbnail: this.imageProxyService.convertToProxyUrl(content.thumbnail) ?? '',
         url: content.url,
         platform: content.platform,
         platformId: content.platformId,
@@ -600,7 +601,7 @@ export class ContentService {
       };
 
       if (creator.profileImageUrl) {
-        const proxyUrl = convertToProxyUrl(creator.profileImageUrl);
+        const proxyUrl = this.imageProxyService.convertToProxyUrl(creator.profileImageUrl);
         if (proxyUrl) {
           creatorInfo.profileImageUrl = proxyUrl;
         }
@@ -622,7 +623,7 @@ export class ContentService {
         type: content.type,
         title: content.title,
         description: content.description ?? '',
-        thumbnail: convertToProxyUrl(content.thumbnail) ?? '',
+        thumbnail: this.imageProxyService.convertToProxyUrl(content.thumbnail) ?? '',
         url: content.url,
         platform: content.platform,
         platformId: content.platformId,

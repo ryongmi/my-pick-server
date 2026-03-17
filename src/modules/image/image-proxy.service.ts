@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+
 import axios from 'axios';
+
+import type { DefaultConfig } from '@common/interfaces/index.js';
 
 /**
  * 이미지 프록시 서비스
@@ -8,6 +12,11 @@ import axios from 'axios';
 @Injectable()
 export class ImageProxyService {
   private readonly logger = new Logger(ImageProxyService.name);
+  private readonly myPickServerUrl: string;
+
+  constructor(private readonly configService: ConfigService) {
+    this.myPickServerUrl = this.configService.get<DefaultConfig['myPickServerUrl']>('myPickServerUrl')!;
+  }
 
   // 허용된 이미지 도메인 화이트리스트
   private readonly ALLOWED_DOMAINS = [
@@ -19,6 +28,24 @@ export class ImageProxyService {
     'scontent.cdninstagram.com', // Instagram 이미지
     'p16-sign-va.tiktokcdn.com', // TikTok 이미지
   ];
+
+  /**
+   * 외부 이미지 URL을 프록시 URL로 변환
+   * @param externalUrl 외부 이미지 URL
+   * @returns 프록시 URL 또는 null
+   */
+  convertToProxyUrl(externalUrl: string | null | undefined): string | null {
+    if (!externalUrl) {
+      return null;
+    }
+
+    if (externalUrl.startsWith(this.myPickServerUrl)) {
+      return externalUrl;
+    }
+
+    const encodedUrl = encodeURIComponent(externalUrl);
+    return `${this.myPickServerUrl}/proxy/image?url=${encodedUrl}`;
+  }
 
   /**
    * 외부 이미지 URL 다운로드 및 반환
